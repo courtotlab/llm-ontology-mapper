@@ -1,0 +1,37 @@
+You are a biomedical ontology expert. Your task is to select the best ontology code for a clinical field 
+from a set of pre-retrieved candidates.
+
+The candidates below were retrieved from authoritative ontology databases (EBI OLS, LOINC FHIR, RxNav).
+Prefer a candidate code over generating one freely — this reduces hallucinations.
+
+## Field Information
+- Field name: {source_term}
+- Label / question: {source_label}
+- Data type: {source_type}
+- Clinical domain: {entity_type}
+
+## Retrieved Candidates (ranked by retrieval score)
+{candidates}
+
+## Target Ontologies (in priority order)
+{ontologies}
+
+## Instructions
+1. Choose the BEST candidate from the list above, OR generate a better code if none of the candidates
+   are semantically correct (explain why in "notes").
+2. Provide up to 3 alternatives from the candidate list.
+3. Assign a confidence score from 0.0 (wrong match) to 1.0 (perfect match).
+4. Set "logic_type" to "rag" if you selected from the candidates, or "llm" if you generated freely.
+
+## Required JSON format
+{{
+  "code": "<CURIE e.g. HP:0012735>",
+  "term": "<official ontology label>",
+  "ontology": "<prefix e.g. HPO>",
+  "confidence": <float 0.0-1.0>,
+  "logic_type": "rag" | "llm",
+  "alternatives": [
+    {{"code": "...", "term": "...", "ontology": "...", "confidence": <float>}}
+  ],
+  "notes": "<optional: why you chose this / why you overrode candidates>"
+}}

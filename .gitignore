@@ -1,0 +1,85 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+*.egg-link
+dist/
+build/
+wheels/
+MANIFEST
+.eggs/
+
+# ── Virtual environments ───────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+.env/
+.hatch/
+
+# ── Distribution / packaging ───────────────────────────────────────────────────
+*.tar.gz
+*.whl
+pip-wheel-metadata/
+share/python-wheels/
+
+# ── Testing & coverage ─────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.log
+
+# ── Type checking ──────────────────────────────────────────────────────────────
+.mypy_cache/
+.pyright/
+.ruff_cache/
+pyrightconfig.json
+
+# ── Jupyter ────────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+# Keep notebooks in git but ignore their outputs/metadata if desired:
+# *.ipynb  ← uncomment to ignore notebooks entirely
+
+# ── Secrets & environment ──────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.env
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Editors ───────────────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# ── Docs ──────────────────────────────────────────────────────────────────────
+site/
+docs/_build/
+
+# ── Data & evaluation outputs ─────────────────────────────────────────────────
+# Benchmark CSVs with sensitive patient data — add paths as needed
+# data/
+# *.benchmark.csv
+
+# Evaluation run outputs
+evaluation_results/
+*.eval.json
+*.eval.csv
+model_comparison_report.md
+
+# ── Caches (diskcache, etc.) ───────────────────────────────────────────────────
+cache/
+.cache/
+*.db
+*.db-shm
+*.db-wal

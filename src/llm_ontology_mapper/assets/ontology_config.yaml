@@ -1,0 +1,239 @@
+# Ontology Configuration for Entity Type Mapping
+# 
+# This configuration defines which ontologies are recommended for each entity type.
+# Each entity type can have multiple recommended ontologies listed in priority order.
+#
+# Supported ontologies:
+# - HPO: Human Phenotype Ontology (symptoms, clinical features)
+# - MONDO: Mondo Disease Ontology (diseases)
+# - NCIT: NCI Thesaurus (cancer and clinical terms)
+# - LOINC: Logical Observation Identifiers Names and Codes (lab tests, measurements)
+# - UO: Units of Measurement Ontology
+# - ICD10: International Classification of Diseases
+# - CHEBI: Chemical Entities of Biological Interest (medications, chemicals)
+# - SNOMED: SNOMED Clinical Terms
+# - RxNorm: Normalized names for medications
+
+# Ontology metadata
+ontologies:
+  HPO:
+    full_name: "Human Phenotype Ontology"
+    description: "Standardized vocabulary for phenotypic abnormalities"
+    curie_prefix: "HP"
+    use_cases:
+      - "Symptoms and clinical signs"
+      - "Phenotypic features"
+      - "Clinical observations"
+  
+  MONDO:
+    full_name: "Mondo Disease Ontology"
+    description: "Disease and disorder classification"
+    curie_prefix: "MONDO"
+    use_cases:
+      - "Disease diagnoses"
+      - "Medical conditions"
+      - "Comorbidities"
+  
+  NCIT:
+    full_name: "NCI Thesaurus"
+    description: "Cancer and clinical terminology"
+    curie_prefix: "NCIT"
+    use_cases:
+      - "Cancer types"
+      - "Treatments and procedures"
+      - "Clinical trials terminology"
+  
+  LOINC:
+    full_name: "Logical Observation Identifiers Names and Codes"
+    description: "Laboratory and clinical observations"
+    curie_prefix: "LOINC"
+    use_cases:
+      - "Laboratory tests"
+      - "Vital signs"
+      - "Clinical measurements"
+  
+  UO:
+    full_name: "Units of Measurement Ontology"
+    description: "Standardized units of measurement"
+    curie_prefix: "UO"
+    use_cases:
+      - "Measurement units"
+      - "Quantities and dimensions"
+  
+  ICD10:
+    full_name: "International Classification of Diseases, 10th Revision"
+    description: "WHO disease classification system"
+    curie_prefix: "icd10"
+    use_cases:
+      - "Disease coding for billing"
+      - "Diagnosis classification"
+  
+  SNOMED-CT:
+    full_name: "SNOMED Clinical Terms"
+    description: "Comprehensive clinical terminology"
+    curie_prefix: "snomedct"
+    use_cases:
+      - "Clinical findings"
+      - "Procedures"
+      - "Medications"
+      - "Chemical compounds"
+      - "Biochemical entities"
+  
+  RxNorm:
+    full_name: "RxNorm"
+    description: "Normalized names for clinical drugs"
+    curie_prefix: "RXNORM"
+    use_cases:
+      - "Medication names"
+      - "Drug prescriptions"
+
+# =============================================================================
+# PREFIX ALIASES
+# =============================================================================
+# Maps alternative/external prefixes to canonical ontology keys
+# Used for normalizing LLM outputs and external API responses
+prefix_aliases:
+  # HPO variations
+  HPO: HPO
+  HP: HPO
+  
+  # SNOMED-CT variations (LLMs often use SCTID)
+  SCTID: SNOMED-CT
+  SNOMED: SNOMED-CT
+  SNOMEDCT: SNOMED-CT
+  "SNOMED-CT": SNOMED-CT
+  
+  # LOINC variations
+  LOINC: LOINC
+  
+  # MONDO variations
+  MONDO: MONDO
+  
+  # NCIT variations
+  NCIT: NCIT
+  
+  # RxNorm variations (external systems use RXCUI)
+  RXNORM: RxNorm
+  RXCUI: RxNorm
+  
+  # ICD10 variations
+  ICD10: ICD10
+  ICD10CM: ICD10
+  
+  # UO variations
+  UO: UO
+  
+  # UBERON variations
+  UBERON: UBERON
+  
+  # CHEBI variations
+  CHEBI: CHEBI
+
+# =============================================================================
+# EXTERNAL API MAPPINGS
+# =============================================================================
+# Maps our ontology keys to external API identifiers
+
+# EBI OLS API ontology IDs (lowercase)
+ols_api_map:
+  HPO: hp
+  MONDO: mondo
+  NCIT: ncit
+  SNOMED-CT: snomed
+  UO: uo
+  UBERON: uberon
+  CHEBI: chebi
+  GO: go
+  DOID: doid
+  MESH: mesh
+
+# BioPortal API ontology acronyms (uppercase)
+bioportal_api_map:
+  HPO: HP
+  MONDO: MONDO
+  NCIT: NCIT
+  LOINC: LOINC
+  SNOMED-CT: SNOMEDCT
+  UO: UO
+  RxNorm: RXNORM
+  ICD10: ICD10CM
+  CHEBI: CHEBI
+
+# SapBERT FAISS index keys (as defined in server/build_index.py)
+sapbert_index_map:
+  HPO: HPO
+  HP: HPO
+  MONDO: MONDO
+  NCIT: NCIT
+  LOINC: LOINC
+  SNOMED-CT: SNOMED
+  SNOMEDCT: SNOMED
+  RxNorm: RXNORM
+  RXNORM: RXNORM
+  RXCUI: RXNORM
+  ICD10: ICD10CM
+  ICD10CM: ICD10CM
+
+# Entity type to ontology mappings
+# Each entity type has a list of recommended ontologies in priority order
+entity_ontology_mapping:
+  # Clinical Features and Symptoms
+  phenotype:
+    ontologies: ["HPO"]
+    primary: "HPO"
+    description: "Phenotypic features and observable characteristics"
+  
+  comorbidity:
+    ontologies: ["MONDO", "ICD10"]
+    primary: "MONDO"
+    description: "Concurrent medical conditions"
+  
+  # Treatments and Interventions
+  medication:
+    ontologies: ["RxNorm", "NCIT"]
+    primary: "RxNorm"
+    description: "Medications and drug treatments"
+  
+  procedure:
+    ontologies: ["NCIT", "SNOMED-CT"]
+    primary: "SNOMED-CT"
+    description: "Medical procedures"
+  
+  # Laboratory and Measurements
+  measurement:
+    ontologies: ["LOINC"]
+    primary: "LOINC"
+    description: "Clinical measurements and observations"
+  
+  # Exposures and Environmental Factors
+  exposure:
+    ontologies: ["SNOMED-CT"]
+    primary: "SNOMED-CT"
+    description: "Environmental and chemical exposures"
+  
+  # Biological Samples
+  specimen:
+    ontologies: ["NCIT"]
+    primary: "NCIT"
+    description: "Biological specimens"
+  
+  sample:
+    ontologies: ["NCIT", "SO"]
+    primary: "NCIT"
+    description: "Biological samples"
+  
+  # Default fallback
+  default:
+    ontologies: ["HPO", "MONDO", "NCIT"]
+    primary: "HPO"
+    description: "Default ontology recommendations"
+
+
+# Custom study-specific overrides (optional)
+# You can add study-specific configurations here
+study_overrides:
+  # Example:
+  # HostSeq:
+  #   phenotype:
+  #     ontologies: ["HPO", "SNOMED-CT", "MONDO"]
+  #     primary: "HPO"

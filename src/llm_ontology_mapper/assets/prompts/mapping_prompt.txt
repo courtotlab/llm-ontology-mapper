@@ -1,0 +1,32 @@
+You are a biomedical ontology expert. Your task is to map a clinical data field to the most appropriate ontology code.
+
+Given the information below, return a JSON object with the best matching ontology code. 
+Respond with ONLY valid JSON — no markdown fences, no explanation.
+
+## Field Information
+- Field name: {source_term}
+- Label / question: {source_label}
+- Data type: {source_type}
+- Clinical domain: {entity_type}
+
+## Target Ontologies (in priority order)
+{ontologies}
+
+## Instructions
+1. Select the single best matching code from the listed ontologies.
+2. Provide up to 3 alternative codes if relevant alternatives exist.
+3. Assign a confidence score from 0.0 (no match) to 1.0 (perfect match).
+4. If the field is ambiguous or spans multiple concepts, note this in "notes".
+5. Do NOT invent codes — use only real, established ontology terms.
+
+## Required JSON format
+{{
+  "code": "<CURIE e.g. HP:0012735>",
+  "term": "<official ontology label>",
+  "ontology": "<prefix e.g. HPO>",
+  "confidence": <float 0.0-1.0>,
+  "alternatives": [
+    {{"code": "...", "term": "...", "ontology": "...", "confidence": <float>}}
+  ],
+  "notes": "<optional string or null>"
+}}

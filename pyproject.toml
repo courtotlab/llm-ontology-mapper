@@ -1,0 +1,173 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# llm-ontology-mapper — standalone LLM-powered ontology mapping micro-library
+# Extracted from pcgl-data-mapper/core/llm (PCGL project, 2025)
+# Build backend: hatchling (PEP 517/518)  |  Project manager: uv
+# ─────────────────────────────────────────────────────────────────────────────
+
+[build-system]
+requires      = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+# ── Project metadata ──────────────────────────────────────────────────────────
+[project]
+name        = "llm-ontology-mapper"
+version     = "0.1.0"
+description = "LLM-powered ontology mapping with RAG grounding and multi-provider support"
+readme      = "README.md"
+license     = { text = "MIT" }
+requires-python = ">=3.10"
+
+keywords = [
+    "ontology", "llm", "NLP", "biomedical", "HPO", "MONDO", "NCIT",
+    "RAG", "mapping", "clinical-data",
+]
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+# ── Core runtime dependencies ─────────────────────────────────────────────────
+# Keep this list minimal; optional features live in [project.optional-dependencies]
+dependencies = [
+    # Data validation — used for MappingResult and all public contracts
+    "pydantic>=2.6,<3",
+
+    # HTTP — ontology API calls (EBI OLS, RxNav, NIH Clinical Tables, …)
+    "requests>=2.31",
+    "httpx>=0.27",           # async-capable HTTP for retriever
+
+    # Config / assets loading
+    "pyyaml>=6.0",
+
+    # Caching (functools.lru_cache covers sync; add diskcache for cross-process)
+    "diskcache>=5.6",
+]
+
+# ── Optional feature groups ───────────────────────────────────────────────────
+[project.optional-dependencies]
+
+# LLM backends (install at least one)
+openai = [
+    "openai>=1.30",          # covers OpenAI, GitHub Models, Azure OpenAI
+]
+anthropic = [
+    "anthropic>=0.25",
+]
+ollama = [
+    "ollama>=0.2",
+]
+
+# LangChain orchestration (optional, for chain-of-thought workflows)
+langchain = [
+    "langchain>=0.2",
+    "langchain-openai>=0.1",
+    "langchain-community>=0.2",
+]
+
+# Phase-2 NER-enhanced query extraction (biomedical scispaCy models)
+ner = [
+    "scispacy>=0.5.4",
+    # Install the actual model wheels separately — see README for pip URLs
+]
+
+# Evaluation / reporting
+eval = [
+    "pandas>=2.0",
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+]
+
+# Pull in every optional group at once (useful for full dev installs)
+all = [
+    "llm-ontology-mapper[openai,anthropic,ollama,langchain,ner,eval]",
+]
+
+# Development dependencies (install with: pip install -e ".[dev]")
+dev = [
+    # Testing
+    "pytest>=8.1",
+    "pytest-cov>=5.0",
+    "pytest-mock>=3.14",
+    "pytest-asyncio>=0.23",
+    "responses>=0.25",          # mock HTTP calls
+
+    # Type checking
+    "mypy>=1.10",
+    "types-requests",
+    "types-pyyaml",
+
+    # Linting & formatting
+    "ruff>=0.4",                # replaces flake8 + isort + pyupgrade
+
+    # Jupyter notebook (playground + exploration)
+    "jupyterlab>=4.0",
+    "ipykernel>=6.0",
+
+    # Docs
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.25",
+]
+
+# ── Entry points ──────────────────────────────────────────────────────────────
+[project.scripts]
+# Thin CLI shim — useful for smoke-testing from the terminal
+llm-map = "llm_ontology_mapper.cli:main"
+
+# ── hatchling build configuration ────────────────────────────────────────────
+[tool.hatch.build.targets.wheel]
+packages = ["src/llm_ontology_mapper"]
+
+# Include the bundled YAML config and prompt-template assets
+[tool.hatch.build.targets.wheel.force-include]
+"src/llm_ontology_mapper/assets" = "llm_ontology_mapper/assets"
+
+# ── Tool configuration ────────────────────────────────────────────────────────
+[tool.ruff]
+target-version = "py310"
+line-length    = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]   # line-length enforced by formatter, not linter
+
+[tool.mypy]
+python_version         = "3.10"
+strict                 = false
+ignore_missing_imports = true
+# Only type-check our source tree
+files = ["src/llm_ontology_mapper"]
+
+[tool.pytest.ini_options]
+testpaths    = ["tests"]
+addopts      = "-ra -q --tb=short"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "unit:      pure-logic tests, no I/O",
+    "integration: tests that call external APIs",
+    "slow:      tests that take > 10 s",
+]
+
+[tool.coverage.run]
+source   = ["llm_ontology_mapper"]
+branch   = true
+omit     = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:"]
+fail_under    = 40
+
+[dependency-groups]
+dev = [
+    "mypy>=1.20.2",
+    "ruff>=0.15.12",
+]
