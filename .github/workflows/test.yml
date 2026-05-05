@@ -7,18 +7,14 @@ name: Test Suite
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
-    branches: [main, develop]
+    branches: [main]
 
 # Cancel in-progress runs for the same branch/PR to save CI minutes
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
-env:
-  # Prevent Hatch from printing progress bars in CI output
-  HATCH_VERBOSE: "1"
 
 jobs:
   # ── 1. Lint & type-check (fast gate — runs before the full matrix) ──────────
@@ -28,19 +24,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
         with:
           python-version: "3.11"
-          cache: pip
 
-      - name: Install Hatch
-        run: pip install hatch
+      - name: Install dev dependencies
+        run: uv sync --extra dev
 
       - name: Ruff lint
-        run: hatch run lint
+        run: uv run ruff check src/
 
       - name: Mypy type check
-        run: hatch run typecheck
+        run: uv run mypy src/
 
   # ── 2. Unit tests — no I/O, no API keys needed ───────────────────────────────
   unit-tests:
@@ -55,16 +51,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
         with:
           python-version: ${{ matrix.python-version }}
-          cache: pip
 
-      - name: Install Hatch
-        run: pip install hatch
+      - name: Install dev dependencies
+        run: uv sync --extra dev --extra openai --extra eval
 
       - name: Run unit tests with coverage
-        run: hatch run test-cov -m unit
+        run: uv run pytest -m unit --cov=llm_ontology_mapper --cov-report=xml
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.11'   # upload once, from the canonical version
@@ -86,18 +82,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
         with:
           python-version: "3.11"
-          cache: pip
 
-      - name: Install Hatch
-        run: pip install hatch
+      - name: Install dev dependencies
+        run: uv sync --extra dev --extra openai --extra eval
 
       - name: Run integration tests
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: hatch run test -m integration
+        run: uv run pytest -m integration
 
   # ── 4. Build wheel — ensures pyproject.toml is always valid ─────────────────
   build:
@@ -108,21 +104,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
         with:
           python-version: "3.11"
-          cache: pip
-
-      - name: Install Hatch
-        run: pip install hatch
 
       - name: Build wheel + sdist
-        run: hatch build
+        run: uv build
 
       - name: Check wheel metadata (twine)
-        run: |
-          pip install twine
-          twine check dist/*
+        run: uvx twine check dist/*
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -145,16 +136,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
         with:
           python-version: "3.11"
-          cache: pip
-
-      - name: Install Hatch
-        run: pip install hatch
 
       - name: Build
-        run: hatch build
+        run: uv build
 
       - name: Publish via Trusted Publishing (OIDC)
         uses: pypa/gh-action-pypi-publish@release/v1
