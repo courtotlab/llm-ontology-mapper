@@ -83,3 +83,4 @@ cache/
 *.db
 *.db-shm
 *.db-wal
+.*_cache/
