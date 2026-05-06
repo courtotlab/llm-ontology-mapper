@@ -94,8 +94,10 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
+          set +e
           uv run pytest -m integration
           code=$?
+          set -e
           if [ $code -eq 5 ]; then
             echo "No integration tests found — skipping."
             exit 0
