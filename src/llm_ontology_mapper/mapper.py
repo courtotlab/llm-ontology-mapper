@@ -322,9 +322,12 @@ class OntologyMapper:
 
     def _extract_json_from_response(self, response: str) -> str:
         import re
-        json_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', response, re.DOTALL)
-        if json_match:
-            return json_match.group(1)
+        fence_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', response, re.DOTALL)
+        if fence_match:
+            return fence_match.group(1)
+        obj_match = re.search(r'\{.*\}', response, re.DOTALL)
+        if obj_match:
+            return obj_match.group(0)
         return response.strip()
 
     def _build_prompt(
@@ -416,7 +419,11 @@ class OntologyMapper:
 
         try:
             data = _json.loads(json_str)
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "Failed to parse LLM response as JSON: %r — %s",
+                text[:200], exc,
+            )
             return MappingResult(
                 source_term=source_term,
                 source_label=source_label,

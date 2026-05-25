@@ -23,6 +23,8 @@ Prefer a candidate code over generating one freely — this reduces hallucinatio
 3. Assign a confidence score from 0.0 (wrong match) to 1.0 (perfect match).
 4. Set "logic_type" to "rag" if you selected from the candidates, or "llm" if you generated freely.
 
+Respond with ONLY valid JSON — no markdown, no explanation, no prose before or after. Your entire response must be a single valid JSON object matching the format above.
+
 ## Required JSON format
 {{
   "code": "<CURIE e.g. HP:0012735>",

@@ -43,7 +43,7 @@ pyrightconfig.json
 # ── Jupyter ────────────────────────────────────────────────────────────────────
 .ipynb_checkpoints/
 # Keep notebooks in git but ignore their outputs/metadata if desired:
-# *.ipynb  ← uncomment to ignore notebooks entirely
+*.ipynb  ← uncomment to ignore notebooks entirely
 
 # ── Secrets & environment ──────────────────────────────────────────────────────
 .env

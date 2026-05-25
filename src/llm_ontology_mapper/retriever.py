@@ -360,11 +360,8 @@ class OntologyRetriever:
                 code = obo_id if obo_id else iri.split('/')[-1].replace('_', ':')
                 code = self._normalize_code(code, ontology)
                 term = doc.get('label', '')
-                definition = (
-                    doc.get('description', [''])[0]
-                    if isinstance(doc.get('description'), list)
-                    else doc.get('description', '')
-                )
+                _desc = doc.get('description', '')
+                definition = (_desc[0] if isinstance(_desc, list) and _desc else _desc) or ''
                 candidates.append({
                     'code': code, 'term': term,
                     'score': 1.0 - (idx * 0.05),
