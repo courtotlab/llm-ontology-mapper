@@ -415,15 +415,13 @@ class OntologyMapper:
             text = completion.content
         else:
             text = str(completion)
+        logger.debug("LLM raw response | model=%s text=%s", self._llm.model, text[:500])
         json_str = self._extract_json_from_response(text)
 
         try:
             data = _json.loads(json_str)
-        except Exception as exc:
-            logger.warning(
-                "Failed to parse LLM response as JSON: %r — %s",
-                text[:200], exc,
-            )
+        except Exception:
+            logger.warning("Failed to parse LLM response | model=%s text=%r", self._llm.model, text[:500])
             return MappingResult(
                 source_term=source_term,
                 source_label=source_label,
@@ -446,16 +444,16 @@ class OntologyMapper:
 
         # Handle RAG selection response (selected_rank) vs direct code response
         if "selected_rank" in data:
-            rank = int(data.get("selected_rank", 0))
-            confidence = float(data.get("confidence", 0.5))
-            reasoning = data.get("reasoning", "")
+            rank = int(data.get("selected_rank") or 0)
+            confidence = float(data.get("confidence") or 0.5)
+            reasoning = data.get("reasoning") or ""
             candidates: list[dict[str, Any]] = (
                 rag_debug.candidates_retrieved if rag_debug else []
             )
             if 1 <= rank <= len(candidates):
                 chosen = candidates[rank - 1]
-                curie = chosen.get("code", "UNMAPPED")
-                term = chosen.get("term", "")
+                curie = chosen.get("code") or "UNMAPPED"
+                term = chosen.get("term") or ""
                 ontology = self._infer_ontology_source_from_code(curie, self.ontologies[0])
                 logic = LogicType.RAG
             else:
@@ -484,14 +482,14 @@ class OntologyMapper:
             )
 
         # Direct code response (also used when rag_prompt.txt returns a full code)
-        raw_code = data.get("code", "UNMAPPED")
+        raw_code = data.get("code") or "UNMAPPED"
         curie = self._normalize_ontology_code(raw_code, self.ontologies[0])
-        term = data.get("term", "MANUAL_REVIEW_REQUIRED")
-        confidence = float(data.get("confidence", 0.5))
-        reasoning = data.get("reasoning", "")
+        term = data.get("term") or "MANUAL_REVIEW_REQUIRED"
+        confidence = float(data.get("confidence") or 0.5)
+        reasoning = data.get("reasoning") or ""
         ontology = self._infer_ontology_source_from_code(curie, self.ontologies[0])
         # Honour logic_type field from rag_prompt.txt ("rag" when LLM picked a candidate)
-        _lt_str = data.get("logic_type", "")
+        _lt_str = data.get("logic_type") or ""
         logic_type = LogicType.RAG if _lt_str == "rag" else LogicType.LLM
         return MappingResult(
             source_term=source_term,

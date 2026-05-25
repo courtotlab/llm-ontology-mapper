@@ -23,7 +23,11 @@ Prefer a candidate code over generating one freely — this reduces hallucinatio
 3. Assign a confidence score from 0.0 (wrong match) to 1.0 (perfect match).
 4. Set "logic_type" to "rag" if you selected from the candidates, or "llm" if you generated freely.
 
-Respond with ONLY valid JSON — no markdown, no explanation, no prose before or after. Your entire response must be a single valid JSON object matching the format above.
+## Output constraints
+- Always return a valid JSON object. Never include plain text, markdown fences, or any prose outside the JSON object.
+- Never use null for any field. If no match is found, use "UNMAPPED" for code, "NO_MATCH_FOUND" for term, and 0.0 for confidence.
+- The response must always include all required fields: code, term, ontology, confidence, logic_type, and notes.
+- Your entire response must be a single valid JSON object matching the format below.
 
 ## Required JSON format
 {{
