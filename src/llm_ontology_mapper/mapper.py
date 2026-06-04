@@ -446,7 +446,7 @@ class OntologyMapper:
         if "selected_rank" in data:
             rank = int(data.get("selected_rank") or 0)
             confidence = float(data.get("confidence") or 0.5)
-            reasoning = data.get("reasoning") or ""
+            reasoning = data.get("notes") or data.get("reasoning") or ""
             candidates: list[dict[str, Any]] = (
                 rag_debug.candidates_retrieved if rag_debug else []
             )
@@ -486,7 +486,7 @@ class OntologyMapper:
         curie = self._normalize_ontology_code(raw_code, self.ontologies[0])
         term = data.get("term") or "MANUAL_REVIEW_REQUIRED"
         confidence = float(data.get("confidence") or 0.5)
-        reasoning = data.get("reasoning") or ""
+        reasoning = data.get("notes") or data.get("reasoning") or ""
         ontology = self._infer_ontology_source_from_code(curie, self.ontologies[0])
         # Honour logic_type field from rag_prompt.txt ("rag" when LLM picked a candidate)
         _lt_str = data.get("logic_type") or ""
