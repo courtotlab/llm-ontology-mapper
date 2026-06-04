@@ -126,10 +126,6 @@ llm-map = "llm_ontology_mapper.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/llm_ontology_mapper"]
 
-# Include the bundled YAML config and prompt-template assets
-[tool.hatch.build.targets.wheel.force-include]
-"src/llm_ontology_mapper/assets" = "llm_ontology_mapper/assets"
-
 # ── Tool configuration ────────────────────────────────────────────────────────
 [tool.ruff]
 target-version = "py310"
