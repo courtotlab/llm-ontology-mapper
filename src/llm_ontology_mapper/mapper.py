@@ -110,6 +110,7 @@ class OntologyMapper:
             )
 
         # ── Config ────────────────────────────────────────────────────────────
+        self._explicit_ontologies: list[str] | None = ontologies  # None = auto-detect
         self.ontologies = ontologies or ["HPO", "MONDO", "NCIT", "LOINC", "UO"]
         config_path = Path(ontology_config_path) if ontology_config_path else _DEFAULT_CONFIG
         self._ontology_config = self._load_config(config_path)
@@ -233,6 +234,11 @@ class OntologyMapper:
     # Private helpers
     # ─────────────────────────────────────────────────────────────────────────
 
+    def _effective_ontologies(self, entity_type: str | None) -> list[str]:
+        if self._explicit_ontologies is not None:
+            return self._explicit_ontologies
+        return self.get_recommended_ontologies(entity_type)
+
     def _load_config(self, path: Path) -> dict[str, Any]:
         """Load ontology_config.yaml.  Cached per path."""
         return _load_config_cached(path)
@@ -339,7 +345,7 @@ class OntologyMapper:
         rag_candidates: list[dict[str, Any]],
     ) -> list[ChatMessage]:
         """Build prompt messages from assets/prompts/*.txt templates."""
-        target_ontologies = self.get_recommended_ontologies(entity_type)
+        target_ontologies = self._effective_ontologies(entity_type)
         ontologies_block = "\n".join(
             f"  {i+1}. {o} — {self._get_ontology_description(o)}"
             for i, o in enumerate(target_ontologies)
@@ -382,7 +388,7 @@ class OntologyMapper:
     ) -> tuple[list[dict[str, Any]], RAGDebugInfo]:
         """Call retriever and build RAGDebugInfo."""
         assert self._retriever is not None, "_retrieve_candidates called without a retriever"
-        ontologies = self.get_recommended_ontologies(entity_type)
+        ontologies = self._effective_ontologies(entity_type)
         candidates, top_score = self._retriever.retrieve(
             query=source_term,
             entity_type=entity_type,
