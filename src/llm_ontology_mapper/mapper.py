@@ -110,6 +110,7 @@ class OntologyMapper:
             )
 
         # ── Config ────────────────────────────────────────────────────────────
+        self._explicit_ontologies: list[str] | None = ontologies  # None = auto-detect
         self.ontologies = ontologies or ["HPO", "MONDO", "NCIT", "LOINC", "UO"]
         config_path = Path(ontology_config_path) if ontology_config_path else _DEFAULT_CONFIG
         self._ontology_config = self._load_config(config_path)
@@ -233,6 +234,11 @@ class OntologyMapper:
     # Private helpers
     # ─────────────────────────────────────────────────────────────────────────
 
+    def _effective_ontologies(self, entity_type: str | None) -> list[str]:
+        if self._explicit_ontologies is not None:
+            return self._explicit_ontologies
+        return self.get_recommended_ontologies(entity_type)
+
     def _load_config(self, path: Path) -> dict[str, Any]:
         """Load ontology_config.yaml.  Cached per path."""
         return _load_config_cached(path)
@@ -322,9 +328,12 @@ class OntologyMapper:
 
     def _extract_json_from_response(self, response: str) -> str:
         import re
-        json_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', response, re.DOTALL)
-        if json_match:
-            return json_match.group(1)
+        fence_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', response, re.DOTALL)
+        if fence_match:
+            return fence_match.group(1)
+        obj_match = re.search(r'\{.*\}', response, re.DOTALL)
+        if obj_match:
+            return obj_match.group(0)
         return response.strip()
 
     def _build_prompt(
@@ -336,7 +345,7 @@ class OntologyMapper:
         rag_candidates: list[dict[str, Any]],
     ) -> list[ChatMessage]:
         """Build prompt messages from assets/prompts/*.txt templates."""
-        target_ontologies = self.get_recommended_ontologies(entity_type)
+        target_ontologies = self._effective_ontologies(entity_type)
         ontologies_block = "\n".join(
             f"  {i+1}. {o} — {self._get_ontology_description(o)}"
             for i, o in enumerate(target_ontologies)
@@ -379,7 +388,7 @@ class OntologyMapper:
     ) -> tuple[list[dict[str, Any]], RAGDebugInfo]:
         """Call retriever and build RAGDebugInfo."""
         assert self._retriever is not None, "_retrieve_candidates called without a retriever"
-        ontologies = self.get_recommended_ontologies(entity_type)
+        ontologies = self._effective_ontologies(entity_type)
         candidates, top_score = self._retriever.retrieve(
             query=source_term,
             entity_type=entity_type,
@@ -412,11 +421,13 @@ class OntologyMapper:
             text = completion.content
         else:
             text = str(completion)
+        logger.debug("LLM raw response | model=%s text=%s", self._llm.model, text[:500])
         json_str = self._extract_json_from_response(text)
 
         try:
             data = _json.loads(json_str)
         except Exception:
+            logger.warning("Failed to parse LLM response | model=%s text=%r", self._llm.model, text[:500])
             return MappingResult(
                 source_term=source_term,
                 source_label=source_label,
@@ -439,16 +450,16 @@ class OntologyMapper:
 
         # Handle RAG selection response (selected_rank) vs direct code response
         if "selected_rank" in data:
-            rank = int(data.get("selected_rank", 0))
-            confidence = float(data.get("confidence", 0.5))
-            reasoning = data.get("reasoning", "")
+            rank = int(data.get("selected_rank") or 0)
+            confidence = float(data.get("confidence") or 0.5)
+            reasoning = data.get("notes") or data.get("reasoning") or ""
             candidates: list[dict[str, Any]] = (
                 rag_debug.candidates_retrieved if rag_debug else []
             )
             if 1 <= rank <= len(candidates):
                 chosen = candidates[rank - 1]
-                curie = chosen.get("code", "UNMAPPED")
-                term = chosen.get("term", "")
+                curie = chosen.get("code") or "UNMAPPED"
+                term = chosen.get("term") or ""
                 ontology = self._infer_ontology_source_from_code(curie, self.ontologies[0])
                 logic = LogicType.RAG
             else:
@@ -477,14 +488,14 @@ class OntologyMapper:
             )
 
         # Direct code response (also used when rag_prompt.txt returns a full code)
-        raw_code = data.get("code", "UNMAPPED")
+        raw_code = data.get("code") or "UNMAPPED"
         curie = self._normalize_ontology_code(raw_code, self.ontologies[0])
-        term = data.get("term", "MANUAL_REVIEW_REQUIRED")
-        confidence = float(data.get("confidence", 0.5))
-        reasoning = data.get("reasoning", "")
+        term = data.get("term") or "MANUAL_REVIEW_REQUIRED"
+        confidence = float(data.get("confidence") or 0.5)
+        reasoning = data.get("notes") or data.get("reasoning") or ""
         ontology = self._infer_ontology_source_from_code(curie, self.ontologies[0])
         # Honour logic_type field from rag_prompt.txt ("rag" when LLM picked a candidate)
-        _lt_str = data.get("logic_type", "")
+        _lt_str = data.get("logic_type") or ""
         logic_type = LogicType.RAG if _lt_str == "rag" else LogicType.LLM
         return MappingResult(
             source_term=source_term,

@@ -217,6 +217,69 @@ def test_retrieve_candidates_builds_valid_rag_debug(stub_provider: _StubProvider
     assert debug.auto_accepted is True
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# _extract_json_from_response
+# ─────────────────────────────────────────────────────────────────────────────
+
+import json as _json
+
+
+@pytest.mark.unit
+def test_extract_json_plain(stub_provider: _StubProvider) -> None:
+    from llm_ontology_mapper.mapper import OntologyMapper
+    mapper = OntologyMapper(llm_provider=stub_provider)
+    raw = '{"code": "HP:001", "term": "Cough"}'
+    result = mapper._extract_json_from_response(raw)
+    assert _json.loads(result)["code"] == "HP:001"
+
+
+@pytest.mark.unit
+def test_extract_json_fenced_with_specifier(stub_provider: _StubProvider) -> None:
+    from llm_ontology_mapper.mapper import OntologyMapper
+    mapper = OntologyMapper(llm_provider=stub_provider)
+    raw = '```json\n{"code": "HP:001", "term": "Cough"}\n```'
+    result = mapper._extract_json_from_response(raw)
+    assert _json.loads(result)["code"] == "HP:001"
+
+
+@pytest.mark.unit
+def test_extract_json_fenced_without_specifier(stub_provider: _StubProvider) -> None:
+    from llm_ontology_mapper.mapper import OntologyMapper
+    mapper = OntologyMapper(llm_provider=stub_provider)
+    raw = '```\n{"code": "HP:001", "term": "Cough"}\n```'
+    result = mapper._extract_json_from_response(raw)
+    assert _json.loads(result)["code"] == "HP:001"
+
+
+@pytest.mark.unit
+def test_extract_json_prose_prefix_no_fence(stub_provider: _StubProvider) -> None:
+    from llm_ontology_mapper.mapper import OntologyMapper
+    mapper = OntologyMapper(llm_provider=stub_provider)
+    raw = 'Here is the best match for your query:\n{"code": "HP:001", "term": "Cough"}'
+    result = mapper._extract_json_from_response(raw)
+    assert _json.loads(result)["code"] == "HP:001"
+
+
+@pytest.mark.unit
+def test_extract_json_pure_prose_returns_prose(stub_provider: _StubProvider) -> None:
+    from llm_ontology_mapper.mapper import OntologyMapper
+    mapper = OntologyMapper(llm_provider=stub_provider)
+    raw = "This is just prose with no JSON object at all."
+    result = mapper._extract_json_from_response(raw)
+    assert result == raw.strip()
+    with pytest.raises((_json.JSONDecodeError, ValueError)):
+        _json.loads(result)
+
+
+@pytest.mark.unit
+def test_extract_json_think_tags_then_plain_json(stub_provider: _StubProvider) -> None:
+    from llm_ontology_mapper.mapper import OntologyMapper
+    mapper = OntologyMapper(llm_provider=stub_provider)
+    raw = "<think>Let me reason about this carefully.</think>\n{\"code\": \"HP:001\", \"term\": \"Cough\"}"
+    result = mapper._extract_json_from_response(raw)
+    assert _json.loads(result)["code"] == "HP:001"
+
+
 @pytest.mark.unit
 def test_parse_response_uses_rag_candidates_from_debug(stub_provider: _StubProvider) -> None:
     from llm_ontology_mapper.mapper import OntologyMapper

@@ -19,6 +19,11 @@ Respond with ONLY valid JSON — no markdown fences, no explanation.
 4. If the field is ambiguous or spans multiple concepts, note this in "notes".
 5. Do NOT invent codes — use only real, established ontology terms.
 
+## Output constraints
+- Always return a valid JSON object. Never include plain text, markdown fences, or any prose outside the JSON object.
+- Never use null for any field. If no match is found, use "UNMAPPED" for code, "NO_MATCH_FOUND" for term, and 0.0 for confidence.
+- The response must always include all required fields: code, term, ontology, confidence, and notes.
+
 ## Required JSON format
 {{
   "code": "<CURIE e.g. HP:0012735>",
@@ -28,5 +33,5 @@ Respond with ONLY valid JSON — no markdown fences, no explanation.
   "alternatives": [
     {{"code": "...", "term": "...", "ontology": "...", "confidence": <float>}}
   ],
-  "notes": "<optional string or null>"
+  "notes": "<optional reasoning string, or empty string if none>"
 }}

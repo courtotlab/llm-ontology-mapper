@@ -422,6 +422,7 @@ class OllamaProvider(BaseLLMProvider):
                 model=self.model,
                 messages=sdk_messages,
                 options={"temperature": temperature},
+                format="json",
             )
         except Exception as exc:
             # Ollama raises plain exceptions for connection errors — treat as retryable
