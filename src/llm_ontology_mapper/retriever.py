@@ -2,8 +2,8 @@
 OntologyRetriever — RAG candidate retrieval from live ontology APIs.
 
 Retrieve candidates from EBI OLS4, LOINC FHIR, RxNav, NIH Clinical Tables,
-SapBERT, and BioPortal.  retrieve() returns Tuple[List[Dict], float] where
-the float is the score of the top candidate (0.0 if no candidates found).
+and SapBERT.  retrieve() returns Tuple[List[Dict], float] where the float is
+the score of the top candidate (0.0 if no candidates found).
 """
 
 from __future__ import annotations
@@ -16,6 +16,8 @@ import urllib.parse
 from typing import Any
 
 import requests  # type: ignore[import-untyped]
+
+from llm_ontology_mapper.search_tools import SearchTools
 
 logger = logging.getLogger(__name__)
 
@@ -56,12 +58,15 @@ class OntologyRetriever:
     """
     Retrieve candidate ontology codes from public APIs for RAG-based mapping.
 
-    Supported endpoints (all free, no auth except optional BioPortal):
+    Supported endpoints:
       • EBI OLS4  — HP, MONDO, NCIT, UO, SNOMED, …
-      • LOINC FHIR — LOINC (optional credentials via env vars)
+      • LOINC Search API — LOINC (service credentials required)
       • RxNav      — RxNorm
       • NIH Clinical Tables — ICD-10-CM
-      • BioPortal  — fallback (free API key required)
+      • SapBERT    — semantic search server (optional)
+
+    Low-level search adapters live in SearchTools; this class owns retrieval
+    strategy, SapBERT, query preprocessing, NER, and caching concerns.
     """
 
     def __init__(
@@ -70,7 +75,6 @@ class OntologyRetriever:
         top_k: int = 5,
         cache_enabled: bool = True,
         api_timeout: int = 10,
-        bioportal_api_key: str | None = None,
         loinc_fhir_url: str | None = None,
         loinc_fhir_user: str | None = None,
         loinc_fhir_pass: str | None = None,
@@ -79,12 +83,14 @@ class OntologyRetriever:
         request_delay: float = 0.3,
         ner_extractor: Any | None = None,
         sapbert_url: str | None = None,
+        loinc_username: str | None = None,
+        loinc_password: str | None = None,
+        loinc_search_url: str = "https://loinc.regenstrief.org/searchapi/loincs",
     ) -> None:
         self.ontologies        = ontologies or ["HPO", "MONDO", "NCIT", "LOINC", "UO"]
         self.top_k             = top_k
         self.cache_enabled     = cache_enabled
         self.api_timeout       = api_timeout
-        self.bioportal_api_key = bioportal_api_key or os.environ.get("BIOPORTAL_API_KEY")
         self._cache: dict[str, list[dict[str, Any]]] = {}
 
         self.use_cache     = cache_enabled or use_cache
@@ -96,8 +102,24 @@ class OntologyRetriever:
             logger.info(f"SapBERT server configured: {self.sapbert_url}")
 
         self.loinc_fhir_url: str  = loinc_fhir_url  or os.environ.get("LOINC_FHIR_URL", "https://fhir.loinc.org")
-        self.loinc_fhir_user = loinc_fhir_user or os.environ.get("LOINC_FHIR_USER")
-        self.loinc_fhir_pass = loinc_fhir_pass or os.environ.get("LOINC_FHIR_PASS")
+        self.loinc_username = (
+            loinc_username
+            if loinc_username is not None
+            else loinc_fhir_user
+            if loinc_fhir_user is not None
+            else os.environ.get("LOINC_USERNAME")
+            or os.environ.get("LOINC_FHIR_USER")
+        )
+        self.loinc_password = (
+            loinc_password
+            if loinc_password is not None
+            else loinc_fhir_pass
+            if loinc_fhir_pass is not None
+            else os.environ.get("LOINC_PASSWORD")
+            or os.environ.get("LOINC_FHIR_PASS")
+        )
+        self.loinc_fhir_user = self.loinc_username
+        self.loinc_fhir_pass = self.loinc_password
 
         # Load ontology config (optional yaml next to assets/)
         from pathlib import Path
@@ -113,29 +135,27 @@ class OntologyRetriever:
         else:
             self.ontology_config = {}
 
-        self.ols_base      = "https://www.ebi.ac.uk/ols4/api"
-        self.rxnav_base_url = "https://rxnav.nlm.nih.gov/REST"
-        self.icd10_nih_url  = "https://clinicaltables.nlm.nih.gov/api/icd10cm/v3/search"
-        self.bioportal_base = "https://data.bioontology.org"
+        self._search_tools = SearchTools(
+            ols_base="https://www.ebi.ac.uk/ols4/api",
+            rxnav_base_url="https://rxnav.nlm.nih.gov/REST",
+            icd10_nih_url="https://clinicaltables.nlm.nih.gov/api/icd10cm/v3/search",
+            loinc_fhir_url=self.loinc_fhir_url,
+            loinc_username=self.loinc_username,
+            loinc_password=self.loinc_password,
+            loinc_search_url=loinc_search_url,
+            api_timeout=api_timeout,
+            request_delay=request_delay,
+        )
 
-        self.ols_ontologies = [
-            'HP', 'HPO', 'MONDO', 'NCIT', 'SNOMED', 'SNOMEDCT',
-            'UO', 'UBERON', 'CHEBI', 'GO', 'DOID', 'MESH',
-        ]
-        self.ols_ontology_map = {
-            'MONDO': 'mondo', 'HP': 'hp', 'HPO': 'hp', 'NCIT': 'ncit',
-            'SNOMED': 'snomed', 'SNOMEDCT': 'snomed', 'UO': 'uo',
-            'UBERON': 'uberon', 'CHEBI': 'chebi', 'GO': 'go',
-            'DOID': 'doid', 'MESH': 'mesh',
-        }
-        self.bioportal_ontology_map = {
-            'HP': 'HP', 'MONDO': 'MONDO', 'NCIT': 'NCIT', 'LOINC': 'LOINC',
-            'ICD10': 'ICD10CM', 'SNOMEDCT': 'SNOMEDCT', 'RXNORM': 'RXNORM', 'UO': 'UO',
-        }
+        # Convenience aliases kept for any callers that read these attrs directly
+        self.ols_base       = self._search_tools.ols_base
+        self.rxnav_base_url = self._search_tools.rxnav_base_url
+        self.icd10_nih_url  = self._search_tools.icd10_nih_url
+
+        self.ols_ontologies = list(SearchTools.OLS_ONTOLOGY_MAP.keys())
+        self.ols_ontology_map = dict(SearchTools.OLS_ONTOLOGY_MAP)
 
         logger.info("OntologyRetriever initialized with public APIs")
-        if self.bioportal_api_key:
-            logger.info("  - BioPortal available as fallback option")
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -287,26 +307,24 @@ class OntologyRetriever:
         query: str,
         ontology: str,
         top_k: int = 10,
-        use_bioportal: bool = False,
     ) -> list[dict[str, str]]:
         ontology_upper = ontology.upper()
 
-        if not use_bioportal and self.sapbert_url:
+        if self.sapbert_url:
             results = self._search_sapbert(query, ontology_upper, top_k)
             if results:
                 return results
 
-        if not use_bioportal:
-            if ontology_upper in self.ols_ontologies:
-                return self._search_ols(query, ontology, top_k)
-            elif ontology_upper == 'LOINC':
-                return self._search_loinc(query, top_k)
-            elif ontology_upper in ['RXNORM', 'RXCUI']:
-                return self._search_rxnorm(query, top_k)
-            elif ontology_upper in ['ICD10', 'ICD10CM']:
-                return self._search_icd10(query, top_k)
+        if ontology_upper in self.ols_ontologies:
+            return self._search_ols(query, ontology, top_k)
+        elif ontology_upper == 'LOINC':
+            return self._search_loinc(query, top_k)
+        elif ontology_upper in ['RXNORM', 'RXCUI']:
+            return self._search_rxnorm(query, top_k)
+        elif ontology_upper in ['ICD10', 'ICD10CM']:
+            return self._search_icd10(query, top_k)
 
-        return self._search_bioportal(query, ontology, top_k)
+        return []
 
     def _search_sapbert(self, query: str, ontology: str, top_k: int = 10) -> list[dict[str, Any]]:
         sapbert_map = self.ontology_config.get('sapbert_index_map', {})
@@ -340,155 +358,16 @@ class OntologyRetriever:
             return []
 
     def _search_ols(self, query: str, ontology: str, top_k: int = 10) -> list[dict[str, str]]:
-        ontology_id = self.ols_ontology_map.get(ontology.upper())
-        if not ontology_id:
-            logger.warning(f"Ontology {ontology} not supported by OLS")
-            return []
-        try:
-            response = requests.get(
-                f"{self.ols_base}/search",
-                params={'q': query, 'ontology': ontology_id, 'rows': str(top_k),
-                        'exact': 'false', 'groupField': 'iri', 'start': '0'},
-                timeout=self.api_timeout,
-            )
-            response.raise_for_status()
-            docs = response.json().get('response', {}).get('docs', [])
-            candidates = []
-            for idx, doc in enumerate(docs[:top_k]):
-                obo_id = doc.get('obo_id')
-                iri = doc.get('iri', '')
-                code = obo_id if obo_id else iri.split('/')[-1].replace('_', ':')
-                code = self._normalize_code(code, ontology)
-                term = doc.get('label', '')
-                _desc = doc.get('description', '')
-                definition = (_desc[0] if isinstance(_desc, list) and _desc else _desc) or ''
-                candidates.append({
-                    'code': code, 'term': term,
-                    'score': 1.0 - (idx * 0.05),
-                    'definition': definition, 'source': 'OLS', 'iri': iri,
-                })
-            time.sleep(self.request_delay)
-            return candidates
-        except requests.exceptions.RequestException as e:
-            logger.error(f"OLS API error for {ontology}: {e}")
-            return []
-        except Exception as e:
-            logger.error(f"Error parsing OLS results: {e}")
-            return []
+        return self._search_tools.search_ols(query, ontology, top_k)
 
     def _search_loinc(self, query: str, top_k: int = 10) -> list[dict[str, str]]:
-        try:
-            auth = None
-            if self.loinc_fhir_user and self.loinc_fhir_pass:
-                from requests.auth import HTTPBasicAuth  # type: ignore[import-untyped]
-                auth = HTTPBasicAuth(self.loinc_fhir_user, self.loinc_fhir_pass)
-            response = requests.get(
-                f"{self.loinc_fhir_url.rstrip('/')}/ValueSet/$expand",
-                params={'filter': query, 'count': str(top_k), 'includeDesignations': 'false'},
-                auth=auth, timeout=self.api_timeout,
-            )
-            response.raise_for_status()
-            candidates = []
-            for idx, concept in enumerate(response.json().get('expansion', {}).get('contains', [])[:top_k]):
-                code = concept.get('code', '')
-                candidates.append({
-                    'code': f"LOINC:{code}" if not code.startswith('LOINC:') else code,
-                    'term': concept.get('display', ''),
-                    'score': 1.0 - (idx * 0.05),
-                    'definition': '', 'source': 'LOINC-FHIR',
-                })
-            time.sleep(self.request_delay)
-            return candidates
-        except Exception as e:
-            logger.error(f"LOINC search error: {e}")
-            return []
+        return self._search_tools.search_loinc(query, top_k)
 
     def _search_rxnorm(self, query: str, top_k: int = 10) -> list[dict[str, str]]:
-        try:
-            response = requests.get(
-                f"{self.rxnav_base_url}/approximateTerm.json",
-                params={'term': query, 'maxEntries': str(top_k)},
-                timeout=self.api_timeout,
-            )
-            response.raise_for_status()
-            candidate_list = response.json().get('approximateGroup', {}).get('candidate', [])
-            if not isinstance(candidate_list, list):
-                candidate_list = [candidate_list] if candidate_list else []
-            candidates = []
-            for candidate in candidate_list[:top_k]:
-                rxcui = candidate.get('rxcui', '')
-                rank = candidate.get('rank', 0)
-                candidates.append({
-                    'code': f"RXNORM:{rxcui}",
-                    'term': candidate.get('name', ''),
-                    'score': 1.0 / (1.0 + float(rank)),
-                    'definition': '', 'source': 'RxNav',
-                })
-            time.sleep(self.request_delay)
-            return candidates
-        except Exception as e:
-            logger.error(f"RxNorm search error: {e}")
-            return []
+        return self._search_tools.search_rxnorm(query, top_k)
 
     def _search_icd10(self, query: str, top_k: int = 10) -> list[dict[str, str]]:
-        try:
-            response = requests.get(
-                self.icd10_nih_url,
-                params={'sf': 'code,name', 'terms': query, 'maxList': str(top_k)},
-                timeout=self.api_timeout,
-            )
-            response.raise_for_status()
-            data = response.json()
-            candidates = []
-            if len(data) >= 4 and isinstance(data[3], list):
-                for idx, item in enumerate(data[3][:top_k]):
-                    if isinstance(item, list) and len(item) >= 2:
-                        candidates.append({
-                            'code': f"ICD10:{item[0]}",
-                            'term': item[1],
-                            'score': 1.0 - (idx * 0.05),
-                            'definition': '', 'source': 'NIH-ClinicalTables',
-                        })
-            time.sleep(self.request_delay)
-            return candidates
-        except Exception as e:
-            logger.error(f"ICD-10 search error: {e}")
-            return []
-
-    def _search_bioportal(self, query: str, ontology: str, top_k: int = 10) -> list[dict[str, str]]:
-        if not self.bioportal_api_key:
-            logger.warning("BioPortal API key not provided.")
-            return []
-        ontology_acronym = self.bioportal_ontology_map.get(ontology.upper(), ontology)
-        try:
-            response = requests.get(
-                f"{self.bioportal_base}/search",
-                params={'q': query, 'ontologies': ontology_acronym,
-                        'pagesize': str(top_k), 'suggest': 'true',
-                        'apikey': self.bioportal_api_key or ""},
-                timeout=self.api_timeout,
-            )
-            response.raise_for_status()
-            candidates = []
-            for idx, result in enumerate(response.json().get('collection', [])[:top_k]):
-                code_raw = result.get('@id', '').split('/')[-1]
-                definition = result.get('definition', '')
-                if isinstance(definition, list):
-                    definition = definition[0] if definition else ''
-                candidates.append({
-                    'code': self._normalize_code(code_raw, ontology),
-                    'term': result.get('prefLabel', ''),
-                    'score': 1.0 - (idx * 0.05),
-                    'definition': definition, 'source': 'BioPortal',
-                })
-            time.sleep(self.request_delay)
-            return candidates
-        except requests.exceptions.RequestException as e:
-            logger.error(f"BioPortal API error: {e}")
-            return []
-        except Exception as e:
-            logger.error(f"Error parsing BioPortal results: {e}")
-            return []
+        return self._search_tools.search_icd10(query, top_k)
 
     # ------------------------------------------------------------------
     # Validation methods
@@ -505,7 +384,6 @@ class OntologyRetriever:
         self,
         code: str,
         ontology: str,
-        use_bioportal: bool = False,
         iri: str | None = None,
     ) -> tuple[bool | None, str | None]:
         """
@@ -518,16 +396,15 @@ class OntologyRetriever:
         """
         full_code = self._normalize_code(code, ontology)
         ontology_upper = ontology.upper()
-        if not use_bioportal:
-            if ontology_upper in self.ols_ontologies:
-                return self._validate_ols(full_code, ontology, iri=iri)
-            elif ontology_upper == 'LOINC':
-                return self._validate_loinc(code.split(':')[-1])
-            elif ontology_upper in ['RXNORM', 'RXCUI']:
-                return self._validate_rxnorm(code.split(':')[-1])
-            elif ontology_upper in ['ICD10', 'ICD10CM']:
-                return self._validate_icd10(code.split(':')[-1])
-        return self._validate_bioportal(full_code, ontology)
+        if ontology_upper in self.ols_ontologies:
+            return self._validate_ols(full_code, ontology, iri=iri)
+        elif ontology_upper == 'LOINC':
+            return self._validate_loinc(code.split(':')[-1])
+        elif ontology_upper in ['RXNORM', 'RXCUI']:
+            return self._validate_rxnorm(code.split(':')[-1])
+        elif ontology_upper in ['ICD10', 'ICD10CM']:
+            return self._validate_icd10(code.split(':')[-1])
+        return None, None
 
     def _validate_ols(self, full_code: str, ontology: str, iri: str | None = None) -> tuple[bool | None, str | None]:
         ontology_id = self.ols_ontology_map.get(ontology.upper())
@@ -634,40 +511,8 @@ class OntologyRetriever:
             logger.error(f"ICD-10 validation error for {code}: {e}")
             return None, None
 
-    def _validate_bioportal(self, code: str, ontology: str) -> tuple[bool | None, str | None]:
-        if not self.bioportal_api_key:
-            return None, None
-        try:
-            ontology_acronym = self.bioportal_ontology_map.get(ontology.upper(), ontology)
-            response = requests.get(
-                f"{self.bioportal_base}/ontologies/{ontology_acronym}/classes/{code.split(':')[-1]}",
-                params={'apikey': self.bioportal_api_key},
-                timeout=self.api_timeout,
-            )
-            if response.status_code == 200:
-                time.sleep(self.request_delay)
-                return True, response.json().get('prefLabel', '')
-            time.sleep(self.request_delay)
-            return False, None
-        except Exception as e:
-            logger.error(f"BioPortal validation error for {code}: {e}")
-            return None, None
-
     def _normalize_code(self, raw_code: str, ontology: str) -> str:
-        raw_code = str(raw_code).replace('_', ':')
-        prefix_map = {
-            'HP': 'HP', 'HPO': 'HP', 'MONDO': 'MONDO', 'NCIT': 'NCIT',
-            'LOINC': 'LOINC', 'ICD10': 'ICD10', 'ICD10CM': 'ICD10',
-            'SNOMEDCT': 'SNOMEDCT', 'SNOMED': 'SNOMEDCT',
-            'RXNORM': 'RXNORM', 'RXCUI': 'RXNORM', 'UO': 'UO',
-        }
-        prefix = prefix_map.get(ontology.upper(), ontology.upper())
-        if not raw_code.startswith(f"{prefix}:"):
-            if raw_code.startswith(prefix):
-                raw_code = raw_code.replace(prefix, f"{prefix}:", 1)
-            else:
-                raw_code = f"{prefix}:{raw_code}"
-        return raw_code
+        return self._search_tools._normalize_code(raw_code, ontology)
 
     def batch_validate_codes(self, codes: list[str], ontology: str) -> dict[str, tuple[bool | None, str | None]]:
         return {code: self.validate_code(code, ontology) for code in codes}

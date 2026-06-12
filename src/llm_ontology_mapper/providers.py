@@ -57,6 +57,67 @@ class CompletionResponse:
     raw: Any | None              = None   # original SDK response object
 
 
+@dataclass
+class ToolCall:
+    """A single tool invocation requested by the model."""
+
+    id: str           # provider-assigned call ID (used to route results back)
+    name: str         # tool/function name
+    arguments: dict[str, Any]  # parsed argument dict
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tool-format translation
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def to_provider_tools(provider: str, tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Translate MCP JSON-Schema tool definitions to the wire format expected by
+    a given provider.
+
+    Input tool shape (MCP / library-internal):
+        {
+            "name": "search_ols",
+            "description": "...",
+            "inputSchema": {"type": "object", "properties": {...}, "required": [...]}
+        }
+
+    Output per provider:
+        OpenAI / Ollama / GitHub / Azure:
+            {"type": "function", "function": {"name": ..., "description": ..., "parameters": ...}}
+        Anthropic:
+            {"name": ..., "description": ..., "input_schema": {...}}
+    """
+    p = provider.lower()
+    result: list[dict[str, Any]] = []
+    for tool in tools:
+        name = tool.get("name", "")
+        description = tool.get("description", "")
+        schema = (
+            tool.get("inputSchema")
+            or tool.get("parameters")
+            or {"type": "object", "properties": {}}
+        )
+        if p == "anthropic":
+            result.append({
+                "name": name,
+                "description": description,
+                "input_schema": schema,
+            })
+        else:
+            # OpenAI-style: covers openai, ollama, github, azure, local
+            result.append({
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "description": description,
+                    "parameters": schema,
+                },
+            })
+    return result
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Abstract base
 # ─────────────────────────────────────────────────────────────────────────────
@@ -104,6 +165,41 @@ class BaseLLMProvider(abc.ABC):
         - Raise RuntimeError for non-retryable provider errors
         - Log at DEBUG level: model, token counts, latency
         """
+
+    # ── Tool-calling completion ───────────────────────────────────────────────
+
+    def complete_with_tools(
+        self,
+        messages: list[ChatMessage],
+        tools: list[dict[str, Any]],
+        temperature: float = 0.1,
+        max_tokens: int = 1024,
+        **kwargs: Any,
+    ) -> tuple[str | None, list[ToolCall]]:
+        """
+        Send a chat completion request that may produce tool calls.
+
+        Args:
+            messages: Conversation history (system + user turns).
+            tools:    MCP JSON-Schema tool definitions (inputSchema key).
+            temperature, max_tokens: standard sampling params.
+
+        Returns:
+            (text, tool_calls)
+            text:       The model's text content, or None when it produced only
+                        tool calls with no accompanying text.
+            tool_calls: Ordered list of ToolCall objects (empty when the model
+                        responded with plain text).
+
+        Raises:
+            RuntimeError: Provider returned neither text nor tool calls (Ollama
+                          empty-response guard), or the underlying API failed.
+            NotImplementedError: Provider subclass has not implemented this method.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not implement complete_with_tools(). "
+            "Override this method in the provider subclass."
+        )
 
     # ── Retry helper (shared) ─────────────────────────────────────────────────
 
@@ -235,6 +331,23 @@ class OpenAIProvider(BaseLLMProvider):
                 )
         return self._client
 
+    def _token_limit_kwargs(self, max_tokens: int) -> dict[str, int]:
+        """Return the Chat Completions token-limit parameter for this model."""
+        model = self.model.lower().rsplit("/", 1)[-1]
+        if model.startswith(("o1", "o3", "o4", "gpt-5")):
+            return {"max_completion_tokens": max_tokens}
+        return {"max_tokens": max_tokens}
+
+    @staticmethod
+    def _requires_max_completion_tokens(exc: Exception) -> bool:
+        """Detect OpenAI's model-specific rejection of max_tokens."""
+        message = str(exc).lower()
+        return (
+            "max_tokens" in message
+            and "max_completion_tokens" in message
+            and ("unsupported" in message or "not supported" in message)
+        )
+
     def complete(
         self,
         messages: list[ChatMessage],
@@ -277,6 +390,58 @@ class OpenAIProvider(BaseLLMProvider):
             completion_tokens=resp.usage.completion_tokens if resp.usage else None,
             raw=resp,
         )
+
+    def complete_with_tools(
+        self,
+        messages: list[ChatMessage],
+        tools: list[dict[str, Any]],
+        temperature: float = 0.1,
+        max_tokens: int = 1024,
+        **kwargs: Any,
+    ) -> tuple[str | None, list[ToolCall]]:
+        import json as _json
+        import openai  # noqa: PLC0415  # type: ignore[import-untyped]
+
+        client = self._get_client()
+        sdk_messages = [{"role": m.role, "content": m.content} for m in messages]
+        provider_tools = to_provider_tools(self.provider_name, tools)
+        request_kwargs = {
+            "model": self.model,
+            "messages": sdk_messages,
+            "tools": provider_tools,
+            "temperature": temperature,
+            **self._token_limit_kwargs(max_tokens),
+            **kwargs,
+        }
+        try:
+            try:
+                resp = client.chat.completions.create(**request_kwargs)
+            except openai.APIStatusError as exc:
+                if (
+                    "max_tokens" not in request_kwargs
+                    or not self._requires_max_completion_tokens(exc)
+                ):
+                    raise
+                request_kwargs.pop("max_tokens")
+                request_kwargs["max_completion_tokens"] = max_tokens
+                resp = client.chat.completions.create(**request_kwargs)
+        except openai.RateLimitError as exc:
+            raise _RetryableError(str(exc)) from exc
+        except openai.APIStatusError as exc:
+            if exc.status_code >= 500:
+                raise _RetryableError(str(exc)) from exc
+            raise RuntimeError(str(exc)) from exc
+
+        msg = resp.choices[0].message
+        text: str | None = msg.content or None
+        tool_calls: list[ToolCall] = []
+        for tc in (msg.tool_calls or []):
+            tool_calls.append(ToolCall(
+                id=tc.id,
+                name=tc.function.name,
+                arguments=_json.loads(tc.function.arguments),
+            ))
+        return text, tool_calls
 
     @property
     def provider_name(self) -> str:
@@ -354,6 +519,52 @@ class AnthropicProvider(BaseLLMProvider):
             completion_tokens=resp.usage.output_tokens if resp.usage else None,
             raw=resp,
         )
+
+    def complete_with_tools(
+        self,
+        messages: list[ChatMessage],
+        tools: list[dict[str, Any]],
+        temperature: float = 0.1,
+        max_tokens: int = 1024,
+        **kwargs: Any,
+    ) -> tuple[str | None, list[ToolCall]]:
+        import anthropic  # noqa: PLC0415  # type: ignore[import-untyped]
+
+        client = self._get_client()
+        system = next((m.content for m in messages if m.role == "system"), "")
+        sdk_messages = [
+            {"role": m.role, "content": m.content}
+            for m in messages if m.role != "system"
+        ]
+        provider_tools = to_provider_tools("anthropic", tools)
+        try:
+            resp = client.messages.create(
+                model=self.model,
+                system=system,
+                messages=sdk_messages,
+                tools=provider_tools,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+        except anthropic.RateLimitError as exc:
+            raise _RetryableError(str(exc)) from exc
+        except anthropic.APIStatusError as exc:
+            if exc.status_code >= 500:
+                raise _RetryableError(str(exc)) from exc
+            raise RuntimeError(str(exc)) from exc
+
+        text: str | None = None
+        tool_calls: list[ToolCall] = []
+        for block in resp.content:
+            if block.type == "text":
+                text = block.text
+            elif block.type == "tool_use":
+                tool_calls.append(ToolCall(
+                    id=block.id,
+                    name=block.name,
+                    arguments=block.input,
+                ))
+        return text, tool_calls
 
     @property
     def provider_name(self) -> str:
@@ -433,6 +644,62 @@ class OllamaProvider(BaseLLMProvider):
 
         content = resp["message"]["content"] if isinstance(resp, dict) else resp.message.content
         return CompletionResponse(content=content, model=self.model, raw=resp)
+
+    def complete_with_tools(
+        self,
+        messages: list[ChatMessage],
+        tools: list[dict[str, Any]],
+        temperature: float = 0.1,
+        max_tokens: int = 1024,
+        **kwargs: Any,
+    ) -> tuple[str | None, list[ToolCall]]:
+        client = self._get_client()
+        sdk_messages = [{"role": m.role, "content": m.content} for m in messages]
+        provider_tools = to_provider_tools("ollama", tools)
+        try:
+            resp = client.chat(
+                model=self.model,
+                messages=sdk_messages,
+                tools=provider_tools,
+                options={"temperature": temperature},
+                # format="json" intentionally omitted for tool-calling mode
+            )
+        except Exception as exc:
+            err = str(exc).lower()
+            if any(kw in err for kw in ("connection", "timeout", "refused", "reset")):
+                raise _RetryableError(str(exc)) from exc
+            raise RuntimeError(str(exc)) from exc
+
+        msg = resp["message"] if isinstance(resp, dict) else resp.message
+        if isinstance(msg, dict):
+            content: str | None = msg.get("content") or None
+            raw_tool_calls = msg.get("tool_calls") or []
+        else:
+            content = msg.content or None
+            raw_tool_calls = msg.tool_calls or []
+
+        tool_calls: list[ToolCall] = []
+        for tc in raw_tool_calls:
+            if isinstance(tc, dict):
+                fn = tc.get("function", {})
+                tool_calls.append(ToolCall(
+                    id=tc.get("id", ""),
+                    name=fn.get("name", ""),
+                    arguments=fn.get("arguments", {}),
+                ))
+            else:
+                tool_calls.append(ToolCall(
+                    id=getattr(tc, "id", ""),
+                    name=tc.function.name,
+                    arguments=tc.function.arguments,
+                ))
+
+        if not tool_calls and not content:
+            raise RuntimeError(
+                "Ollama complete_with_tools: model returned neither tool calls nor text content"
+            )
+
+        return content, tool_calls
 
     @property
     def provider_name(self) -> str:

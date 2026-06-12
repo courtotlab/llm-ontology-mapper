@@ -81,6 +81,18 @@ flowchart TB
 | GitHub Models | `openai` | `GITHUB_TOKEN` |
 | Anthropic | `anthropic` | `ANTHROPIC_API_KEY` |
 
+Live LOINC search uses the official LOINC Search API rather than FHIR
+ValueSet expansion and requires one configured service credential:
+
+```bash
+export LOINC_USERNAME="..."
+export LOINC_PASSWORD="..."
+```
+
+Bridge and backend deployments can configure these variables once in the
+service runtime. End users of those deployments do not need individual LOINC
+accounts. Credentials are used only for authenticated LOINC API requests.
+
 ### Installation
 
 > **Note:** This package is not yet published to PyPI. Install directly from the repository.
@@ -229,4 +241,3 @@ If you use this library in your research, please cite the repository:
 ```
 https://github.com/courtotlab/llm-ontology-mapper
 ```
-

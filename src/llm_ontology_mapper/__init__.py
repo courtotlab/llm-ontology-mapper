@@ -67,6 +67,9 @@ from .providers import (
 # ── Retriever (optional — only materialises HTTP dep when used) ────────────────
 from .retriever import OntologyRetriever
 
+# ── Agentic engine ────────────────────────────────────────────────────────────
+from .agentic_mapper import AgenticMapper, normalize_code
+
 # ── Validator (optional — needs requests for live API calls) ───────────────────
 from .validator import OntologyValidator
 
@@ -101,5 +104,8 @@ __all__ = [
     "EvaluationMetrics",
     "EvaluationReport",
     "NERQueryExtractor",
+    # Agentic engine
+    "AgenticMapper",
+    "normalize_code",
 ]
 

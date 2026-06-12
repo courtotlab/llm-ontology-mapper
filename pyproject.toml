@@ -150,6 +150,7 @@ asyncio_default_fixture_loop_scope = "function"
 markers = [
     "unit:      pure-logic tests, no I/O",
     "integration: tests that call external APIs",
+    "live:      opt-in tests that call live external APIs",
     "slow:      tests that take > 10 s",
 ]
 

@@ -41,6 +41,9 @@ class LogicType(str, Enum):
     # Hybrid: RAG shortlisted candidates; LLM re-ranked / reconciled
     HYBRID = "hybrid"
 
+    # Agentic: tool-calling agent loop drove the mapping
+    AGENTIC = "agentic"
+
 
 class OntologyPrefix(str, Enum):
     """Supported ontology namespaces."""
@@ -72,7 +75,7 @@ class AlternativeMapping(BaseModel):
         ..., ge=0.0, le=1.0,
         description="Confidence score in [0, 1]"
     )
-    source: Literal["llm", "rag", "direct"] = Field(
+    source: Literal["llm", "rag", "direct", "agentic"] = Field(
         "llm",
         description="How this alternative was generated"
     )
