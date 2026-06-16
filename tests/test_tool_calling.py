@@ -42,7 +42,10 @@ _SAMPLE_TOOLS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "query":    {"type": "string"},
-                "ontology": {"type": "string"},
+                "ontology": {
+                    "type": "string",
+                    "enum": ["HP", "MONDO", "NCIT"],
+                },
             },
             "required": ["query", "ontology"],
         },
@@ -94,6 +97,18 @@ def test_to_provider_tools_ollama_is_openai_style() -> None:
     result = to_provider_tools("ollama", _SAMPLE_TOOLS)
     assert result[0]["type"] == "function"
     assert result[0]["function"]["name"] == "search_ols"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("provider", ["openai", "ollama", "anthropic"])
+def test_to_provider_tools_preserves_ontology_enum(provider: str) -> None:
+    result = to_provider_tools(provider, _SAMPLE_TOOLS)
+    if provider == "anthropic":
+        schema = result[0]["input_schema"]
+    else:
+        schema = result[0]["function"]["parameters"]
+
+    assert schema["properties"]["ontology"]["enum"] == ["HP", "MONDO", "NCIT"]
 
 
 @pytest.mark.unit

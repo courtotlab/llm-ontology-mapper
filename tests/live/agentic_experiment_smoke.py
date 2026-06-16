@@ -25,11 +25,11 @@ from llm_ontology_mapper.search_tools import SearchTools
 AGENTIC_PROVIDER = "ollama"  # "openai" or "ollama"
 
 OPENAI_MODEL = "gpt-4.1-mini"
-OLLAMA_MODEL = "qwen2.5:14b-instruct"
+OLLAMA_MODEL = "llama3.2:latest"
 OLLAMA_BASE_URL = "http://localhost:11434"
 
 SOURCE_TERM = "sys_bp"
-SOURCE_LABEL = "systolic blood pressure"
+SOURCE_LABEL = ""
 TARGET_ONTOLOGY = "LOINC"
 CLINICAL_AREA = ""
 

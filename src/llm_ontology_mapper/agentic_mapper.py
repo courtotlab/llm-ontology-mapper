@@ -19,9 +19,12 @@ Design invariants
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
+import os
 import re
+import sys
 import time
 from typing import Any, Callable
 
@@ -35,6 +38,18 @@ from llm_ontology_mapper.search_tools import SearchTools
 
 logger = logging.getLogger(__name__)
 
+
+def _agentic_trace(event: str, **details: Any) -> None:
+    """Emit structured agent-loop diagnostics only when explicitly enabled."""
+    if os.environ.get("AGENTIC_DEBUG") != "1":
+        return
+    print(
+        "[AGENTIC_DEBUG] "
+        + json.dumps({"event": event, **details}, default=str, sort_keys=True),
+        file=sys.stderr,
+        flush=True,
+    )
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Loop constants
 # ─────────────────────────────────────────────────────────────────────────────
@@ -42,6 +57,11 @@ logger = logging.getLogger(__name__)
 MAX_ITERATIONS: int   = 6
 TOTAL_TIMEOUT_S: float = 90.0
 TOP_K_PER_TOOL: int   = 5
+
+_OLS_CANONICAL_ONTOLOGIES: tuple[str, ...] = (
+    "HP", "MONDO", "NCIT", "SNOMED", "UBERON", "CHEBI", "GO", "DOID",
+    "MESH", "UO",
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MCP JSON-Schema tool definitions
@@ -60,7 +80,8 @@ _TOOL_SEARCH_OLS: dict[str, Any] = {
             "query":    {"type": "string",
                          "description": "Term to search for (expanded, not abbreviated)"},
             "ontology": {"type": "string",
-                         "description": "Ontology short-name: HP, MONDO, NCIT, UBERON, CHEBI, SNOMED"},
+                         "enum": list(_OLS_CANONICAL_ONTOLOGIES),
+                         "description": "Canonical ontology short-name"},
         },
         "required": ["query", "ontology"],
     },
@@ -112,11 +133,14 @@ ALL_TOOLS: list[dict[str, Any]] = [
     _TOOL_SEARCH_ICD10,
 ]
 
-# OLS-compatible ontology identifiers (target_ontology hard-filter routing)
-_OLS_ONTOLOGIES: frozenset[str] = frozenset({
-    "HPO", "HP", "MONDO", "NCIT", "SNOMED", "SNOMEDCT", "SNOMED-CT",
-    "UBERON", "CHEBI", "GO", "DOID", "MESH", "UO",
-})
+# OLS target aliases are separate from canonical values exposed to models.
+_OLS_TARGET_ALIASES: dict[str, str] = {
+    **{ontology: ontology for ontology in _OLS_CANONICAL_ONTOLOGIES},
+    "HPO": "HP",
+    "SNOMEDCT": "SNOMED",
+    "SNOMED-CT": "SNOMED",
+}
+_OLS_ONTOLOGIES: frozenset[str] = frozenset(_OLS_TARGET_ALIASES)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Code normalisation (module-level, also used by the A4 test suite)
@@ -185,6 +209,22 @@ def _ontology_to_prefix(ontology: str) -> str:
     return _MAP.get(ontology.upper(), ontology.upper())
 
 
+def _resolve_ols_ontology(target_ontology: str | None) -> str | None:
+    """Resolve a hard target constraint to the canonical OLS API identifier."""
+    if not isinstance(target_ontology, str):
+        return None
+    return _OLS_TARGET_ALIASES.get(target_ontology.strip().upper())
+
+
+def _is_meaningful_query(value: Any) -> bool:
+    """Return whether *value* contains usable search text."""
+    return (
+        isinstance(value, str)
+        and bool(value.strip())
+        and any(character.isalnum() for character in value)
+    )
+
+
 def _extract_json(text: str) -> str:
     """Pull the first JSON object from a possibly-prose model response."""
     # Remove <think>…</think> blocks (some reasoning models emit these)
@@ -227,6 +267,7 @@ def _build_system_prompt(
         "3. When you have sufficient candidates, return your final answer as JSON.",
         "",
         _SOURCE_ROUTING_BLOCK,
+        'TOOL ARGUMENT EXAMPLE: search_ols({"query":"cough","ontology":"HP"})',
     ]
 
     if clinical_area:
@@ -355,7 +396,14 @@ class AgenticMapper:
         _cancel = cancel_check or (lambda: False)
         t_start = time.monotonic()
 
-        tools    = self._select_tools(target_ontology)
+        bound_ols_ontology = _resolve_ols_ontology(target_ontology)
+        tools    = self._select_tools(target_ontology, bound_ols_ontology)
+        _agentic_trace(
+            "mapping_start",
+            target_ontology=target_ontology,
+            target_bound=bound_ols_ontology is not None,
+            pinned_ols_ontology=bound_ols_ontology,
+        )
         messages: list[ChatMessage] = [
             ChatMessage(role="system", content=_build_system_prompt(target_ontology, clinical_area)),
             ChatMessage(role="user",   content=_build_user_prompt(source_term, source_label)),
@@ -363,12 +411,48 @@ class AgenticMapper:
 
         # norm_code → raw result dict from the tool
         accumulated: dict[str, dict[str, Any]] = {}
+        attempted_calls: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        fallback_query = self._preferred_fallback_query(source_label, source_term)
+        target_bound_query_fallback = (
+            fallback_query
+            if target_ontology is not None and len(tools) == 1
+            else None
+        )
         non_progress   = 0   # consecutive turns with no tool calls AND no valid JSON
         grounding_tried = False
+        force_finalize_next = False
+        duplicate_productive_seen = False
 
         for iteration in range(self.MAX_ITERATIONS):
+            iteration_tools = [] if force_finalize_next else tools
+            force_finalize_next = False
+            search_ols_tool = next(
+                (tool for tool in iteration_tools if tool.get("name") == "search_ols"),
+                None,
+            )
+            search_ols_schema = (
+                search_ols_tool.get("inputSchema", {})
+                if search_ols_tool is not None
+                else {}
+            )
+            _agentic_trace(
+                "iteration_start",
+                iteration=iteration,
+                exposed_tools=[tool.get("name") for tool in iteration_tools],
+                search_ols_schema_properties=list(
+                    search_ols_schema.get("properties", {}).keys()
+                ),
+                search_ols_schema_required=search_ols_schema.get("required", []),
+                target_bound=bound_ols_ontology is not None,
+                pinned_ols_ontology=bound_ols_ontology,
+            )
 
             if time.monotonic() - t_start > self.TOTAL_TIMEOUT_S:
+                _agentic_trace(
+                    "loop_exit",
+                    iteration=iteration,
+                    reason="total_timeout",
+                )
                 return self._unmapped(
                     source_term, source_label,
                     f"Total timeout ({self.TOTAL_TIMEOUT_S}s) exceeded "
@@ -376,16 +460,40 @@ class AgenticMapper:
                 )
 
             if _cancel():
+                _agentic_trace(
+                    "loop_exit",
+                    iteration=iteration,
+                    reason="cancelled",
+                )
                 return self._unmapped(source_term, source_label, "Cancelled by cancel_check")
 
             # ── LLM turn ─────────────────────────────────────────────────────
             try:
-                text, tool_calls = self._provider.complete_with_tools(messages, tools)
+                text, tool_calls = self._provider.complete_with_tools(
+                    messages,
+                    iteration_tools,
+                )
             except Exception as exc:
+                _agentic_trace(
+                    "provider_error",
+                    iteration=iteration,
+                    error=repr(exc),
+                )
                 logger.warning(
                     "AgenticMapper LLM error on iteration %d: %s", iteration, exc
                 )
                 return self._unmapped(source_term, source_label, f"LLM error: {exc}")
+
+            _agentic_trace(
+                "provider_response",
+                iteration=iteration,
+                text=text,
+                tool_calls=[
+                    {"name": tc.name, "arguments": tc.arguments}
+                    for tc in tool_calls
+                ],
+                attempted_final_answer=bool(text and not tool_calls),
+            )
 
             # ── Branch A: model issued tool calls ────────────────────────────
             if tool_calls:
@@ -393,20 +501,184 @@ class AgenticMapper:
                 result_blocks: list[str] = []
 
                 for tc in tool_calls:
+                    error: str | None = None
+                    repeated_call = False
+                    formatted_arguments = tc.arguments
                     try:
-                        results = self._execute_tool(tc.name, tc.arguments)
-                    except Exception as exc:
-                        logger.warning("Tool %r raised: %s — skipping", tc.name, exc)
+                        dispatch_arguments = self._prepare_tool_arguments(
+                            tc.name,
+                            tc.arguments,
+                            bound_ols_ontology=bound_ols_ontology,
+                            fallback_query=target_bound_query_fallback,
+                        )
+                        formatted_arguments = dispatch_arguments
+                        call_key = self._normalized_tool_call_key(
+                            tc.name,
+                            dispatch_arguments,
+                        )
+                        if call_key in attempted_calls:
+                            repeated_call = True
+                            results = attempted_calls[call_key]
+                            if results:
+                                duplicate_productive_seen = True
+                                force_finalize_next = True
+                                error = (
+                                    f"Duplicate {tc.name} call: this query already "
+                                    "returned candidates. Do not search again. Select "
+                                    "one of the returned codes and produce the final "
+                                    "grounded JSON."
+                                )
+                                trace_event = "duplicate_productive_tool_call"
+                            else:
+                                error = (
+                                    f"Repeated {tc.name} call: this query already "
+                                    "returned no results. Do not repeat the same "
+                                    "search. Use a different meaningful query."
+                                )
+                                trace_event = "duplicate_zero_result_tool_call"
+                            _agentic_trace(
+                                trace_event,
+                                iteration=iteration,
+                                tool=tc.name,
+                                dispatch_arguments=dispatch_arguments,
+                                result_count=len(results),
+                            )
+                        else:
+                            try:
+                                results = self._execute_tool(
+                                    tc.name,
+                                    dispatch_arguments,
+                                    bound_ols_ontology=bound_ols_ontology,
+                                )
+                            except Exception as primary_exc:
+                                attempted_calls[call_key] = []
+                                fallback_arguments = self._fallback_tool_arguments(
+                                    dispatch_arguments,
+                                    target_bound_query_fallback,
+                                )
+                                if fallback_arguments is None:
+                                    raise
+                                _agentic_trace(
+                                    "query_fallback",
+                                    iteration=iteration,
+                                    tool=tc.name,
+                                    original_query=dispatch_arguments["query"],
+                                    replacement_query=fallback_arguments["query"],
+                                    reason="query_error_fallback",
+                                    error=repr(primary_exc),
+                                )
+                                dispatch_arguments = fallback_arguments
+                                formatted_arguments = fallback_arguments
+                                call_key = self._normalized_tool_call_key(
+                                    tc.name,
+                                    dispatch_arguments,
+                                )
+                                if call_key in attempted_calls:
+                                    results = attempted_calls[call_key]
+                                else:
+                                    results = self._execute_tool(
+                                        tc.name,
+                                        dispatch_arguments,
+                                        bound_ols_ontology=bound_ols_ontology,
+                                    )
+                                    attempted_calls[call_key] = results
+                            else:
+                                attempted_calls[call_key] = results
+                                fallback_arguments = self._fallback_tool_arguments(
+                                    dispatch_arguments,
+                                    target_bound_query_fallback,
+                                )
+                                if not results and fallback_arguments is not None:
+                                    _agentic_trace(
+                                        "query_fallback",
+                                        iteration=iteration,
+                                        tool=tc.name,
+                                        original_query=dispatch_arguments["query"],
+                                        replacement_query=fallback_arguments["query"],
+                                        reason="zero_result_fallback",
+                                    )
+                                    dispatch_arguments = fallback_arguments
+                                    formatted_arguments = fallback_arguments
+                                    call_key = self._normalized_tool_call_key(
+                                        tc.name,
+                                        dispatch_arguments,
+                                    )
+                                    if call_key in attempted_calls:
+                                        results = attempted_calls[call_key]
+                                    else:
+                                        results = self._execute_tool(
+                                            tc.name,
+                                            dispatch_arguments,
+                                            bound_ols_ontology=bound_ols_ontology,
+                                        )
+                                        attempted_calls[call_key] = results
+                    except ValueError as exc:
                         results = []
+                        error = str(exc)
+                        _agentic_trace(
+                            "tool_argument_rejected",
+                            iteration=iteration,
+                            tool=tc.name,
+                            arguments=tc.arguments,
+                            reason=error,
+                        )
+                    except Exception as exc:
+                        logger.warning("Tool %r raised: %s", tc.name, exc)
+                        results = []
+                        error = (
+                            f"Tool execution failed: {exc}. "
+                            "Retry with valid arguments or another search."
+                        )
+                        _agentic_trace(
+                            "tool_execution_error",
+                            iteration=iteration,
+                            tool=tc.name,
+                            arguments=tc.arguments,
+                            reason=repr(exc),
+                        )
 
                     for r in results:
                         raw = r.get("code", "")
                         if raw:
                             accumulated[normalize_code(raw)] = r
 
-                    result_blocks.append(
-                        _format_tool_result(tc.name, tc.arguments, results)
+                    _agentic_trace(
+                        "tool_results",
+                        iteration=iteration,
+                        tool=tc.name,
+                        result_count=len(results),
+                        first_results=[
+                            {
+                                "code": result.get("code"),
+                                "term": result.get("term"),
+                                "score": result.get("score"),
+                            }
+                            for result in results[:5]
+                        ],
                     )
+                    if repeated_call and results:
+                        formatted_result = (
+                            f"{tc.name}: error={error}\n"
+                            + _format_tool_result(
+                                tc.name,
+                                formatted_arguments,
+                                results,
+                            )
+                        )
+                    else:
+                        formatted_result = _format_tool_result(
+                            tc.name,
+                            formatted_arguments,
+                            results,
+                            error=error,
+                        )
+                    _agentic_trace(
+                        "formatted_tool_result",
+                        iteration=iteration,
+                        tool=tc.name,
+                        text=formatted_result,
+                    )
+                    result_blocks.append(formatted_result)
 
                 if text:
                     messages.append(ChatMessage(role="assistant", content=text))
@@ -425,12 +697,29 @@ class AgenticMapper:
 
             # ── Branch B: model returned text ────────────────────────────────
             if text:
+                _agentic_trace(
+                    "final_answer_attempt",
+                    iteration=iteration,
+                    text=text,
+                )
                 json_str = _extract_json(text)
                 try:
                     data = json.loads(json_str)
-                except json.JSONDecodeError:
+                except json.JSONDecodeError as exc:
+                    _agentic_trace(
+                        "final_answer_rejected",
+                        iteration=iteration,
+                        reason="json_parse_error",
+                        error=str(exc),
+                        extracted_text=json_str,
+                    )
                     non_progress += 1
                     if non_progress >= 2:
+                        _agentic_trace(
+                            "loop_exit",
+                            iteration=iteration,
+                            reason="two_unparseable_responses",
+                        )
                         return self._unmapped(
                             source_term, source_label,
                             "Two consecutive non-progress turns (unparseable response)",
@@ -448,8 +737,19 @@ class AgenticMapper:
 
                 raw_code = (data.get("code") or "").strip()
                 if not raw_code or raw_code.upper() == "UNMAPPED":
+                    _agentic_trace(
+                        "final_answer_rejected",
+                        iteration=iteration,
+                        reason="missing_or_unmapped_code",
+                        parsed_answer=data,
+                    )
                     non_progress += 1
                     if non_progress >= 2:
+                        _agentic_trace(
+                            "loop_exit",
+                            iteration=iteration,
+                            reason="two_answers_without_valid_code",
+                        )
                         return self._unmapped(
                             source_term, source_label,
                             "Two consecutive non-progress turns (no valid code in response)",
@@ -468,8 +768,22 @@ class AgenticMapper:
                 # ── Grounding check ──────────────────────────────────────────
                 non_progress = 0
                 ok, reason = self._ground(raw_code, target_ontology, accumulated)
+                _agentic_trace(
+                    "grounding_check",
+                    iteration=iteration,
+                    code=raw_code,
+                    accepted=ok,
+                    rejection_reason=reason or None,
+                    accumulated_codes=sorted(accumulated.keys()),
+                )
 
                 if ok:
+                    _agentic_trace(
+                        "loop_exit",
+                        iteration=iteration,
+                        reason="grounded_answer",
+                        code=raw_code,
+                    )
                     return self._build_result(source_term, source_label, data, accumulated)
 
                 if not grounding_tried:
@@ -489,6 +803,13 @@ class AgenticMapper:
                     continue
 
                 # Second grounding failure → LLM fallback
+                _agentic_trace(
+                    "loop_exit",
+                    iteration=iteration,
+                    reason="second_grounding_failure",
+                    code=raw_code,
+                    rejection_reason=reason,
+                )
                 return self._build_result(
                     source_term, source_label, data, accumulated,
                     logic_type=LogicType.LLM,
@@ -496,8 +817,18 @@ class AgenticMapper:
                 )
 
             # ── Branch C: empty response (neither text nor tool calls) ────────
+            _agentic_trace(
+                "empty_provider_response",
+                iteration=iteration,
+                consecutive_non_progress=non_progress + 1,
+            )
             non_progress += 1
             if non_progress >= 2:
+                _agentic_trace(
+                    "loop_exit",
+                    iteration=iteration,
+                    reason="two_empty_responses",
+                )
                 return self._unmapped(
                     source_term, source_label,
                     "Two consecutive non-progress turns (empty LLM response)",
@@ -509,6 +840,27 @@ class AgenticMapper:
                 ),
             ))
 
+        _agentic_trace(
+            "loop_exit",
+            iteration=self.MAX_ITERATIONS,
+            reason="max_iterations",
+            accumulated_codes=sorted(accumulated.keys()),
+        )
+        fallback = self._grounded_retrieval_fallback(
+            source_term,
+            source_label,
+            target_ontology,
+            accumulated,
+            duplicate_productive_seen=duplicate_productive_seen,
+        )
+        if fallback is not None:
+            _agentic_trace(
+                "loop_exit",
+                iteration=self.MAX_ITERATIONS,
+                reason="grounded_retrieval_fallback",
+                code=fallback.target_code,
+            )
+            return fallback
         return self._unmapped(
             source_term, source_label,
             f"Max iterations ({self.MAX_ITERATIONS}) reached without a grounded answer",
@@ -516,13 +868,21 @@ class AgenticMapper:
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
-    def _select_tools(self, target_ontology: str | None) -> list[dict[str, Any]]:
+    def _select_tools(
+        self,
+        target_ontology: str | None,
+        bound_ols_ontology: str | None = None,
+    ) -> list[dict[str, Any]]:
         """Restrict the tool set based on target_ontology (hard filter)."""
         if target_ontology is None:
             return list(ALL_TOOLS)
         onto_upper = target_ontology.upper()
-        if onto_upper in _OLS_ONTOLOGIES:
-            return [_TOOL_SEARCH_OLS]
+        if bound_ols_ontology or onto_upper in _OLS_ONTOLOGIES:
+            tool = copy.deepcopy(_TOOL_SEARCH_OLS)
+            schema = tool["inputSchema"]
+            schema["properties"].pop("ontology")
+            schema["required"].remove("ontology")
+            return [tool]
         if onto_upper == "LOINC":
             return [_TOOL_SEARCH_LOINC]
         if onto_upper in ("RXNORM", "RXCUI"):
@@ -534,28 +894,142 @@ class AgenticMapper:
     def _execute_tool(
         self,
         name: str,
-        arguments: dict[str, Any],
+        arguments: Any,
+        *,
+        bound_ols_ontology: str | None = None,
     ) -> list[dict[str, Any]]:
+        prepared = self._prepare_tool_arguments(
+            name,
+            arguments,
+            bound_ols_ontology=bound_ols_ontology,
+        )
+        query = prepared["query"]
+
         if name == "search_ols":
+            ontology = prepared["ontology"]
+            _agentic_trace(
+                "tool_dispatch",
+                tool=name,
+                target_bound=bound_ols_ontology is not None,
+                pinned_ols_ontology=bound_ols_ontology,
+                query=query,
+                ontology=ontology,
+            )
             return self._search_tools.search_ols(
-                arguments.get("query", ""),
-                arguments.get("ontology", "HP"),
+                query,
+                ontology,
                 top_k=TOP_K_PER_TOOL,
             )
         if name == "search_loinc":
+            _agentic_trace("tool_dispatch", tool=name, query=query)
             return self._search_tools.search_loinc(
-                arguments.get("query", ""), top_k=TOP_K_PER_TOOL
+                query, top_k=TOP_K_PER_TOOL
             )
         if name == "search_rxnorm":
+            _agentic_trace("tool_dispatch", tool=name, query=query)
             return self._search_tools.search_rxnorm(
-                arguments.get("query", ""), top_k=TOP_K_PER_TOOL
+                query, top_k=TOP_K_PER_TOOL
             )
         if name == "search_icd10":
+            _agentic_trace("tool_dispatch", tool=name, query=query)
             return self._search_tools.search_icd10(
-                arguments.get("query", ""), top_k=TOP_K_PER_TOOL
+                query, top_k=TOP_K_PER_TOOL
             )
-        logger.warning("AgenticMapper: unknown tool %r — skipping", name)
-        return []
+        raise ValueError(
+            f"Unknown tool {name!r}. Retry using one of the provided tools."
+        )
+
+    @staticmethod
+    def _prepare_tool_arguments(
+        name: str,
+        arguments: Any,
+        *,
+        bound_ols_ontology: str | None = None,
+        fallback_query: str | None = None,
+    ) -> dict[str, str]:
+        if not isinstance(arguments, dict):
+            raise ValueError(
+                f"Invalid arguments for {name!r}: expected an object; "
+                f"you sent {arguments!r}. Retry with valid values."
+            )
+
+        original_query = arguments.get("query")
+        if _is_meaningful_query(original_query):
+            query = original_query.strip()
+        elif _is_meaningful_query(fallback_query):
+            query = fallback_query.strip()
+            _agentic_trace(
+                "query_fallback",
+                tool=name,
+                original_query=original_query,
+                replacement_query=query,
+                reason="invalid_query_fallback",
+            )
+        else:
+            raise ValueError(
+                f"Invalid 'query': expected meaningful plain search text; "
+                f"you sent {original_query!r}. Retry with a valid value."
+            )
+
+        if name == "search_ols":
+            ontology = bound_ols_ontology
+            if ontology is None:
+                supplied = arguments.get("ontology")
+                if (
+                    not isinstance(supplied, str)
+                    or supplied.strip() not in _OLS_CANONICAL_ONTOLOGIES
+                ):
+                    allowed = ", ".join(_OLS_CANONICAL_ONTOLOGIES)
+                    raise ValueError(
+                        f"Invalid 'ontology': must be one of [{allowed}] as a "
+                        f"plain string; you sent {supplied!r}. "
+                        "Retry with a valid value."
+                    )
+                ontology = supplied.strip()
+            return {"query": query, "ontology": ontology}
+        if name in {"search_loinc", "search_rxnorm", "search_icd10"}:
+            return {"query": query}
+        raise ValueError(
+            f"Unknown tool {name!r}. Retry using one of the provided tools."
+        )
+
+    @staticmethod
+    def _preferred_fallback_query(
+        source_label: str | None,
+        source_term: str,
+    ) -> str | None:
+        for candidate in (source_label, source_term):
+            if _is_meaningful_query(candidate):
+                return candidate.strip()
+        return None
+
+    @staticmethod
+    def _fallback_tool_arguments(
+        arguments: dict[str, str],
+        fallback_query: str | None,
+    ) -> dict[str, str] | None:
+        if not _is_meaningful_query(fallback_query):
+            return None
+        if " ".join(arguments["query"].split()).casefold() == (
+            " ".join(fallback_query.split()).casefold()
+        ):
+            return None
+        return {**arguments, "query": fallback_query.strip()}
+
+    @staticmethod
+    def _normalized_tool_call_key(
+        name: str,
+        arguments: dict[str, str],
+    ) -> tuple[str, str]:
+        normalized_arguments = {
+            key: (
+                " ".join(value.split()).casefold()
+                if key == "query"
+                else value.strip().upper()
+            )
+            for key, value in arguments.items()
+        }
+        return name, json.dumps(normalized_arguments, sort_keys=True)
 
     @staticmethod
     def _ground(
@@ -630,6 +1104,60 @@ class AgenticMapper:
             notes=note,
         )
 
+    def _grounded_retrieval_fallback(
+        self,
+        source_term: str,
+        source_label: str | None,
+        target_ontology: str | None,
+        accumulated: dict[str, dict[str, Any]],
+        *,
+        duplicate_productive_seen: bool,
+    ) -> MappingResult | None:
+        ranked = sorted(
+            accumulated.items(),
+            key=lambda item: self._candidate_score(item[1]),
+            reverse=True,
+        )
+        grounded = [
+            (code, candidate)
+            for code, candidate in ranked
+            if self._ground(code, target_ontology, accumulated)[0]
+        ]
+        if not grounded:
+            return None
+
+        code, candidate = grounded[0]
+        score = self._candidate_score(candidate)
+        fallback_note = (
+            "Selected from grounded retrieval candidates after the agent "
+            "repeated tool calls and did not produce a final answer."
+            if duplicate_productive_seen
+            else (
+                "Selected from grounded retrieval candidates after the agent "
+                "did not produce a final answer."
+            )
+        )
+        return self._build_result(
+            source_term,
+            source_label,
+            {
+                "code": code,
+                "term": candidate.get("term", ""),
+                "ontology": _code_to_ontology(code),
+                "confidence": min(0.75, score),
+                "notes": fallback_note,
+            },
+            accumulated,
+        )
+
+    @staticmethod
+    def _candidate_score(candidate: dict[str, Any]) -> float:
+        try:
+            score = float(candidate.get("score", 0.5))
+        except (TypeError, ValueError):
+            score = 0.5
+        return max(0.0, min(1.0, score))
+
     @staticmethod
     def _unmapped(
         source_term: str,
@@ -655,10 +1183,17 @@ class AgenticMapper:
 
 def _format_tool_result(
     name: str,
-    arguments: dict[str, Any],
+    arguments: Any,
     results: list[dict[str, Any]],
+    *,
+    error: str | None = None,
 ) -> str:
-    arg_str = ", ".join(f'{k}="{v}"' for k, v in arguments.items())
+    if isinstance(arguments, dict):
+        arg_str = ", ".join(f'{k}="{v}"' for k, v in arguments.items())
+    else:
+        arg_str = repr(arguments)
+    if error:
+        return f"{name}({arg_str}): error={error}"
     if not results:
         return f"{name}({arg_str}): No results found."
     lines = [f"{name}({arg_str}): {len(results)} result(s):"]

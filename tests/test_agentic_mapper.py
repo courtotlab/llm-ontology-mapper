@@ -24,6 +24,7 @@ Run with:  pytest tests/test_agentic_mapper.py -v -m unit
 """
 from __future__ import annotations
 
+import copy
 import json
 from unittest.mock import MagicMock, call, patch
 
@@ -36,6 +37,8 @@ from llm_ontology_mapper.agentic_mapper import (
     _TOOL_SEARCH_LOINC,
     _TOOL_SEARCH_OLS,
     _TOOL_SEARCH_RXNORM,
+    _format_tool_result,
+    _is_meaningful_query,
     normalize_code,
 )
 from llm_ontology_mapper.models import LogicType
@@ -155,6 +158,42 @@ def test_select_tools_unknown_ontology_returns_all() -> None:
     assert len(tools) == 4
 
 
+@pytest.mark.unit
+def test_target_bound_ols_schema_exposes_only_query() -> None:
+    mapper = AgenticMapper(MagicMock(), _make_search_tools())
+    tool = mapper._select_tools("HPO")[0]
+    schema = tool["inputSchema"]
+
+    assert set(schema["properties"]) == {"query"}
+    assert schema["required"] == ["query"]
+
+
+@pytest.mark.unit
+def test_free_route_ols_schema_exposes_canonical_enum() -> None:
+    mapper = AgenticMapper(MagicMock(), _make_search_tools())
+    search_ols = next(
+        tool for tool in mapper._select_tools(None)
+        if tool["name"] == "search_ols"
+    )
+
+    assert search_ols["inputSchema"]["properties"]["ontology"]["enum"] == [
+        "HP", "MONDO", "NCIT", "SNOMED", "UBERON", "CHEBI", "GO", "DOID",
+        "MESH", "UO",
+    ]
+
+
+@pytest.mark.unit
+def test_target_bound_schema_does_not_mutate_global_tool() -> None:
+    original = copy.deepcopy(_TOOL_SEARCH_OLS)
+    mapper = AgenticMapper(MagicMock(), _make_search_tools())
+
+    mapper._select_tools("HPO")
+
+    assert _TOOL_SEARCH_OLS == original
+    assert "ontology" in _TOOL_SEARCH_OLS["inputSchema"]["properties"]
+    assert "ontology" in _TOOL_SEARCH_OLS["inputSchema"]["required"]
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Happy path: sys_bp → LOINC:8480-6
 # ─────────────────────────────────────────────────────────────────────────────
@@ -226,6 +265,230 @@ def test_hpo_result_uses_ontology_name_not_code_prefix() -> None:
     assert result.target_code == code
     assert result.ontology == "HPO"
     assert result.logic_type == LogicType.AGENTIC
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "model_arguments",
+    [
+        {
+            "query": "cough",
+            "ontology": {
+                "type": "string",
+                "description": "Ontology short-name: HP",
+            },
+        },
+        {"query": "cough"},
+        {"query": "cough", "ontology": "MONDO"},
+    ],
+)
+def test_target_bound_hpo_injects_hp_despite_model_ontology(
+    model_arguments: dict,
+) -> None:
+    code = "HP:0012735"
+    st = _make_search_tools(ols_results=[
+        {
+            "code": code,
+            "term": "Cough",
+            "score": 0.95,
+            "definition": "",
+            "source": "OLS",
+        },
+    ])
+    prov = _make_provider(
+        (None, [_make_tool_call("search_ols", model_arguments)]),
+        (_json_answer(code=code, term="Cough", ontology="HPO"), []),
+    )
+
+    result = AgenticMapper(prov, st).map(
+        "cough",
+        target_ontology="HPO",
+        clinical_area="phenotype",
+    )
+
+    st.search_ols.assert_called_once_with("cough", "HP", top_k=5)
+    assert result.target_code == code
+    assert result.logic_type == LogicType.AGENTIC
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "query",
+    ["{", "}", "{}", "[]", '"""', ":", "   "],
+)
+def test_query_meaningfulness_rejects_punctuation_and_json_fragments(
+    query: str,
+) -> None:
+    assert not _is_meaningful_query(query)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "query",
+    [
+        "systolic blood pressure",
+        "sys_bp",
+        "blood pressure",
+        "8480-6",
+        "BP",
+        "heart rate",
+    ],
+)
+def test_query_meaningfulness_accepts_search_text(query: str) -> None:
+    assert _is_meaningful_query(query)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "model_query",
+    [
+        {"description": "Systolic blood pressure", "type": "string"},
+        "{",
+    ],
+)
+def test_target_bound_loinc_invalid_query_uses_source_label(
+    model_query: object,
+) -> None:
+    st = _make_search_tools(loinc_results=[_loinc_hit()])
+    prov = _make_provider(
+        (None, [_make_tool_call("search_loinc", {"query": model_query})]),
+        (_json_answer(), []),
+    )
+
+    result = AgenticMapper(prov, st).map(
+        "sys_bp",
+        source_label="systolic blood pressure",
+        target_ontology="LOINC",
+    )
+
+    st.search_loinc.assert_called_once_with(
+        "systolic blood pressure",
+        top_k=5,
+    )
+    assert result.target_code == "LOINC:8480-6"
+
+
+@pytest.mark.unit
+def test_target_bound_invalid_query_uses_source_term_without_label() -> None:
+    st = _make_search_tools(loinc_results=[_loinc_hit()])
+    prov = _make_provider(
+        (None, [_make_tool_call("search_loinc", {"query": "{"})]),
+        (_json_answer(), []),
+    )
+
+    AgenticMapper(prov, st).map("sys_bp", target_ontology="LOINC")
+
+    st.search_loinc.assert_called_once_with("sys_bp", top_k=5)
+
+
+@pytest.mark.unit
+def test_target_bound_valid_query_dispatches_unchanged() -> None:
+    st = _make_search_tools(loinc_results=[_loinc_hit()])
+    prov = _make_provider(
+        (
+            None,
+            [_make_tool_call(
+                "search_loinc",
+                {"query": "sitting systolic blood pressure"},
+            )],
+        ),
+        (_json_answer(), []),
+    )
+
+    AgenticMapper(prov, st).map(
+        "sys_bp",
+        source_label="systolic blood pressure",
+        target_ontology="LOINC",
+    )
+
+    st.search_loinc.assert_called_once_with(
+        "sitting systolic blood pressure",
+        top_k=5,
+    )
+
+
+@pytest.mark.unit
+def test_zero_result_query_retries_once_with_source_label() -> None:
+    st = _make_search_tools()
+    st.search_loinc.side_effect = [[], [_loinc_hit()]]
+    prov = _make_provider(
+        (None, [_make_tool_call("search_loinc", {"query": "sys bp reading"})]),
+        (_json_answer(), []),
+    )
+
+    result = AgenticMapper(prov, st).map(
+        "sys_bp",
+        source_label="systolic blood pressure",
+        target_ontology="LOINC",
+    )
+
+    assert st.search_loinc.call_args_list == [
+        call("sys bp reading", top_k=5),
+        call("systolic blood pressure", top_k=5),
+    ]
+    assert result.target_code == "LOINC:8480-6"
+
+
+@pytest.mark.unit
+def test_target_bound_hpo_garbage_query_uses_label_and_pinned_hp() -> None:
+    code = "HP:0012735"
+    st = _make_search_tools(ols_results=[
+        {
+            "code": code,
+            "term": "Cough",
+            "score": 0.95,
+            "definition": "",
+            "source": "OLS",
+        },
+    ])
+    prov = _make_provider(
+        (None, [_make_tool_call("search_ols", {"query": "{"})]),
+        (_json_answer(code=code, term="Cough", ontology="HPO"), []),
+    )
+
+    AgenticMapper(prov, st).map(
+        "cough_flag",
+        source_label="cough",
+        target_ontology="HPO",
+    )
+
+    st.search_ols.assert_called_once_with("cough", "HP", top_k=5)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "invalid_ontology",
+    [
+        {"type": "string", "description": "Ontology short-name: HP"},
+        "CUSTOM_ONTOLOGY",
+    ],
+)
+def test_free_route_invalid_ols_ontology_returns_corrective_feedback(
+    invalid_ontology: object,
+) -> None:
+    st = _make_search_tools()
+    tc = _make_tool_call(
+        "search_ols",
+        {"query": "cough", "ontology": invalid_ontology},
+    )
+    prov = _make_provider(
+        (None, [tc]),
+        (None, []),
+        (None, []),
+    )
+
+    AgenticMapper(prov, st).map("cough")
+
+    st.search_ols.assert_not_called()
+    second_messages = prov.complete_with_tools.call_args_list[1].args[0]
+    feedback = next(
+        message.content
+        for message in second_messages
+        if "error=Invalid 'ontology'" in message.content
+    )
+    assert "error=Invalid 'ontology'" in feedback
+    assert "must be one of [HP, MONDO, NCIT" in feedback
+    assert repr(invalid_ontology) in feedback
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -380,6 +643,22 @@ def test_clinical_area_hint_appears_in_system_prompt() -> None:
 
 
 @pytest.mark.unit
+def test_system_prompt_has_one_plain_value_tool_example() -> None:
+    st = _make_search_tools(loinc_results=[_loinc_hit()])
+    prov = _make_provider(
+        (None, [_make_tool_call("search_loinc", {"query": "bp"})]),
+        (_json_answer(), []),
+    )
+
+    AgenticMapper(prov, st).map("sys_bp")
+
+    messages = prov.complete_with_tools.call_args_list[0].args[0]
+    system_content = next(m.content for m in messages if m.role == "system")
+    example = 'search_ols({"query":"cough","ontology":"HP"})'
+    assert system_content.count(example) == 1
+
+
+@pytest.mark.unit
 def test_no_clinical_area_produces_clean_prompt() -> None:
     """Without clinical_area, prompt must not contain the CLINICAL AREA HINT line."""
     st = _make_search_tools(loinc_results=[_loinc_hit()])
@@ -424,6 +703,11 @@ def test_tool_error_does_not_abort_loop() -> None:
 
     # Must not raise; result has some logic_type (LLM fallback since nothing accumulated)
     assert result.target_code in ("LOINC:8480-6", "UNKNOWN:UNMAPPED")
+    messages = prov.complete_with_tools.call_args_list[1].args[0]
+    assert any(
+        "error=Tool execution failed: LOINC server unavailable" in message.content
+        for message in messages
+    )
 
 
 @pytest.mark.unit
@@ -455,6 +739,148 @@ def test_tool_error_loop_continues_to_final_answer() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # Max-iterations guard
 # ─────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.unit
+def test_duplicate_productive_call_is_not_dispatched_twice() -> None:
+    hits = [
+        {
+            "code": "HP:0004421",
+            "term": "Elevated systolic blood pressure",
+            "score": 0.91,
+            "definition": "",
+            "source": "OLS",
+        },
+    ]
+    st = _make_search_tools(ols_results=hits)
+    first = _make_tool_call(
+        "search_ols",
+        {"query": "  Systolic   blood pressure  ", "ontology": "MONDO"},
+    )
+    duplicate = _make_tool_call(
+        "search_ols",
+        {
+            "query": "systolic blood PRESSURE",
+            "ontology": {"type": "string"},
+        },
+    )
+    prov = _make_provider(
+        (None, [first]),
+        (None, [duplicate]),
+        (
+            _json_answer(
+                code="HP:0004421",
+                term="Elevated systolic blood pressure",
+                ontology="HPO",
+            ),
+            [],
+        ),
+    )
+
+    result = AgenticMapper(prov, st).map(
+        "sys_bp",
+        source_label="systolic blood pressure",
+        target_ontology="HPO",
+    )
+
+    st.search_ols.assert_called_once_with(
+        "Systolic   blood pressure",
+        "HP",
+        top_k=5,
+    )
+    assert result.target_code == "HP:0004421"
+    finalization_call = prov.complete_with_tools.call_args_list[2]
+    assert finalization_call.args[1] == []
+    feedback = finalization_call.args[0][-1].content
+    assert "Duplicate search_ols call" in feedback
+    assert "Do not search again" in feedback
+    assert "Select one of the returned codes" in feedback
+    assert "code=HP:0004421" in feedback
+    assert 'ontology="HP"' in feedback
+
+
+@pytest.mark.unit
+def test_non_duplicate_productive_calls_dispatch_normally() -> None:
+    first_hits = [_loinc_hit("LOINC:8480-6", score=0.8)]
+    second_hits = [_loinc_hit("LOINC:8459-8", term="Systolic blood pressure--sitting", score=0.9)]
+    st = _make_search_tools()
+    st.search_loinc.side_effect = [first_hits, second_hits]
+    prov = _make_provider(
+        (None, [_make_tool_call("search_loinc", {"query": "blood pressure"})]),
+        (None, [_make_tool_call("search_loinc", {"query": "sitting blood pressure"})]),
+        (_json_answer(code="LOINC:8459-8"), []),
+    )
+
+    result = AgenticMapper(prov, st).map("sys_bp", target_ontology="LOINC")
+
+    assert st.search_loinc.call_count == 2
+    assert result.target_code == "LOINC:8459-8"
+    assert prov.complete_with_tools.call_args_list[2].args[1][0]["name"] == "search_loinc"
+
+
+@pytest.mark.unit
+def test_repeated_zero_result_call_does_not_redispatch() -> None:
+    st = _make_search_tools(loinc_results=[])
+    tc = _make_tool_call("search_loinc", {"query": "{"})
+    prov = _make_provider(*[(None, [tc])] * AgenticMapper.MAX_ITERATIONS)
+
+    result = AgenticMapper(prov, st).map(
+        "unknown",
+        target_ontology="LOINC",
+    )
+
+    assert st.search_loinc.call_count == 1
+    assert result.target_code == "UNKNOWN:UNMAPPED"
+
+
+@pytest.mark.unit
+def test_max_iterations_uses_best_grounded_retrieval_candidate() -> None:
+    hits = [
+        {
+            "code": "HP:0004421",
+            "term": "Elevated systolic blood pressure",
+            "score": 0.92,
+            "definition": "",
+            "source": "OLS",
+        },
+        {
+            "code": "HP:0030972",
+            "term": "Abnormal systemic blood pressure",
+            "score": 0.81,
+            "definition": "",
+            "source": "OLS",
+        },
+    ]
+    st = _make_search_tools(ols_results=hits)
+    tc = _make_tool_call(
+        "search_ols",
+        {"query": "systolic blood pressure"},
+    )
+    prov = _make_provider(*[(None, [tc])] * AgenticMapper.MAX_ITERATIONS)
+
+    result = AgenticMapper(prov, st).map(
+        "sys_bp",
+        source_label="systolic blood pressure",
+        target_ontology="HPO",
+    )
+
+    st.search_ols.assert_called_once_with(
+        "systolic blood pressure",
+        "HP",
+        top_k=5,
+    )
+    assert result.target_code == "HP:0004421"
+    assert result.target_term == "Elevated systolic blood pressure"
+    assert result.ontology == "HPO"
+    assert result.logic_type == LogicType.AGENTIC
+    assert result.confidence == pytest.approx(0.75)
+    assert [alternative.code for alternative in result.alternatives] == [
+        "HP:0030972",
+    ]
+    assert result.notes is not None
+    assert "grounded retrieval candidates" in result.notes
+    assert "repeated tool calls" in result.notes
+    assert "did not produce a final answer" in result.notes
+
 
 @pytest.mark.unit
 def test_max_iterations_guard_returns_unmapped() -> None:
@@ -685,6 +1111,51 @@ def test_all_tool_defs_have_required_mcp_keys() -> None:
         schema = tool["inputSchema"]
         assert schema.get("type") == "object"
         assert "properties" in schema
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tool-result formatting
+# ─────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.unit
+def test_format_tool_result_success_includes_key_fields() -> None:
+    text = _format_tool_result(
+        "search_ols",
+        {"query": "cough", "ontology": "HP"},
+        [{"code": "HP:0012735", "term": "Cough", "score": 0.95}],
+    )
+
+    assert "code=HP:0012735" in text
+    assert "term=Cough" in text
+    assert "score=0.950" in text
+
+
+@pytest.mark.unit
+def test_format_tool_result_empty_reports_no_results() -> None:
+    text = _format_tool_result(
+        "search_ols",
+        {"query": "unknown", "ontology": "HP"},
+        [],
+    )
+
+    assert text.endswith("No results found.")
+
+
+@pytest.mark.unit
+def test_format_tool_result_preserves_corrective_error() -> None:
+    error = (
+        "Invalid 'ontology': must be one of [HP, MONDO] as a plain string; "
+        "you sent {'type': 'string'}. Retry with a valid value."
+    )
+    text = _format_tool_result(
+        "search_ols",
+        {"query": "cough", "ontology": {"type": "string"}},
+        [],
+        error=error,
+    )
+
+    assert f"error={error}" in text
+    assert "No results found" not in text
 
 
 # ─────────────────────────────────────────────────────────────────────────────
