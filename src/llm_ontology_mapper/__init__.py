@@ -66,6 +66,12 @@ from .retrieval_router import RetrievalRouter
 # ── Phase 4A — candidate normalizer ───────────────────────────────────────────
 from .candidate_normalizer import CandidateNormalizationError, CandidateNormalizer
 
+# ── Phase 4B — candidate merger ───────────────────────────────────────────────
+from .candidate_merger import CandidateMergeError, CandidateMerger
+
+# ── Phase 5A — grounded LLM reranker ──────────────────────────────────────────
+from .llm_reranker import LLMReranker, LLMRerankerError
+
 # ── NER extractor (optional — pulls in scispacy when used) ─────────────────────
 from .ner_extractor import NERQueryExtractor
 
@@ -139,5 +145,11 @@ __all__ = [
     # Phase 4A — candidate normalizer
     "CandidateNormalizer",
     "CandidateNormalizationError",
+    # Phase 4B — candidate merger
+    "CandidateMerger",
+    "CandidateMergeError",
+    # Phase 5A — grounded LLM reranker
+    "LLMReranker",
+    "LLMRerankerError",
 ]
 
