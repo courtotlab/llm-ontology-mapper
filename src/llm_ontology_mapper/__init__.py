@@ -81,6 +81,9 @@ from .disabled_mapping import DisabledMappingError, DisabledMappingRunner
 # ── Phase 7 — public ontology retriever wrapper ────────────────────────────────
 from .public_retriever import PublicOntologyRetriever, PublicRetrievalError
 
+# ── Phase 8 — local semantic retriever wrapper ────────────────────────────────
+from .local_retriever import LocalSemanticRetriever, LocalRetrievalError, SapBERTClient
+
 # ── NER extractor (optional — pulls in scispacy when used) ─────────────────────
 from .ner_extractor import NERQueryExtractor
 
@@ -169,5 +172,9 @@ __all__ = [
     # Phase 7 — public ontology retriever wrapper
     "PublicOntologyRetriever",
     "PublicRetrievalError",
+    # Phase 8 — local semantic retriever wrapper
+    "LocalSemanticRetriever",
+    "LocalRetrievalError",
+    "SapBERTClient",
 ]
 
