@@ -307,3 +307,299 @@ class MappingBatch(BaseModel):
     def to_csv_records(self) -> list[dict[str, Any]]:
         """Flat list of dicts suitable for pandas.DataFrame() or csv.DictWriter."""
         return [r.to_legacy_dict() for r in self.results]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 1 pipeline enumerations  (planned architecture contracts — no runtime
+# behaviour change; these define future pipeline data contracts only)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class RetrievalMode(str, Enum):
+    """User-facing Layer 2 retrieval mode.
+
+    Exactly three values are supported; there is no user-facing 'both' mode.
+    """
+
+    PUBLIC   = "public"    # public ontology database retrieval
+    LOCAL    = "local"     # local semantic retrieval (e.g. SapBERT / FAISS)
+    DISABLED = "disabled"  # no retrieval; LLM-only / ungrounded
+
+
+class GroundingSource(str, Enum):
+    """Where retrieval grounding candidates originated."""
+
+    PUBLIC_API    = "public_api"     # public ontology APIs (OLS, LOINC, RxNav, …)
+    LOCAL_SAPBERT = "local_sapbert"  # local SapBERT / FAISS index
+    NONE          = "none"           # no grounding (disabled mode or unmapped)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 1 pipeline models  (planned architecture contracts)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class QueryPlan(BaseModel):
+    """Planned interpretation of a source term before retrieval or LLM-only mapping."""
+
+    original_term: str = Field(..., description="Raw input term, e.g. 'sys_bp'")
+    original_label: str | None = Field(None, description="Optional human-readable label")
+    normalized_term: str | None = Field(None, description="Basic normalized form of the term")
+    expanded_queries: list[str] = Field(
+        default_factory=list,
+        description="Queries to send to retrieval, e.g. ['systolic blood pressure']",
+    )
+    inferred_meaning: str | None = Field(None, description="Plain-language meaning of the field")
+    semantic_type: str | None = Field(
+        None,
+        description="Type such as measurement, phenotype, diagnosis, drug, procedure",
+    )
+    candidate_ontologies: list[str] = Field(
+        default_factory=list,
+        description="Candidate ontology families inferred by the planner",
+    )
+    preferred_ontology: str | None = Field(
+        None,
+        description="Preferred ontology when planner confidence is high",
+    )
+    retrieval_mode: RetrievalMode = Field(
+        RetrievalMode.PUBLIC,
+        description="User-facing Layer 2 mode: public, local, or disabled",
+    )
+    target_ontology_constraint: str | None = Field(
+        None,
+        description="Hard target-ontology constraint supplied by the caller",
+    )
+    retrieval_disabled_reason: str | None = Field(
+        None,
+        description="Why retrieval was disabled, when applicable",
+    )
+    reasoning: str | None = Field(None, description="Short explanation of the plan")
+    confidence: float = Field(
+        0.0, ge=0.0, le=1.0,
+        description="Planner confidence in the interpretation, in [0, 1]",
+    )
+
+    @field_validator("original_term")
+    @classmethod
+    def original_term_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("original_term must not be blank")
+        return v.strip()
+
+    # ── Derived routing helpers ───────────────────────────────────────────────
+
+    @property
+    def route_public_apis(self) -> bool:
+        """True only when retrieval_mode is public."""
+        return self.retrieval_mode == RetrievalMode.PUBLIC
+
+    @property
+    def route_local(self) -> bool:
+        """True only when retrieval_mode is local."""
+        return self.retrieval_mode == RetrievalMode.LOCAL
+
+    @property
+    def retrieval_disabled(self) -> bool:
+        """True only when retrieval_mode is disabled."""
+        return self.retrieval_mode == RetrievalMode.DISABLED
+
+    model_config = {"frozen": True}
+
+
+class NormalizedCandidate(BaseModel):
+    """A retrieved candidate from a grounded retrieval mode in a common schema.
+
+    Disabled mode must not produce NormalizedCandidate records; retrieval_mode
+    is therefore restricted to public or local.
+    """
+
+    code: str = Field(..., description="Canonical CURIE or normalized code")
+    term: str = Field(..., description="Official candidate label")
+    ontology: str = Field(..., description="Ontology family such as LOINC, HPO, MONDO")
+    definition: str | None = Field(None, description="Definition or description if available")
+    source: str = Field(..., description="Source system such as OLS, LOINC-Search-API, SapBERT")
+    matched_query: str = Field(..., description="Expanded query that produced this candidate")
+    retrieval_mode: RetrievalMode = Field(
+        ...,
+        description="Grounded retrieval mode that produced the candidate; must be public or local",
+    )
+    raw_score: float | None = Field(
+        None,
+        description="Source-native score; any float or None (not normalized across sources)",
+    )
+    normalized_score: float | None = Field(
+        None,
+        description="Calibrated score in [0, 1] when provided",
+    )
+    provenance: dict[str, Any] | list[dict[str, Any]] | None = Field(
+        None,
+        description="Route, endpoint, query, and raw payload references",
+    )
+
+    @field_validator("code", "term", "source", "matched_query")
+    @classmethod
+    def must_not_be_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("field must not be blank")
+        return v.strip()
+
+    @field_validator("ontology")
+    @classmethod
+    def normalise_ontology(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("ontology must not be blank")
+        return v.upper().strip()
+
+    @field_validator("retrieval_mode")
+    @classmethod
+    def retrieval_mode_not_disabled(cls, v: RetrievalMode) -> RetrievalMode:
+        if v == RetrievalMode.DISABLED:
+            raise ValueError(
+                "NormalizedCandidate retrieval_mode cannot be disabled; "
+                "disabled mode does not produce retrieval candidates"
+            )
+        return v
+
+    @field_validator("normalized_score")
+    @classmethod
+    def normalized_score_in_range(cls, v: float | None) -> float | None:
+        if v is not None and not (0.0 <= v <= 1.0):
+            raise ValueError("normalized_score must be between 0.0 and 1.0")
+        return v
+
+    model_config = {"frozen": True}
+
+
+class RetrievalTrace(BaseModel):
+    """Evidence trail for retrieval, or explicit record that retrieval was skipped.
+
+    For disabled mode, retrieval_skipped is auto-set to True during construction.
+    """
+
+    query_plan: QueryPlan | None = Field(
+        None,
+        description="Plan used for retrieval or disabled mapping",
+    )
+    retrieval_mode: RetrievalMode = Field(..., description="User-facing Layer 2 mode")
+    is_grounded: bool = Field(
+        ...,
+        description="True for candidate-grounded modes; false for disabled",
+    )
+    grounding_source: GroundingSource = Field(..., description="Grounding source category")
+    retrieval_skipped: bool = Field(
+        False,
+        description="True when retrieval_mode is disabled; auto-set during construction",
+    )
+    retrieval_disabled_reason: str | None = Field(
+        None,
+        description="Reason retrieval was skipped, if applicable",
+    )
+    route_calls: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Routes called, queries sent, and ontology constraints",
+    )
+    raw_candidate_count: int = Field(
+        0, ge=0,
+        description="Number of raw candidates before deduplication",
+    )
+    merged_candidate_count: int = Field(
+        0, ge=0,
+        description="Number of candidates after deduplication",
+    )
+    errors: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Non-fatal route errors encountered during retrieval",
+    )
+    selected_candidate_code: str | None = Field(
+        None,
+        description="Final selected candidate code, if available",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def auto_set_retrieval_skipped(cls, data: Any) -> Any:
+        """Auto-set retrieval_skipped=True when retrieval_mode is disabled."""
+        if isinstance(data, dict) and data.get("retrieval_mode") == "disabled":
+            data.setdefault("retrieval_skipped", True)
+        return data
+
+    @model_validator(mode="after")
+    def validate_disabled_consistency(self) -> RetrievalTrace:
+        if self.retrieval_mode == RetrievalMode.DISABLED:
+            if self.is_grounded:
+                raise ValueError(
+                    "disabled retrieval_mode cannot be grounded; is_grounded must be False"
+                )
+            if self.grounding_source != GroundingSource.NONE:
+                raise ValueError(
+                    "disabled retrieval_mode requires grounding_source=none"
+                )
+        return self
+
+    model_config = {"frozen": True}
+
+
+class RerankDecision(BaseModel):
+    """Final decision before converting to MappingResult.
+
+    For public/local production mode, an ungrounded result requires either
+    is_unmapped=True or a non-production policy (e.g. 'research_debug').
+    """
+
+    selected_code: str | None = Field(
+        None,
+        description="Candidate code selected by reranker; None when unmapped",
+    )
+    selected_candidate_id: str | None = Field(
+        None,
+        description="Stable candidate identifier, if introduced",
+    )
+    is_unmapped: bool = Field(False, description="Whether no mapping was selected")
+    is_grounded: bool = Field(
+        ...,
+        description="True only if selected_code was chosen from retrieved candidates",
+    )
+    grounding_source: GroundingSource = Field(..., description="Where grounding came from")
+    retrieval_mode: RetrievalMode = Field(..., description="Layer 2 mode used")
+    confidence: float = Field(
+        0.0, ge=0.0, le=1.0,
+        description="Decision confidence in [0, 1]",
+    )
+    reasoning: str | None = Field(
+        None,
+        description="Clinical or data-manager-facing explanation",
+    )
+    alternative_codes: list[str] = Field(
+        default_factory=list,
+        description="Candidate alternatives by code; may be empty in disabled mode",
+    )
+    policy: str = Field(
+        "production_grounded",
+        description="production_grounded, disabled_llm_only, or research_debug",
+    )
+
+    @model_validator(mode="after")
+    def validate_consistency(self) -> RerankDecision:
+        if self.retrieval_mode == RetrievalMode.DISABLED:
+            if self.is_grounded:
+                raise ValueError(
+                    "disabled retrieval_mode cannot be grounded; is_grounded must be False"
+                )
+            if self.grounding_source != GroundingSource.NONE:
+                raise ValueError(
+                    "disabled retrieval_mode requires grounding_source=none"
+                )
+        if (
+            not self.is_grounded
+            and self.retrieval_mode != RetrievalMode.DISABLED
+            and not self.is_unmapped
+            and self.policy == "production_grounded"
+        ):
+            raise ValueError(
+                "ungrounded result in public/local production mode requires "
+                "is_unmapped=True or a non-production policy (research_debug)"
+            )
+        return self
+
+    model_config = {"frozen": True}

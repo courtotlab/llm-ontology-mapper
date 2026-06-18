@@ -42,13 +42,22 @@ from .evaluator import (
 from .mapper import OntologyMapper
 from .models import (
     AlternativeMapping,
+    GroundingSource,
     LogicType,
     MappingBatch,
     MappingMetadata,
     MappingResult,
+    NormalizedCandidate,
     OntologyPrefix,
+    QueryPlan,
     RAGDebugInfo,
+    RerankDecision,
+    RetrievalMode,
+    RetrievalTrace,
 )
+
+# ── Phase 2 — LLM-assisted query planner ──────────────────────────────────────
+from .query_planner import QueryPlanner, QueryPlanningError
 
 # ── NER extractor (optional — pulls in scispacy when used) ─────────────────────
 from .ner_extractor import NERQueryExtractor
@@ -107,5 +116,15 @@ __all__ = [
     # Agentic engine
     "AgenticMapper",
     "normalize_code",
+    # Phase 1 pipeline models
+    "RetrievalMode",
+    "GroundingSource",
+    "QueryPlan",
+    "NormalizedCandidate",
+    "RetrievalTrace",
+    "RerankDecision",
+    # Phase 2 — LLM-assisted query planner
+    "QueryPlanner",
+    "QueryPlanningError",
 ]
 
