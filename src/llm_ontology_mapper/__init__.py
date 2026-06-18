@@ -72,6 +72,9 @@ from .candidate_merger import CandidateMergeError, CandidateMerger
 # ── Phase 5A — grounded LLM reranker ──────────────────────────────────────────
 from .llm_reranker import LLMReranker, LLMRerankerError
 
+# ── Phase 5B — mapping result builder ─────────────────────────────────────────
+from .mapping_result_builder import MappingResultBuilder, MappingResultBuilderError
+
 # ── NER extractor (optional — pulls in scispacy when used) ─────────────────────
 from .ner_extractor import NERQueryExtractor
 
@@ -151,5 +154,8 @@ __all__ = [
     # Phase 5A — grounded LLM reranker
     "LLMReranker",
     "LLMRerankerError",
+    # Phase 5B — mapping result builder
+    "MappingResultBuilder",
+    "MappingResultBuilderError",
 ]
 
