@@ -75,6 +75,9 @@ from .llm_reranker import LLMReranker, LLMRerankerError
 # ── Phase 5B — mapping result builder ─────────────────────────────────────────
 from .mapping_result_builder import MappingResultBuilder, MappingResultBuilderError
 
+# ── Phase 6 — disabled LLM-only mapping path ──────────────────────────────────
+from .disabled_mapping import DisabledMappingError, DisabledMappingRunner
+
 # ── NER extractor (optional — pulls in scispacy when used) ─────────────────────
 from .ner_extractor import NERQueryExtractor
 
@@ -157,5 +160,8 @@ __all__ = [
     # Phase 5B — mapping result builder
     "MappingResultBuilder",
     "MappingResultBuilderError",
+    # Phase 6 — disabled LLM-only mapping path
+    "DisabledMappingRunner",
+    "DisabledMappingError",
 ]
 
