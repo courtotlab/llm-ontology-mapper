@@ -20,7 +20,9 @@ from llm_ontology_mapper.models import (
     MappingMetadata,
     MappingResult,
     RAGDebugInfo,
+    RetrievalMode,
 )
+from llm_ontology_mapper.planned_pipeline import PlannedPipeline
 from llm_ontology_mapper.providers import (
     BaseLLMProvider,
     ChatMessage,
@@ -94,6 +96,10 @@ class OntologyMapper:
         ontology_retriever: Any | None = None,  # OntologyRetriever
         rag_top_k: int = 5,
         rag_auto_accept_threshold: float = 0.0,
+        # ── Planned pipeline opt-in ──────────────────────────────────────────
+        use_planned_pipeline: bool = False,
+        retrieval_mode: RetrievalMode | str = RetrievalMode.PUBLIC,
+        planned_pipeline: Any | None = None,
         # ── Legacy compat flags ───────────────────────────────────────────────
         use_ontogpt: bool = False,   # deprecated no-op
         **provider_kwargs: Any,
@@ -121,6 +127,20 @@ class OntologyMapper:
         self.rag_top_k                = rag_top_k
         self.rag_auto_accept_threshold = rag_auto_accept_threshold
 
+        # ── Planned pipeline (explicit opt-in only) ───────────────────────────
+        self.use_planned_pipeline = use_planned_pipeline
+        if use_planned_pipeline:
+            self._planned_retrieval_mode = self._coerce_planned_retrieval_mode(
+                retrieval_mode
+            )
+        else:
+            if not self._is_public_retrieval_mode(retrieval_mode):
+                raise ValueError(
+                    "retrieval_mode is only supported when use_planned_pipeline=True"
+                )
+            self._planned_retrieval_mode = RetrievalMode.PUBLIC
+        self._planned_pipeline = planned_pipeline
+
         # ── Cache dir ─────────────────────────────────────────────────────────
         self._cache_dir = Path(cache_dir) if cache_dir else None
         if self._cache_dir:
@@ -139,6 +159,8 @@ class OntologyMapper:
         source_label: str | None = None,
         source_type: str | None = None,
         entity_type: str | None = None,
+        use_planned_pipeline: bool | None = None,
+        retrieval_mode: RetrievalMode | str | None = None,
     ) -> MappingResult:
         """
         Map a single term to an ontology code.
@@ -148,10 +170,39 @@ class OntologyMapper:
             source_label: Human-readable question / label text.
             source_type:  Schema type hint (radio, integer, text, …).
             entity_type:  Domain hint (phenotype, diagnosis, measurement, …).
+            use_planned_pipeline: Optional per-call override for the constructor
+                opt-in flag. Defaults to the constructor setting.
+            retrieval_mode: Optional per-call retrieval mode for planned mode.
+                Ignored only when omitted; rejected if provided for legacy mode.
 
         Returns:
             MappingResult with confidence score and logic_type.
         """
+        planned_enabled = (
+            self.use_planned_pipeline
+            if use_planned_pipeline is None
+            else use_planned_pipeline
+        )
+
+        if planned_enabled:
+            mode = self._coerce_planned_retrieval_mode(
+                retrieval_mode
+                if retrieval_mode is not None
+                else self._planned_retrieval_mode
+            )
+            return self._map_term_with_planned_pipeline(
+                source_term=source_term,
+                source_label=source_label,
+                source_type=source_type,
+                entity_type=entity_type,
+                retrieval_mode=mode,
+            )
+
+        if retrieval_mode is not None:
+            raise ValueError(
+                "retrieval_mode is only supported when use_planned_pipeline=True"
+            )
+
         t0 = time.monotonic()
 
         # 1. RAG retrieval (if enabled)
@@ -233,6 +284,68 @@ class OntologyMapper:
     # ─────────────────────────────────────────────────────────────────────────
     # Private helpers
     # ─────────────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _coerce_planned_retrieval_mode(
+        retrieval_mode: RetrievalMode | str,
+    ) -> RetrievalMode:
+        if isinstance(retrieval_mode, RetrievalMode):
+            return retrieval_mode
+        return RetrievalMode(str(retrieval_mode).lower())
+
+    @staticmethod
+    def _is_public_retrieval_mode(retrieval_mode: RetrievalMode | str) -> bool:
+        if isinstance(retrieval_mode, RetrievalMode):
+            return retrieval_mode == RetrievalMode.PUBLIC
+        return str(retrieval_mode).lower() == RetrievalMode.PUBLIC.value
+
+    def _get_planned_pipeline(self) -> Any:
+        if self._planned_pipeline is None:
+            self._planned_pipeline = PlannedPipeline(provider=self._llm)
+        return self._planned_pipeline
+
+    def _planned_target_ontology(self) -> str | None:
+        """
+        Resolve the explicit constructor ontology list into a planned target.
+
+        Policy for Phase 10: planned mode accepts zero or one explicit target
+        ontology. Multiple explicit ontologies are rejected until the planned
+        pipeline supports a richer target-selection contract.
+        """
+        if self._explicit_ontologies is None:
+            return None
+
+        ontologies = [o.strip() for o in self._explicit_ontologies if o and o.strip()]
+        if not ontologies:
+            return None
+        if len(ontologies) > 1:
+            raise ValueError(
+                "PlannedPipeline integration currently supports at most one "
+                "explicit target ontology. Provide a single ontology or leave "
+                "ontologies=None."
+            )
+        return ontologies[0].upper()
+
+    def _map_term_with_planned_pipeline(
+        self,
+        *,
+        source_term: str,
+        source_label: str | None,
+        source_type: str | None,
+        entity_type: str | None,
+        retrieval_mode: RetrievalMode,
+    ) -> MappingResult:
+        target_ontology = self._planned_target_ontology()
+        pipeline = self._get_planned_pipeline()
+        return pipeline.map_term(
+            source_term=source_term,
+            source_label=source_label,
+            source_type=source_type,
+            clinical_area=entity_type,
+            target_ontology=target_ontology,
+            retrieval_mode=retrieval_mode,
+            max_results_per_query=self.rag_top_k,
+        )
 
     def _effective_ontologies(self, entity_type: str | None) -> list[str]:
         if self._explicit_ontologies is not None:
