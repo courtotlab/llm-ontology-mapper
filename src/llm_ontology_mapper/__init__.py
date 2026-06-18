@@ -78,6 +78,9 @@ from .mapping_result_builder import MappingResultBuilder, MappingResultBuilderEr
 # ── Phase 6 — disabled LLM-only mapping path ──────────────────────────────────
 from .disabled_mapping import DisabledMappingError, DisabledMappingRunner
 
+# ── Phase 7 — public ontology retriever wrapper ────────────────────────────────
+from .public_retriever import PublicOntologyRetriever, PublicRetrievalError
+
 # ── NER extractor (optional — pulls in scispacy when used) ─────────────────────
 from .ner_extractor import NERQueryExtractor
 
@@ -163,5 +166,8 @@ __all__ = [
     # Phase 6 — disabled LLM-only mapping path
     "DisabledMappingRunner",
     "DisabledMappingError",
+    # Phase 7 — public ontology retriever wrapper
+    "PublicOntologyRetriever",
+    "PublicRetrievalError",
 ]
 
