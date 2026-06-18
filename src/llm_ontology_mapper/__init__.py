@@ -84,6 +84,9 @@ from .public_retriever import PublicOntologyRetriever, PublicRetrievalError
 # ── Phase 8 — local semantic retriever wrapper ────────────────────────────────
 from .local_retriever import LocalSemanticRetriever, LocalRetrievalError, SapBERTClient
 
+# ── Phase 9 — planned pipeline orchestrator ──────────────────────────────────
+from .planned_pipeline import PlannedPipeline, PlannedPipelineError
+
 # ── NER extractor (optional — pulls in scispacy when used) ─────────────────────
 from .ner_extractor import NERQueryExtractor
 
@@ -176,5 +179,7 @@ __all__ = [
     "LocalSemanticRetriever",
     "LocalRetrievalError",
     "SapBERTClient",
+    # Phase 9 — planned pipeline orchestrator
+    "PlannedPipeline",
+    "PlannedPipelineError",
 ]
-
