@@ -603,3 +603,76 @@ class RerankDecision(BaseModel):
         return self
 
     model_config = {"frozen": True}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 3 pipeline models  (planned architecture contracts)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class RetrievalRoutePlan(BaseModel):
+    """Output of RetrievalRouter: a planned description of what retrieval should happen.
+
+    No retrieval has occurred at this point.  The plan is consumed by the
+    concrete retriever in the next pipeline stage.
+
+    Disabled mode is always ungrounded (is_grounded_mode=False, route_calls=[]).
+    retrieval_skipped is auto-set to True when retrieval_mode is disabled.
+    """
+
+    retrieval_mode: RetrievalMode = Field(..., description="User-facing Layer 2 mode")
+    is_grounded_mode: bool = Field(
+        ...,
+        description="True for public/local grounded modes; False for disabled",
+    )
+    retrieval_skipped: bool = Field(
+        False,
+        description="True when retrieval_mode is disabled; auto-set during construction",
+    )
+    grounding_source: GroundingSource = Field(
+        ...,
+        description="Grounding source category for this route",
+    )
+    queries: list[str] = Field(
+        default_factory=list,
+        description="Query strings to send to the retriever",
+    )
+    target_ontology_constraint: str | None = Field(
+        None,
+        description="Hard target-ontology constraint passed through from caller",
+    )
+    candidate_ontologies: list[str] = Field(
+        default_factory=list,
+        description="Ontology families the retriever should search",
+    )
+    route_calls: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Planned retrieval call descriptions (not actual HTTP calls)",
+    )
+    retrieval_disabled_reason: str | None = Field(
+        None,
+        description="Why retrieval was skipped, if applicable",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def auto_set_retrieval_skipped(cls, data: Any) -> Any:
+        """Auto-set retrieval_skipped=True when retrieval_mode is disabled."""
+        if isinstance(data, dict) and data.get("retrieval_mode") == "disabled":
+            data.setdefault("retrieval_skipped", True)
+        return data
+
+    @model_validator(mode="after")
+    def validate_disabled_consistency(self) -> RetrievalRoutePlan:
+        if self.retrieval_mode == RetrievalMode.DISABLED:
+            if self.is_grounded_mode:
+                raise ValueError(
+                    "disabled retrieval_mode cannot be grounded; is_grounded_mode must be False"
+                )
+            if self.grounding_source != GroundingSource.NONE:
+                raise ValueError(
+                    "disabled retrieval_mode requires grounding_source=none"
+                )
+        return self
+
+    model_config = {"frozen": True}

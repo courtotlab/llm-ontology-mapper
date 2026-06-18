@@ -53,11 +53,18 @@ from .models import (
     RAGDebugInfo,
     RerankDecision,
     RetrievalMode,
+    RetrievalRoutePlan,
     RetrievalTrace,
 )
 
 # ── Phase 2 — LLM-assisted query planner ──────────────────────────────────────
 from .query_planner import QueryPlanner, QueryPlanningError
+
+# ── Phase 3 — retrieval router ────────────────────────────────────────────────
+from .retrieval_router import RetrievalRouter
+
+# ── Phase 4A — candidate normalizer ───────────────────────────────────────────
+from .candidate_normalizer import CandidateNormalizationError, CandidateNormalizer
 
 # ── NER extractor (optional — pulls in scispacy when used) ─────────────────────
 from .ner_extractor import NERQueryExtractor
@@ -126,5 +133,11 @@ __all__ = [
     # Phase 2 — LLM-assisted query planner
     "QueryPlanner",
     "QueryPlanningError",
+    # Phase 3 — retrieval router
+    "RetrievalRouter",
+    "RetrievalRoutePlan",
+    # Phase 4A — candidate normalizer
+    "CandidateNormalizer",
+    "CandidateNormalizationError",
 ]
 
