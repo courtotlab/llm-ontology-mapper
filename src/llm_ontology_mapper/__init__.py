@@ -51,6 +51,7 @@ from .models import (
     OntologyPrefix,
     QueryPlan,
     RAGDebugInfo,
+    RerankAlternative,
     RerankDecision,
     RetrievalMode,
     RetrievalRoutePlan,
@@ -150,6 +151,7 @@ __all__ = [
     "QueryPlan",
     "NormalizedCandidate",
     "RetrievalTrace",
+    "RerankAlternative",
     "RerankDecision",
     # Phase 2 — LLM-assisted query planner
     "QueryPlanner",

@@ -9,7 +9,7 @@ Hard constraints enforced by Python (LLM cannot override):
   - selected_candidate_id must be in the provided candidate list.
   - selected_code must match the code of the selected candidate.
   - selected_code must be in the candidate code set.
-  - alternative_codes must be a subset of the candidate code set.
+  - alternatives and alternative_codes must resolve to retrieved candidates.
   - target_ontology_constraint is enforced: selected candidate's ontology
     must match when the constraint is present.
   - disabled mode raises immediately — it does not produce candidates.
@@ -29,14 +29,23 @@ from llm_ontology_mapper.models import (
     GroundingSource,
     NormalizedCandidate,
     QueryPlan,
+    RerankAlternative,
     RerankDecision,
     RetrievalMode,
 )
-from llm_ontology_mapper.providers import BaseLLMProvider, ChatMessage
+from llm_ontology_mapper.providers import (
+    BaseLLMProvider,
+    ChatMessage,
+    CompletionResponse,
+    is_reasoning_model,
+)
 
 logger = logging.getLogger(__name__)
 
 _PROMPT_DIR = Path(__file__).parent / "assets" / "prompts"
+_RERANK_MAX_TOKENS = 512
+_REASONING_RERANK_MIN_COMPLETION_TOKENS = 4096
+_REASONING_RERANK_RETRY_TOKENS = 8192
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -147,6 +156,7 @@ class LLMReranker:
                 confidence=0.0,
                 reasoning="No candidates were provided for reranking.",
                 alternative_codes=[],
+                alternatives=[],
                 policy="production_grounded",
             )
 
@@ -165,9 +175,34 @@ class LLMReranker:
             len(candidates),
         )
 
-        response = self._provider.complete(messages, temperature=0.1, max_tokens=512)
-
+        response = self._complete_rerank(messages)
         raw = _strip_fences(response.content)
+        if not raw.strip() and _provider_uses_reasoning_model(self._provider):
+            logger.warning(
+                "LLMReranker received empty response from reasoning model; "
+                "retrying once with a larger completion budget. source_term=%r "
+                "candidate_count=%d model=%s",
+                query_plan.original_term,
+                len(candidates),
+                getattr(self._provider, "model", None),
+            )
+            response = self._complete_rerank(
+                messages,
+                max_tokens=_REASONING_RERANK_RETRY_TOKENS,
+                min_completion_tokens=_REASONING_RERANK_RETRY_TOKENS,
+            )
+            raw = _strip_fences(response.content)
+
+        if not raw.strip():
+            raise LLMRerankerError(
+                "LLM returned empty response; for reasoning models this may "
+                "indicate max_completion_tokens was too low or no visible output "
+                "was produced. "
+                f"source_term={query_plan.original_term!r} "
+                f"candidate_count={len(candidates)} "
+                f"model={getattr(self._provider, 'model', None)!r}"
+            )
+
         try:
             data: dict[str, Any] = json.loads(raw)
         except json.JSONDecodeError as exc:
@@ -187,6 +222,24 @@ class LLMReranker:
         )
 
     # ── Private helpers ───────────────────────────────────────────────────────
+
+    def _complete_rerank(
+        self,
+        messages: list[ChatMessage],
+        *,
+        max_tokens: int = _RERANK_MAX_TOKENS,
+        min_completion_tokens: int = _REASONING_RERANK_MIN_COMPLETION_TOKENS,
+    ) -> CompletionResponse:
+        kwargs: dict[str, Any] = {}
+        if _provider_uses_reasoning_model(self._provider):
+            kwargs["min_completion_tokens"] = min_completion_tokens
+            kwargs["reasoning_effort"] = "minimal"
+        return self._provider.complete(
+            messages,
+            temperature=0.1,
+            max_tokens=max_tokens,
+            **kwargs,
+        )
 
     def _build_messages(
         self,
@@ -245,14 +298,6 @@ class LLMReranker:
 
         reasoning: str | None = data.get("reasoning") or None
 
-        raw_alts = data.get("alternative_codes") or []
-        if isinstance(raw_alts, list):
-            alternative_codes = [
-                str(c).strip() for c in raw_alts if c and str(c).strip()
-            ]
-        else:
-            alternative_codes = []
-
         if is_unmapped:
             return RerankDecision(
                 selected_code=None,
@@ -264,6 +309,7 @@ class LLMReranker:
                 confidence=confidence,
                 reasoning=reasoning,
                 alternative_codes=[],
+                alternatives=[],
                 policy="production_grounded",
             )
 
@@ -303,13 +349,12 @@ class LLMReranker:
                     f"selected candidate must belong to the constrained ontology."
                 )
 
-        # Validate alternative_codes are all in the candidate code set
-        for alt in alternative_codes:
-            if alt not in candidate_codes:
-                raise LLMRerankerError(
-                    f"LLM returned alternative_code={alt!r} which is not in "
-                    f"the candidate list; alternative codes must come from retrieved candidates."
-                )
+        alternative_codes, alternatives = _parse_alternatives(
+            data=data,
+            candidate_map=candidate_map,
+            candidate_codes=candidate_codes,
+            selected_code=selected_code,
+        )
 
         return RerankDecision(
             selected_code=selected_code,
@@ -321,6 +366,7 @@ class LLMReranker:
             confidence=confidence,
             reasoning=reasoning,
             alternative_codes=alternative_codes,
+            alternatives=alternatives,
             policy="production_grounded",
         )
 
@@ -328,6 +374,222 @@ class LLMReranker:
 # ─────────────────────────────────────────────────────────────────────────────
 # Module-level helpers
 # ─────────────────────────────────────────────────────────────────────────────
+
+def fallback_alternative_explanation(candidate: NormalizedCandidate) -> str:
+    """Return a concise reviewer-facing fallback explanation for a candidate."""
+    term = candidate.term.strip()
+    lower = term.lower()
+
+    if re.search(r"\b(mean|average|averaged)\b", lower):
+        return "Use if the field stores an average across repeated measurements."
+    if re.search(r"\b(noninvasive|non-invasive|cuff)\b", lower):
+        return "Use if the field indicates noninvasive cuff-based measurement."
+    if re.search(r"\b(invasive|arterial line)\b", lower):
+        return "Use if the measurement was obtained through invasive arterial monitoring."
+    if re.search(r"\b(exercise|stress)\b", lower):
+        return "Use if the measurement was taken during exercise or stress testing."
+    if re.search(r"\b(aorta|aortic)\b", lower):
+        return "Use if the measurement site is specifically the aorta."
+    if re.search(r"\b(baseline|pre[- ]?treatment)\b", lower):
+        return "Use if the field captures baseline values before treatment or follow-up."
+    if re.search(r"\b(first encounter|first visit|initial encounter|initial visit)\b", lower):
+        return "Use if the field captures the first clinical encounter."
+    if re.search(r"\b(initial)\b", lower):
+        return "Use if the field captures the initial measurement."
+    if re.search(r"\b(follow[- ]?up|followup)\b", lower):
+        return "Use if the field captures a follow-up timepoint."
+
+    body_site = _candidate_body_site(lower)
+    if body_site:
+        return f"Use if the measurement site is specifically the {body_site}."
+
+    specimen = _candidate_specimen(lower)
+    if specimen:
+        return f"Use if the source field uses a {specimen} specimen."
+
+    if re.search(r"\bdiastolic\b", lower):
+        return "Use if the field captures diastolic blood pressure."
+    if re.search(r"\bsystolic\b", lower):
+        return "Use if the field captures systolic blood pressure."
+
+    concise_term = _concise_candidate_term(term)
+    return f"Use only if the field specifically means {concise_term}."
+
+
+def _parse_alternatives(
+    *,
+    data: dict[str, Any],
+    candidate_map: dict[str, NormalizedCandidate],
+    candidate_codes: set[str],
+    selected_code: str | None,
+    max_alternatives: int = 5,
+) -> tuple[list[str], list[RerankAlternative]]:
+    """Parse structured and legacy alternatives, dropping invalid entries."""
+    code_to_candidate_id = {candidate.code: cid for cid, candidate in candidate_map.items()}
+    alternatives: list[RerankAlternative] = []
+    seen_codes: set[str] = set()
+
+    raw_structured = data.get("alternatives") or []
+    if isinstance(raw_structured, list):
+        for item in raw_structured:
+            if len(alternatives) >= max_alternatives:
+                break
+            if not isinstance(item, dict):
+                continue
+            alt = _parse_structured_alternative(
+                item=item,
+                candidate_map=candidate_map,
+                candidate_codes=candidate_codes,
+                selected_code=selected_code,
+            )
+            if alt is None or alt.code in seen_codes:
+                continue
+            alternatives.append(alt)
+            seen_codes.add(alt.code)
+
+    legacy_codes: list[str] = []
+    raw_legacy = data.get("alternative_codes") or []
+    if isinstance(raw_legacy, list):
+        for raw in raw_legacy:
+            if len(legacy_codes) >= max_alternatives:
+                break
+            code = _resolve_legacy_alternative_code(raw, candidate_map)
+            if not code or code == selected_code or code not in candidate_codes:
+                continue
+            if code in legacy_codes:
+                continue
+            legacy_codes.append(code)
+
+            if code not in seen_codes and len(alternatives) < max_alternatives:
+                candidate_id = code_to_candidate_id.get(code)
+                if candidate_id:
+                    candidate = candidate_map[candidate_id]
+                    alternatives.append(
+                        RerankAlternative(
+                            candidate_id=candidate_id,
+                            code=code,
+                            confidence=_candidate_confidence(candidate),
+                            explanation=fallback_alternative_explanation(candidate),
+                        )
+                    )
+                    seen_codes.add(code)
+
+    alternative_codes = [alt.code for alt in alternatives]
+    for code in legacy_codes:
+        if len(alternative_codes) >= max_alternatives:
+            break
+        if code not in alternative_codes:
+            alternative_codes.append(code)
+
+    return alternative_codes, alternatives[:max_alternatives]
+
+
+def _parse_structured_alternative(
+    *,
+    item: dict[str, Any],
+    candidate_map: dict[str, NormalizedCandidate],
+    candidate_codes: set[str],
+    selected_code: str | None,
+) -> RerankAlternative | None:
+    candidate_id = str(item.get("candidate_id") or "").strip()
+    if candidate_id not in candidate_map:
+        return None
+
+    candidate = candidate_map[candidate_id]
+    code = str(item.get("code") or "").strip()
+    if code != candidate.code or code == selected_code or code not in candidate_codes:
+        return None
+
+    try:
+        confidence = float(item.get("confidence"))
+    except (TypeError, ValueError):
+        return None
+    if not (0.0 <= confidence <= 1.0):
+        return None
+
+    explanation = str(item.get("explanation") or "").strip()
+    if not explanation:
+        explanation = fallback_alternative_explanation(candidate)
+
+    try:
+        return RerankAlternative(
+            candidate_id=candidate_id,
+            code=code,
+            confidence=confidence,
+            explanation=explanation,
+        )
+    except ValueError:
+        return None
+
+
+def _resolve_legacy_alternative_code(
+    raw: Any,
+    candidate_map: dict[str, NormalizedCandidate],
+) -> str | None:
+    value = str(raw or "").strip()
+    if not value:
+        return None
+    if value in candidate_map:
+        return candidate_map[value].code
+    return value
+
+
+def _candidate_confidence(candidate: NormalizedCandidate) -> float:
+    if candidate.normalized_score is not None:
+        return candidate.normalized_score
+    if candidate.raw_score is not None and 0.0 <= candidate.raw_score <= 1.0:
+        return candidate.raw_score
+    return 0.5
+
+
+def _candidate_body_site(lower_term: str) -> str | None:
+    site_patterns = [
+        (r"\bpulmonary artery\b", "pulmonary artery"),
+        (r"\bradial artery\b", "radial artery"),
+        (r"\bfemoral artery\b", "femoral artery"),
+        (r"\bcarotid artery\b", "carotid artery"),
+        (r"\bbrachial artery\b", "brachial artery"),
+        (r"\bleft arm\b", "left arm"),
+        (r"\bright arm\b", "right arm"),
+        (r"\barm\b", "arm"),
+        (r"\bankle\b", "ankle"),
+        (r"\bwrist\b", "wrist"),
+        (r"\bleg\b", "leg"),
+    ]
+    for pattern, site in site_patterns:
+        if re.search(pattern, lower_term):
+            return site
+    return None
+
+
+def _candidate_specimen(lower_term: str) -> str | None:
+    specimen_patterns = [
+        (r"\bcerebrospinal fluid\b|\bcsf\b", "cerebrospinal fluid"),
+        (r"\burine\b", "urine"),
+        (r"\bserum\b", "serum"),
+        (r"\bplasma\b", "plasma"),
+        (r"\bsaliva\b", "saliva"),
+        (r"\bsputum\b", "sputum"),
+        (r"\bstool\b|\bfeces\b", "stool"),
+        (r"\btissue\b", "tissue"),
+        (r"\bswab\b", "swab"),
+        (r"\bblood specimen\b|\bwhole blood\b", "blood"),
+    ]
+    for pattern, specimen in specimen_patterns:
+        if re.search(pattern, lower_term):
+            return specimen
+    return None
+
+
+def _concise_candidate_term(term: str, max_words: int = 8) -> str:
+    words = re.findall(r"[A-Za-z0-9][A-Za-z0-9:/.-]*", term)
+    if not words:
+        return "this candidate concept"
+    return " ".join(words[:max_words])
+
+
+def _provider_uses_reasoning_model(provider: BaseLLMProvider) -> bool:
+    return is_reasoning_model(str(getattr(provider, "model", "")))
 
 
 def _build_query_context(plan: QueryPlan) -> str:

@@ -79,6 +79,10 @@ class AlternativeMapping(BaseModel):
         "llm",
         description="How this alternative was generated"
     )
+    explanation: str | None = Field(
+        None,
+        description="Plain-language explanation of when this alternative may fit",
+    )
 
     model_config = {"frozen": True}
 
@@ -471,6 +475,30 @@ class NormalizedCandidate(BaseModel):
     model_config = {"frozen": True}
 
 
+class RerankAlternative(BaseModel):
+    """Structured alternative selected by the reranker from retrieved candidates."""
+
+    candidate_id: str = Field(..., description="Candidate id such as C1")
+    code: str = Field(..., description="Exact ontology code from the candidate")
+    confidence: float = Field(
+        ..., ge=0.0, le=1.0,
+        description="Reranker confidence for this alternative in [0, 1]",
+    )
+    explanation: str = Field(
+        ...,
+        description="Why this retrieved candidate could be a good alternative",
+    )
+
+    @field_validator("candidate_id", "code", "explanation")
+    @classmethod
+    def must_not_be_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("field must not be blank")
+        return v.strip()
+
+    model_config = {"frozen": True}
+
+
 class RetrievalTrace(BaseModel):
     """Evidence trail for retrieval, or explicit record that retrieval was skipped.
 
@@ -573,6 +601,10 @@ class RerankDecision(BaseModel):
     alternative_codes: list[str] = Field(
         default_factory=list,
         description="Candidate alternatives by code; may be empty in disabled mode",
+    )
+    alternatives: list[RerankAlternative] = Field(
+        default_factory=list,
+        description="Structured candidate alternatives with reviewer-facing explanations",
     )
     policy: str = Field(
         "production_grounded",

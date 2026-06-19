@@ -29,6 +29,7 @@ from llm_ontology_mapper.models import (
     LogicType,
     NormalizedCandidate,
     QueryPlan,
+    RerankAlternative,
     RerankDecision,
     RetrievalMode,
     RetrievalTrace,
@@ -87,6 +88,7 @@ def _make_selected_decision(
     confidence: float = 0.91,
     reasoning: str = "Best LOINC match for systolic blood pressure.",
     alternative_codes: list[str] | None = None,
+    alternatives: list[RerankAlternative] | None = None,
     grounding_source: GroundingSource = GroundingSource.PUBLIC_API,
 ) -> RerankDecision:
     return RerankDecision(
@@ -99,6 +101,7 @@ def _make_selected_decision(
         confidence=confidence,
         reasoning=reasoning,
         alternative_codes=alternative_codes or [],
+        alternatives=alternatives or [],
         policy="production_grounded",
     )
 
@@ -133,6 +136,21 @@ def _make_trace(
         raw_candidate_count=5,
         merged_candidate_count=3,
     )
+
+
+def _assert_specific_fallback(
+    explanation: str | None,
+    *,
+    expected_fragment: str,
+) -> None:
+    assert explanation
+    assert len(explanation.split()) <= 25
+    lower = explanation.lower()
+    assert expected_fragment in lower
+    assert "retrieved as a related candidate" not in lower
+    assert "review the term and context" not in lower
+    assert "may be appropriate if context matches" not in lower
+    assert "this is another possible match" not in lower
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -493,6 +511,137 @@ def test_alternatives_source_is_rag() -> None:
         candidates=[c1, c2],
     )
     assert result.alternatives[0].source == "rag"
+
+
+def test_structured_alternative_explanation_is_preserved() -> None:
+    builder = MappingResultBuilder()
+    c1 = _make_candidate("LOINC:8480-6", "Systolic BP")
+    c2 = _make_candidate("LOINC:60984-2", "Aortic systolic pressure")
+    decision = _make_selected_decision(
+        selected_code="LOINC:8480-6",
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C2",
+                code="LOINC:60984-2",
+                confidence=0.75,
+                explanation=(
+                    "Could fit if the measurement is specifically aortic systolic pressure."
+                ),
+            )
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[c1, c2],
+    )
+
+    assert result.alternatives[0].code == "LOINC:60984-2"
+    assert result.alternatives[0].explanation == (
+        "Could fit if the measurement is specifically aortic systolic pressure."
+    )
+
+
+def test_legacy_alternative_codes_get_fallback_explanation() -> None:
+    builder = MappingResultBuilder()
+    c1 = _make_candidate("LOINC:8480-6", "Systolic BP")
+    c2 = _make_candidate("LOINC:8462-4", "Mean systolic BP")
+    decision = _make_selected_decision(
+        selected_code="LOINC:8480-6",
+        alternative_codes=["LOINC:8462-4"],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[c1, c2],
+    )
+
+    assert result.alternatives[0].code == "LOINC:8462-4"
+    _assert_specific_fallback(
+        result.alternatives[0].explanation,
+        expected_fragment="average",
+    )
+
+
+def test_empty_alternatives_fall_back_to_retrieved_candidates() -> None:
+    builder = MappingResultBuilder()
+    c1 = _make_candidate("LOINC:8480-6", "Systolic BP")
+    c2 = _make_candidate("LOINC:8462-4", "Diastolic BP")
+    c3 = _make_candidate("LOINC:55284-4", "Exercise blood pressure")
+    decision = _make_selected_decision(
+        selected_code="LOINC:8480-6",
+        alternative_codes=[],
+        alternatives=[],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[c1, c2, c3],
+    )
+
+    alt_codes = [alt.code for alt in result.alternatives]
+    assert alt_codes == ["LOINC:8462-4", "LOINC:55284-4"]
+    _assert_specific_fallback(
+        result.alternatives[0].explanation,
+        expected_fragment="diastolic",
+    )
+    _assert_specific_fallback(
+        result.alternatives[1].explanation,
+        expected_fragment="exercise",
+    )
+
+
+def test_alternatives_are_capped_by_builder() -> None:
+    builder = MappingResultBuilder()
+    selected = _make_candidate("LOINC:100", "Selected")
+    others = [
+        _make_candidate(f"LOINC:{i}", f"Candidate {i}", normalized_score=0.9 - i * 0.01)
+        for i in range(1, 8)
+    ]
+    decision = _make_selected_decision(selected_code="LOINC:100")
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[selected, *others],
+        max_alternatives=5,
+    )
+
+    assert len(result.alternatives) == 5
+
+
+def test_selected_code_never_appears_in_structured_alternatives() -> None:
+    builder = MappingResultBuilder()
+    c1 = _make_candidate("LOINC:8480-6", "Systolic BP")
+    c2 = _make_candidate("LOINC:60984-2", "Aortic systolic pressure")
+    decision = _make_selected_decision(
+        selected_code="LOINC:8480-6",
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C1",
+                code="LOINC:8480-6",
+                confidence=0.8,
+                explanation="Should be excluded.",
+            ),
+            RerankAlternative(
+                candidate_id="C2",
+                code="LOINC:60984-2",
+                confidence=0.7,
+                explanation="Related candidate.",
+            ),
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[c1, c2],
+    )
+
+    assert [alt.code for alt in result.alternatives] == ["LOINC:60984-2"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -348,3 +348,19 @@ def test_provider_configuration_still_builds_provider_for_planned_mode(
         "api_key": "sk-test",
     }
     assert captured["pipeline_provider"] is provider
+
+
+def test_planned_mode_passes_max_candidates_and_max_alternatives() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+        max_candidates=7,
+        max_alternatives=3,
+    )
+
+    mapper.map_term("sys_bp")
+
+    assert fake.calls[0]["max_candidates"] == 7
+    assert fake.calls[0]["max_alternatives"] == 3

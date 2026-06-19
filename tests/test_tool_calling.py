@@ -239,6 +239,7 @@ def test_openai_complete_with_tools_passes_tools_to_sdk(monkeypatch: pytest.Monk
     _, call_kwargs = mock_client.chat.completions.create.call_args
     assert "tools" in call_kwargs
     assert call_kwargs["tools"][0]["type"] == "function"
+    assert call_kwargs["temperature"] == 0.1
     assert call_kwargs["max_tokens"] == 1024
     assert "max_completion_tokens" not in call_kwargs
 
@@ -260,7 +261,9 @@ def test_openai_complete_with_tools_uses_completion_tokens_for_reasoning_model(
     )
 
     _, call_kwargs = mock_client.chat.completions.create.call_args
+    assert "temperature" not in call_kwargs
     assert call_kwargs["max_completion_tokens"] == 321
+    assert call_kwargs["reasoning_effort"] == "low"
     assert "max_tokens" not in call_kwargs
 
 

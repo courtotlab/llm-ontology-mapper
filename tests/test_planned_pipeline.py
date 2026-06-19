@@ -697,6 +697,14 @@ def test_max_candidates_passed_to_candidate_merger() -> None:
     assert parts["merger"].last_max_candidates == 3
 
 
+def test_max_alternatives_passed_to_mapping_result_builder() -> None:
+    pipeline, parts = _pipeline()
+
+    pipeline.map_term("sys_bp", max_alternatives=4)
+
+    assert parts["builder"].last_kwargs["max_alternatives"] == 4
+
+
 def test_public_mapping_result_has_grounded_metadata() -> None:
     pipeline, _ = _pipeline()
 

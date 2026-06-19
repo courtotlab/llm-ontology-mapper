@@ -17,6 +17,7 @@ from llm_ontology_mapper.models import (
     NormalizedCandidate,
     OntologyPrefix,
     QueryPlan,
+    RerankAlternative,
     RerankDecision,
     RetrievalMode,
     RetrievalTrace,
@@ -127,6 +128,34 @@ def test_is_high_confidence(confidence: float, expected: bool) -> None:
 def test_alternatives_sorted_descending(result_with_alternatives: MappingResult) -> None:
     scores = [a.confidence for a in result_with_alternatives.alternatives]
     assert scores == sorted(scores, reverse=True)
+
+
+@pytest.mark.unit
+def test_alternative_mapping_explanation_is_optional() -> None:
+    alt = AlternativeMapping(
+        code="LOINC:60984-2",
+        term="Aortic systolic pressure",
+        ontology="LOINC",
+        confidence=0.75,
+        source="rag",
+        explanation="Could fit if the field is specifically an aortic measurement.",
+    )
+
+    assert alt.explanation == "Could fit if the field is specifically an aortic measurement."
+
+
+@pytest.mark.unit
+def test_rerank_alternative_serializes() -> None:
+    alt = RerankAlternative(
+        candidate_id="C1",
+        code="LOINC:60984-2",
+        confidence=0.75,
+        explanation="Could fit if the measurement context is more specific.",
+    )
+
+    dumped = alt.model_dump(mode="json")
+    assert dumped["candidate_id"] == "C1"
+    assert dumped["code"] == "LOINC:60984-2"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

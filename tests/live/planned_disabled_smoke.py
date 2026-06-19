@@ -14,6 +14,14 @@ import os
 import sys
 from typing import Any
 
+from _planned_smoke_helpers import (
+    env_flag,
+    extract_pipeline_metadata,
+    print_alternatives_summary,
+    print_full_debug_result,
+    print_result_summary,
+    print_trace_summary,
+)
 from llm_ontology_mapper.mapper import OntologyMapper
 from llm_ontology_mapper.models import LogicType
 from llm_ontology_mapper.providers import OllamaProvider, OpenAIProvider
@@ -30,11 +38,12 @@ OPENAI_MODEL = "gpt-4.1-mini"
 OLLAMA_MODEL = "llama3.2:latest"
 OLLAMA_BASE_URL = "http://localhost:11434"
 
-SOURCE_TERM = "sys_bp"
-SOURCE_LABEL = ""
+SOURCE_TERM = "hr"
+SOURCE_LABEL = "heart rate"
 CLINICAL_AREA = "measurement"
 TARGET_ONTOLOGY = "LOINC"
 RETRIEVAL_MODE = "disabled"
+SMOKE_DEBUG = env_flag("SMOKE_DEBUG")
 
 
 def _optional(value: str) -> str | None:
@@ -53,23 +62,6 @@ def _build_provider() -> OpenAIProvider | OllamaProvider | None:
     if provider_name == "ollama":
         return OllamaProvider(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL)
     raise ValueError("PROVIDER must be 'openai' or 'ollama'.")
-
-
-def _result_payload(result: object) -> dict[str, Any]:
-    if hasattr(result, "model_dump"):
-        return result.model_dump(mode="json")  # type: ignore[no-any-return]
-    if isinstance(result, dict):
-        return result
-    return {"result": str(result)}
-
-
-def _pipeline_info(result: object) -> dict[str, Any]:
-    metadata = getattr(result, "metadata", None)
-    rag_debug = getattr(metadata, "rag_debug", None)
-    candidates = getattr(rag_debug, "candidates_retrieved", None) or []
-    if candidates and isinstance(candidates[0], dict):
-        return candidates[0]
-    return {}
 
 
 def _logic_value(result: object) -> str:
@@ -92,6 +84,7 @@ def main() -> None:
         "target_ontology": _optional(TARGET_ONTOLOGY),
         "clinical_area": _optional(CLINICAL_AREA),
         "retrieval_mode": RETRIEVAL_MODE,
+        "smoke_debug": SMOKE_DEBUG,
     }
     if provider_name == "ollama":
         context["ollama_base_url"] = OLLAMA_BASE_URL
@@ -110,10 +103,11 @@ def main() -> None:
         entity_type=_optional(CLINICAL_AREA),
     )
 
-    payload = _result_payload(result)
-    info = _pipeline_info(result)
-    print(json.dumps(payload, indent=2, default=str))
-    print(json.dumps({"selected_pipeline_metadata": info}, indent=2, default=str))
+    info = extract_pipeline_metadata(result) or {}
+    print_result_summary(result)
+    print_alternatives_summary(result, max_alternatives=0, always=True)
+    print_trace_summary(result)
+    print_full_debug_result(result, enabled=SMOKE_DEBUG)
 
     assert result.logic_type == LogicType.LLM, (
         f"Expected logic_type=LLM, got {_logic_value(result)!r}"

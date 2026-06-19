@@ -14,6 +14,14 @@ import os
 import sys
 from typing import Any
 
+from _planned_smoke_helpers import (
+    env_flag,
+    extract_pipeline_metadata,
+    print_alternatives_summary,
+    print_full_debug_result,
+    print_result_summary,
+    print_trace_summary,
+)
 from llm_ontology_mapper.mapper import OntologyMapper
 from llm_ontology_mapper.planned_pipeline import PlannedPipeline
 from llm_ontology_mapper.providers import OllamaProvider, OpenAIProvider
@@ -27,20 +35,22 @@ __test__ = False
 # EDIT THIS SECTION FOR LOCAL SMOKE TESTING
 # =============================================================================
 
-PROVIDER = "openai"  # "openai" or "ollama"
-OPENAI_MODEL = "gpt-4.1-mini"
-OLLAMA_MODEL = "llama3.2:latest"
+PROVIDER = "ollama"  # "openai" or "ollama"
+OPENAI_MODEL = "gpt-5"
+OLLAMA_MODEL = "qwen2.5:14b-instruct"
 OLLAMA_BASE_URL = "http://localhost:11434"
 
 SOURCE_TERM = "sys_bp"
-SOURCE_LABEL = ""
+SOURCE_LABEL = "systolic blood pressure"
 CLINICAL_AREA = "measurement"
 TARGET_ONTOLOGY = "LOINC"
 RETRIEVAL_MODE = "public"
 
-MAX_RESULTS_PER_QUERY = 10
+MAX_RESULTS_PER_QUERY = int(os.environ.get("MAX_RESULTS_PER_QUERY", "6"))
+MAX_ALTERNATIVES = int(os.environ.get("MAX_ALTERNATIVES", "5"))
+SMOKE_DEBUG = env_flag("SMOKE_DEBUG")
 
-RUN_TARGET_OVERRIDE_CASE = True
+RUN_TARGET_OVERRIDE_CASE = False
 OVERRIDE_TARGET_ONTOLOGY = "HPO"
 
 
@@ -62,27 +72,27 @@ def _build_provider() -> OpenAIProvider | OllamaProvider | None:
     raise ValueError("PROVIDER must be 'openai' or 'ollama'.")
 
 
-def _result_payload(result: object) -> dict[str, Any]:
-    if hasattr(result, "model_dump"):
-        return result.model_dump(mode="json")  # type: ignore[no-any-return]
-    if isinstance(result, dict):
-        return result
-    return {"result": str(result)}
-
-
-def _pipeline_info(result: object) -> dict[str, Any]:
-    metadata = getattr(result, "metadata", None)
-    rag_debug = getattr(metadata, "rag_debug", None)
-    candidates = getattr(rag_debug, "candidates_retrieved", None) or []
-    if candidates and isinstance(candidates[0], dict):
-        return candidates[0]
-    return {}
-
-
 def _is_unmapped(result: object) -> bool:
     code = str(getattr(result, "target_code", "")).upper()
     ontology = str(getattr(result, "ontology", "")).upper()
     return code in {"UNMAPPED", "UNKNOWN:UNMAPPED"} or ontology == "UNKNOWN"
+
+
+def _validate_alternatives(result: object) -> None:
+    alternatives = getattr(result, "alternatives", [])
+    assert len(alternatives) <= MAX_ALTERNATIVES
+
+    for alt in alternatives:
+        assert alt.code
+        assert not alt.code.startswith("C"), "candidate IDs must not appear as ontology codes"
+        assert alt.term
+        assert alt.ontology
+        assert 0.0 <= alt.confidence <= 1.0
+        assert getattr(alt, "explanation", None), (
+            "each alternative should include an explanation"
+        )
+        if not _is_unmapped(result):
+            assert alt.code != result.target_code
 
 
 def _make_mapper(
@@ -90,14 +100,11 @@ def _make_mapper(
     *,
     target_ontology: str | None,
 ) -> OntologyMapper:
-    # Provide explicit blank LOINC credentials so this script does not read
-    # LOINC_* environment variables. LOINC public retrieval may therefore
-    # return no candidates unless credentials are added in code for local use.
     search_tools = SearchTools(
         api_timeout=15,
         request_delay=0.1,
-        loinc_username="",
-        loinc_password="",
+        loinc_username=os.environ.get("LOINC_USERNAME"),
+        loinc_password=os.environ.get("LOINC_PASSWORD"),
     )
     pipeline = PlannedPipeline(
         provider=provider,
@@ -110,6 +117,7 @@ def _make_mapper(
         retrieval_mode=RETRIEVAL_MODE,
         planned_pipeline=pipeline,
         rag_top_k=MAX_RESULTS_PER_QUERY,
+        max_alternatives=MAX_ALTERNATIVES,
     )
 
 
@@ -128,6 +136,8 @@ def _print_context(
         "clinical_area": _optional(CLINICAL_AREA),
         "retrieval_mode": RETRIEVAL_MODE,
         "max_results_per_query": MAX_RESULTS_PER_QUERY,
+        "max_alternatives": MAX_ALTERNATIVES,
+        "smoke_debug": SMOKE_DEBUG,
     }
     if provider_name == "ollama":
         context["ollama_base_url"] = OLLAMA_BASE_URL
@@ -155,12 +165,18 @@ def _run_case(
         entity_type=_optional(CLINICAL_AREA),
     )
 
-    payload = _result_payload(result)
-    info = _pipeline_info(result)
-    print(json.dumps(payload, indent=2, default=str))
-    print(json.dumps({"selected_pipeline_metadata": info}, indent=2, default=str))
+    info = extract_pipeline_metadata(result) or {}
+    print_result_summary(result)
+    print_alternatives_summary(
+        result,
+        max_alternatives=MAX_ALTERNATIVES,
+        always=True,
+    )
+    print_trace_summary(result)
+    print_full_debug_result(result, enabled=SMOKE_DEBUG)
 
     assert 0.0 <= result.confidence <= 1.0, "confidence must be in [0, 1]"
+    _validate_alternatives(result)
 
     if override_case:
         assert result.ontology in {"HPO", "HP", "UNKNOWN"}, (

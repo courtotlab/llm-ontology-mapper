@@ -8,6 +8,20 @@ Your role is to select the best ontology candidate from the retrieved list for t
 - You MUST NOT invent candidate IDs. Only C1, C2, C3, … from the list below are valid.
 - Return UNMAPPED (selected_candidate_id: null, is_unmapped: true) if no candidate is a semantically correct match for the source term.
 - Do not add any text outside the JSON object.
+- selected_candidate_id must be a candidate ID like C1.
+- selected_code must be the exact ontology code from that selected candidate.
+- Return up to 5 alternatives when reasonable candidates exist.
+- Each alternative must come from the retrieved candidate list.
+- Each alternative must exclude the selected candidate.
+- alternatives[].candidate_id must be a candidate ID like C1.
+- alternatives[].code must be the exact ontology code from that candidate.
+- alternatives[].code must not be C1, C2, etc.
+- Each alternative must include confidence between 0.0 and 1.0.
+- Each alternative must include an explanation that helps a clinical reviewer decide whether the alternative might be better for their dataset.
+- The explanation should mention what extra context would make the alternative appropriate, such as method, specimen, body site, abnormality, disease scope, route, measurement context, or clinical setting.
+- Do not include alternatives that are clearly unrelated.
+- Do not invent codes.
+- Do not use candidate IDs as ontology codes.
 
 ## Source term context
 {query_context}
@@ -26,6 +40,14 @@ Your role is to select the best ontology candidate from the retrieved list for t
   "is_unmapped": false,
   "confidence": 0.92,
   "reasoning": "The source term likely refers to systolic blood pressure as a measured vital sign, and C1 is the closest LOINC measurement match.",
+  "alternatives": [
+    {{
+      "candidate_id": "C2",
+      "code": "LOINC:8462-4",
+      "confidence": 0.65,
+      "explanation": "Could be appropriate if the field is actually diastolic blood pressure rather than systolic blood pressure."
+    }}
+  ],
   "alternative_codes": ["LOINC:8462-4"]
 }}
 
@@ -36,8 +58,26 @@ Your role is to select the best ontology candidate from the retrieved list for t
   "is_unmapped": true,
   "confidence": 0.0,
   "reasoning": "None of the retrieved candidates semantically match the source term.",
+  "alternatives": [],
   "alternative_codes": []
 }}
 
 ## Required output format
 Return ONLY valid JSON. No markdown fences. No explanation outside the JSON object.
+
+{{
+  "selected_candidate_id": "C3",
+  "selected_code": "LOINC:8480-6",
+  "confidence": 0.95,
+  "reasoning": "This directly matches systolic blood pressure as a general measurement.",
+  "is_unmapped": false,
+  "alternatives": [
+    {{
+      "candidate_id": "C1",
+      "code": "LOINC:60984-2",
+      "confidence": 0.75,
+      "explanation": "Could be appropriate if the field specifically refers to systolic pressure measured in the aorta."
+    }}
+  ],
+  "alternative_codes": ["LOINC:60984-2"]
+}}

@@ -100,6 +100,8 @@ class OntologyMapper:
         use_planned_pipeline: bool = False,
         retrieval_mode: RetrievalMode | str = RetrievalMode.PUBLIC,
         planned_pipeline: Any | None = None,
+        max_candidates: int | None = 10,
+        max_alternatives: int = 5,
         # ── Legacy compat flags ───────────────────────────────────────────────
         use_ontogpt: bool = False,   # deprecated no-op
         **provider_kwargs: Any,
@@ -126,6 +128,8 @@ class OntologyMapper:
         self._retriever               = ontology_retriever
         self.rag_top_k                = rag_top_k
         self.rag_auto_accept_threshold = rag_auto_accept_threshold
+        self.max_candidates = max_candidates
+        self.max_alternatives = max_alternatives
 
         # ── Planned pipeline (explicit opt-in only) ───────────────────────────
         self.use_planned_pipeline = use_planned_pipeline
@@ -345,6 +349,8 @@ class OntologyMapper:
             target_ontology=target_ontology,
             retrieval_mode=retrieval_mode,
             max_results_per_query=self.rag_top_k,
+            max_candidates=self.max_candidates,
+            max_alternatives=self.max_alternatives,
         )
 
     def _effective_ontologies(self, entity_type: str | None) -> list[str]:

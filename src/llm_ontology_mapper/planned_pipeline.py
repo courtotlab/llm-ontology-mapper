@@ -87,6 +87,7 @@ class PlannedPipeline:
         retrieval_mode: RetrievalMode | str = RetrievalMode.PUBLIC,
         max_results_per_query: int = 10,
         max_candidates: int | None = None,
+        max_alternatives: int = 5,
     ) -> MappingResult:
         """
         Map one source term through the planned pipeline.
@@ -140,6 +141,7 @@ class PlannedPipeline:
             candidates=merged_candidates,
             retrieval_trace=retrieval_trace,
             source_type=source_type,
+            max_alternatives=max_alternatives,
         )
 
     @staticmethod
@@ -278,6 +280,7 @@ class PlannedPipeline:
         candidates: list[NormalizedCandidate],
         retrieval_trace: RetrievalTrace,
         source_type: str | None,
+        max_alternatives: int,
     ) -> MappingResult:
         try:
             return self._mapping_result_builder.build(
@@ -286,6 +289,7 @@ class PlannedPipeline:
                 candidates=candidates,
                 retrieval_trace=retrieval_trace,
                 source_type=source_type,
+                max_alternatives=max_alternatives,
             )
         except Exception as exc:
             raise PlannedPipelineError(

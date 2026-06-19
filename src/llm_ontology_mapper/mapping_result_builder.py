@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
+from llm_ontology_mapper.llm_reranker import fallback_alternative_explanation
 from llm_ontology_mapper.models import (
     AlternativeMapping,
     LogicType,
@@ -32,6 +33,7 @@ from llm_ontology_mapper.models import (
     QueryPlan,
     RAGDebugInfo,
     RerankDecision,
+    RerankAlternative,
     RetrievalMode,
     RetrievalTrace,
 )
@@ -91,6 +93,7 @@ class MappingResultBuilder:
         candidates: Sequence[NormalizedCandidate],
         retrieval_trace: RetrievalTrace | None = None,
         source_type: str | None = None,
+        max_alternatives: int = 5,
     ) -> MappingResult:
         """
         Build a MappingResult from a grounded pipeline decision.
@@ -133,6 +136,7 @@ class MappingResultBuilder:
             candidates=candidates,
             retrieval_trace=retrieval_trace,
             source_type=source_type,
+            max_alternatives=max_alternatives,
         )
 
     # ── Private helpers ───────────────────────────────────────────────────────
@@ -145,6 +149,7 @@ class MappingResultBuilder:
         candidates: Sequence[NormalizedCandidate],
         retrieval_trace: RetrievalTrace | None,
         source_type: str | None,
+        max_alternatives: int,
     ) -> MappingResult:
         # Validate grounding
         if not rerank_decision.is_grounded:
@@ -180,9 +185,11 @@ class MappingResultBuilder:
                 )
 
         alternatives = _build_alternatives(
-            rerank_decision.alternative_codes,
-            candidates,
+            structured_alternatives=rerank_decision.alternatives,
+            alternative_codes=rerank_decision.alternative_codes,
+            candidates=candidates,
             exclude_code=selected_code,
+            max_alternatives=max_alternatives,
         )
 
         metadata = _build_metadata(
@@ -258,35 +265,73 @@ def _find_by_code(
 
 
 def _build_alternatives(
+    *,
+    structured_alternatives: Sequence[RerankAlternative],
     alternative_codes: list[str],
     candidates: Sequence[NormalizedCandidate],
     exclude_code: str | None,
+    max_alternatives: int = 5,
 ) -> list[AlternativeMapping]:
     """
-    Build AlternativeMapping objects for each code in alternative_codes.
-
-    Order follows alternative_codes.  The selected candidate (exclude_code)
-    is never included.  Codes not found in candidates are skipped silently
-    (LLMReranker already validates them; this is a defensive safeguard only).
+    Build grounded AlternativeMapping objects from structured alternatives,
+    legacy alternative_codes, or retrieval-ranked fallback candidates.
     """
     code_map: dict[str, NormalizedCandidate] = {c.code: c for c in candidates}
     result: list[AlternativeMapping] = []
-    for code in alternative_codes:
-        if code == exclude_code:
-            continue
+    seen_codes: set[str] = set()
+
+    def _append(
+        *,
+        code: str,
+        confidence: float,
+        explanation: str,
+    ) -> None:
+        if len(result) >= max_alternatives:
+            return
+        if code == exclude_code or code in seen_codes:
+            return
         candidate = code_map.get(code)
         if candidate is None:
-            continue
-        alt_conf = _candidate_confidence(candidate)
+            return
         result.append(
             AlternativeMapping(
                 code=candidate.code,
                 term=candidate.term,
                 ontology=candidate.ontology,
-                confidence=alt_conf,
+                confidence=confidence,
                 source="rag",
+                explanation=explanation,
             )
         )
+        seen_codes.add(code)
+
+    for alt in structured_alternatives:
+        _append(
+            code=alt.code,
+            confidence=alt.confidence,
+            explanation=alt.explanation,
+        )
+
+    for code in alternative_codes:
+        candidate = code_map.get(code)
+        if candidate is None:
+            continue
+        _append(
+            code=code,
+            confidence=_candidate_confidence(candidate),
+            explanation=fallback_alternative_explanation(candidate),
+        )
+
+    for candidate in candidates:
+        _append(
+            code=candidate.code,
+            confidence=_candidate_confidence(candidate),
+            explanation=fallback_alternative_explanation(candidate),
+        )
+
+        if len(result) >= max_alternatives:
+            break
+
     return result
 
 

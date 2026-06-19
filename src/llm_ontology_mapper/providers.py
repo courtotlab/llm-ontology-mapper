@@ -279,6 +279,12 @@ class _RetryableError(Exception):
     """Raised inside _do_complete to signal a transient error worth retrying."""
 
 
+def is_reasoning_model(model: str) -> bool:
+    """Return True for OpenAI reasoning-style model families."""
+    normalized = model.lower().rsplit("/", 1)[-1]
+    return normalized.startswith(("o1", "o3", "o4", "gpt-5"))
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Concrete providers (thin wrappers — heavy SDK imports are guarded)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -331,12 +337,37 @@ class OpenAIProvider(BaseLLMProvider):
                 )
         return self._client
 
-    def _token_limit_kwargs(self, max_tokens: int) -> dict[str, int]:
+    def _token_limit_kwargs(
+        self,
+        max_tokens: int,
+        min_completion_tokens: int | None = None,
+    ) -> dict[str, int]:
         """Return the Chat Completions token-limit parameter for this model."""
-        model = self.model.lower().rsplit("/", 1)[-1]
-        if model.startswith(("o1", "o3", "o4", "gpt-5")):
-            return {"max_completion_tokens": max_tokens}
+        if self._uses_reasoning_style_parameters():
+            effective_tokens = max(max_tokens, min_completion_tokens or 0)
+            return {"max_completion_tokens": effective_tokens}
         return {"max_tokens": max_tokens}
+
+    def _temperature_kwargs(self, temperature: float) -> dict[str, float]:
+        """Return sampling kwargs supported by this model family."""
+        if self._uses_reasoning_style_parameters():
+            return {}
+        return {"temperature": temperature}
+
+    def _uses_reasoning_style_parameters(self) -> bool:
+        """True for OpenAI models that reject max_tokens or non-default temperature."""
+        return is_reasoning_model(self.model)
+
+    def _reasoning_kwargs(self, requested_effort: str | None) -> dict[str, str]:
+        """Return conservative reasoning controls for compatible model families."""
+        if not self._uses_reasoning_style_parameters():
+            return {}
+        if requested_effort:
+            return {"reasoning_effort": requested_effort}
+        model = self.model.lower().rsplit("/", 1)[-1]
+        if model.startswith("gpt-5"):
+            return {"reasoning_effort": "minimal"}
+        return {"reasoning_effort": "low"}
 
     @staticmethod
     def _requires_max_completion_tokens(exc: Exception) -> bool:
@@ -347,6 +378,51 @@ class OpenAIProvider(BaseLLMProvider):
             and "max_completion_tokens" in message
             and ("unsupported" in message or "not supported" in message)
         )
+
+    @staticmethod
+    def _rejects_parameter(exc: Exception, parameter_name: str) -> bool:
+        """Detect provider rejection of an optional request parameter."""
+        message = str(exc).lower()
+        parameter = parameter_name.lower()
+        return (
+            parameter in message
+            and (
+                "unsupported" in message
+                or "not supported" in message
+                or "unrecognized" in message
+                or "unknown parameter" in message
+            )
+        )
+
+    def _create_chat_completion(
+        self,
+        client: Any,
+        request_kwargs: dict[str, Any],
+        *,
+        max_tokens: int,
+    ) -> Any:
+        import openai  # noqa: PLC0415  # type: ignore[import-untyped]
+
+        for _ in range(3):
+            try:
+                return client.chat.completions.create(**request_kwargs)
+            except openai.APIStatusError as exc:
+                if (
+                    "max_tokens" in request_kwargs
+                    and self._requires_max_completion_tokens(exc)
+                ):
+                    request_kwargs.pop("max_tokens")
+                    request_kwargs["max_completion_tokens"] = max_tokens
+                    continue
+                if (
+                    "reasoning_effort" in request_kwargs
+                    and self._rejects_parameter(exc, "reasoning_effort")
+                ):
+                    request_kwargs.pop("reasoning_effort")
+                    continue
+                raise
+
+        return client.chat.completions.create(**request_kwargs)
 
     def complete(
         self,
@@ -368,13 +444,24 @@ class OpenAIProvider(BaseLLMProvider):
 
         client = self._get_client()
         sdk_messages = [{"role": m.role, "content": m.content} for m in messages]
+        min_completion_tokens = kwargs.pop("min_completion_tokens", None)
+        reasoning_effort = kwargs.pop("reasoning_effort", None)
+        request_kwargs = {
+            "model": self.model,
+            "messages": sdk_messages,
+            **self._temperature_kwargs(temperature),
+            **self._token_limit_kwargs(
+                max_tokens,
+                min_completion_tokens=min_completion_tokens,
+            ),
+            **self._reasoning_kwargs(reasoning_effort),
+            **kwargs,
+        }
         try:
-            resp = client.chat.completions.create(
-                model=self.model,
-                messages=sdk_messages,
-                temperature=temperature,
+            resp = self._create_chat_completion(
+                client,
+                request_kwargs,
                 max_tokens=max_tokens,
-                **kwargs,
             )
         except openai.RateLimitError as exc:
             raise _RetryableError(str(exc)) from exc
@@ -383,8 +470,17 @@ class OpenAIProvider(BaseLLMProvider):
                 raise _RetryableError(str(exc)) from exc
             raise RuntimeError(str(exc)) from exc
 
+        content = resp.choices[0].message.content or ""
+        if not content.strip():
+            logger.warning(
+                "OpenAI returned empty assistant content | model=%s finish_reason=%s usage=%s",
+                getattr(resp, "model", self.model),
+                getattr(resp.choices[0], "finish_reason", None),
+                _safe_usage_dict(getattr(resp, "usage", None)),
+            )
+
         return CompletionResponse(
-            content=resp.choices[0].message.content or "",
+            content=content,
             model=resp.model,
             prompt_tokens=resp.usage.prompt_tokens if resp.usage else None,
             completion_tokens=resp.usage.completion_tokens if resp.usage else None,
@@ -405,26 +501,26 @@ class OpenAIProvider(BaseLLMProvider):
         client = self._get_client()
         sdk_messages = [{"role": m.role, "content": m.content} for m in messages]
         provider_tools = to_provider_tools(self.provider_name, tools)
+        min_completion_tokens = kwargs.pop("min_completion_tokens", None)
+        reasoning_effort = kwargs.pop("reasoning_effort", None)
         request_kwargs = {
             "model": self.model,
             "messages": sdk_messages,
             "tools": provider_tools,
-            "temperature": temperature,
-            **self._token_limit_kwargs(max_tokens),
+            **self._temperature_kwargs(temperature),
+            **self._token_limit_kwargs(
+                max_tokens,
+                min_completion_tokens=min_completion_tokens,
+            ),
+            **self._reasoning_kwargs(reasoning_effort),
             **kwargs,
         }
         try:
-            try:
-                resp = client.chat.completions.create(**request_kwargs)
-            except openai.APIStatusError as exc:
-                if (
-                    "max_tokens" not in request_kwargs
-                    or not self._requires_max_completion_tokens(exc)
-                ):
-                    raise
-                request_kwargs.pop("max_tokens")
-                request_kwargs["max_completion_tokens"] = max_tokens
-                resp = client.chat.completions.create(**request_kwargs)
+            resp = self._create_chat_completion(
+                client,
+                request_kwargs,
+                max_tokens=max_tokens,
+            )
         except openai.RateLimitError as exc:
             raise _RetryableError(str(exc)) from exc
         except openai.APIStatusError as exc:
@@ -450,6 +546,26 @@ class OpenAIProvider(BaseLLMProvider):
         if self._base_url and "models.inference" in (self._base_url or ""):
             return "github"
         return "openai"
+
+
+def _safe_usage_dict(usage: Any) -> dict[str, Any] | None:
+    """Return non-sensitive token usage diagnostics from an SDK usage object."""
+    if usage is None:
+        return None
+    if hasattr(usage, "model_dump"):
+        return usage.model_dump(mode="json")
+    result: dict[str, Any] = {}
+    for key in (
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "completion_tokens_details",
+        "prompt_tokens_details",
+    ):
+        value = getattr(usage, key, None)
+        if value is not None:
+            result[key] = value
+    return result or None
 
 
 class AnthropicProvider(BaseLLMProvider):

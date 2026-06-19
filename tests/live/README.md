@@ -46,11 +46,17 @@ uv run python tests/live/planned_local_smoke.py
 uv run python tests/live/planned_disabled_smoke.py
 ```
 
-For the planned smoke scripts, the only environment variable read by the
-scripts is:
+For the planned smoke scripts, OpenAI runs require:
 
 ```bash
 export OPENAI_API_KEY="..."
+```
+
+Public planned LOINC retrieval can also use:
+
+```bash
+export LOINC_USERNAME="..."
+export LOINC_PASSWORD="..."
 ```
 
 All other settings are edited at the top of each planned smoke file:
@@ -62,7 +68,6 @@ All other settings are edited at the top of each planned smoke file:
   the corresponding constants.
 - Local SapBERT URL: edit `SAPBERT_URL` in `planned_local_smoke.py`.
 
-`planned_public_smoke.py` injects blank LOINC credentials into `SearchTools`
-so the script itself does not read LOINC-related environment variables. Public
-LOINC retrieval may therefore return `UNKNOWN:UNMAPPED` unless credentials are
-configured directly in code for local experimentation.
+`planned_public_smoke.py` passes `LOINC_USERNAME` and `LOINC_PASSWORD` to
+`SearchTools` for LOINC public retrieval. If those variables are missing, LOINC
+retrieval may return no candidates and the result may be `UNKNOWN:UNMAPPED`.
