@@ -7,6 +7,7 @@ public ontology API, or SapBERT service is called.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import pytest
@@ -606,6 +607,45 @@ def test_empty_public_retrieval_produces_unmapped_result() -> None:
     assert result.target_code == "UNKNOWN:UNMAPPED"
     assert result.target_term == "UNMAPPED"
     assert result.ontology == "UNKNOWN"
+
+
+def test_normalize_raw_candidates_skip_one_bad_record(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """One malformed candidate (blank term) + two valid → the two valid normalize,
+    the bad one is captured in the retrieval trace errors, no PlannedPipelineError."""
+    bad = _public_raw(term="")
+    good1 = _public_raw(code="LOINC:8480-6", term="Systolic blood pressure")
+    good2 = _public_raw(code="LOINC:8462-4", term="Diastolic blood pressure")
+
+    pipeline, parts = _pipeline(public_raw=[bad, good1, good2])
+
+    with caplog.at_level(logging.WARNING):
+        result = pipeline.map_term("sys_bp", retrieval_mode=RetrievalMode.PUBLIC)
+
+    # The two valid candidates flowed through — result is grounded.
+    assert result.target_code != "UNKNOWN:UNMAPPED"
+
+    # The skip was logged at WARNING.
+    assert "skipped malformed candidate" in caplog.text
+
+    # The skipped record is surfaced in the retrieval trace errors.
+    trace = parts["builder"].last_kwargs["retrieval_trace"]
+    assert len(trace.errors) == 1
+    assert trace.errors[0]["raw_candidate"] == bad
+    assert "error" in trace.errors[0]
+
+
+def test_normalize_raw_candidates_systematic_failure_raises() -> None:
+    """More than half the batch failing normalization must raise PlannedPipelineError."""
+    # Three bad candidates (blank term), one good — >50% failure rate.
+    bad = _public_raw(term="")
+    good = _public_raw(code="LOINC:8480-6", term="Systolic blood pressure")
+
+    pipeline, _ = _pipeline(public_raw=[bad, bad, bad, good])
+
+    with pytest.raises(PlannedPipelineError, match="systematic"):
+        pipeline.map_term("sys_bp", retrieval_mode=RetrievalMode.PUBLIC)
 
 
 def test_empty_local_retrieval_produces_unmapped_result() -> None:

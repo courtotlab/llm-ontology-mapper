@@ -34,10 +34,10 @@ __test__ = False
 # EDIT THIS SECTION FOR LOCAL SMOKE TESTING
 # =============================================================================
 
-PROVIDER = "ollama"  # "openai" or "ollama"
+PROVIDER = "openai"  # "openai" or "ollama"
 OPENAI_MODEL = "gpt-5"
-OLLAMA_MODEL = "qwen2.5:14b-instruct"
-OLLAMA_BASE_URL = "http://localhost:11434"
+OLLAMA_MODEL = "gpt-oss:120b"
+OLLAMA_BASE_URL = "http://localhost:11528"
 
 SAPBERT_URL = "http://localhost:8765"
 
@@ -70,6 +70,15 @@ def _build_provider() -> OpenAIProvider | OllamaProvider | None:
     raise ValueError("PROVIDER must be 'openai' or 'ollama'.")
 
 
+# All code prefixes that local retrieval routes can legitimately emit, derived from
+# search_tools._normalize_code prefix_map and OLS_ONTOLOGY_MAP.
+_KNOWN_CODE_PREFIXES: tuple[str, ...] = (
+    "CHEBI:", "DOID:", "GO:", "HP:", "ICD10:", "LOINC:",
+    "MESH:", "MONDO:", "NCIT:", "RXNORM:", "SNOMEDCT:",
+    "UBERON:", "UO:",
+)
+
+
 def _is_unmapped(result: object) -> bool:
     code = str(getattr(result, "target_code", "")).upper()
     ontology = str(getattr(result, "ontology", "")).upper()
@@ -82,7 +91,18 @@ def _validate_alternatives(result: object) -> None:
 
     for alt in alternatives:
         assert alt.code
-        assert not alt.code.startswith("C"), "candidate IDs must not appear as ontology codes"
+        # Guard: bare UMLS CUIs (C0000000) must not leak as ontology codes.
+        # Positive check: every legitimate code carries a known ontology prefix.
+        assert alt.code.startswith(_KNOWN_CODE_PREFIXES), (
+            f"alt.code lacks a known ontology prefix (raw CUI leak or unknown route?): "
+            f"{alt.code!r}"
+        )
+        # Guard: doubled/embedded namespace (e.g. "SNOMEDCT:SNOMED:768500006") must
+        # not appear — the code body after the first ":" must contain no further ":".
+        _, _, _body = alt.code.partition(":")
+        assert ":" not in _body, (
+            f"doubled/embedded namespace in alt.code: {alt.code!r}"
+        )
         assert alt.term
         assert alt.ontology
         assert 0.0 <= alt.confidence <= 1.0
@@ -166,9 +186,18 @@ def main() -> None:
 
     assert 0.0 <= result.confidence <= 1.0, "confidence must be in [0, 1]"
     _validate_alternatives(result)
-    assert result.ontology in {"LOINC", "UNKNOWN"}, (
-        f"Expected LOINC or UNKNOWN, got {result.ontology!r}"
-    )
+    target_ontology = _optional(TARGET_ONTOLOGY)
+    if target_ontology:
+        expected_ontology = target_ontology.upper()
+        assert result.ontology in {expected_ontology, "UNKNOWN"}, (
+            f"Expected {expected_ontology!r} or UNKNOWN, got {result.ontology!r}"
+        )
+    else:
+        # No target constraint: pipeline picks freely; accept any non-empty ontology.
+        assert result.ontology, (
+            f"result.ontology must be non-empty in unconstrained mode, "
+            f"got {result.ontology!r}"
+        )
     if info:
         assert info.get("retrieval_mode") == "local", info
         if "grounding_source" in info:

@@ -35,13 +35,13 @@ __test__ = False
 # EDIT THIS SECTION FOR LOCAL SMOKE TESTING
 # =============================================================================
 
-PROVIDER = "ollama"  # "openai" or "ollama"
+PROVIDER = "openai"  # "openai" or "ollama"
 OPENAI_MODEL = "gpt-5"
-OLLAMA_MODEL = "qwen2.5:14b-instruct"
-OLLAMA_BASE_URL = "http://localhost:11434"
+OLLAMA_MODEL = "gpt-oss:120b"
+OLLAMA_BASE_URL = "http://localhost:11528"
 
 SOURCE_TERM = "sys_bp"
-SOURCE_LABEL = "systolic blood pressure"
+SOURCE_LABEL = ""
 CLINICAL_AREA = "measurement"
 TARGET_ONTOLOGY = "LOINC"
 RETRIEVAL_MODE = "public"
@@ -78,13 +78,33 @@ def _is_unmapped(result: object) -> bool:
     return code in {"UNMAPPED", "UNKNOWN:UNMAPPED"} or ontology == "UNKNOWN"
 
 
+# All code prefixes that the public retrieval routes can legitimately emit, derived
+# from search_tools._normalize_code prefix_map and OLS_ONTOLOGY_MAP.
+_KNOWN_CODE_PREFIXES: tuple[str, ...] = (
+    "CHEBI:", "DOID:", "GO:", "HP:", "ICD10:", "LOINC:",
+    "MESH:", "MONDO:", "NCIT:", "RXNORM:", "SNOMEDCT:",
+    "UBERON:", "UO:",
+)
+
+
 def _validate_alternatives(result: object) -> None:
     alternatives = getattr(result, "alternatives", [])
     assert len(alternatives) <= MAX_ALTERNATIVES
 
     for alt in alternatives:
         assert alt.code
-        assert not alt.code.startswith("C"), "candidate IDs must not appear as ontology codes"
+        # Guard: bare UMLS CUIs (C0000000) must not leak as ontology codes.
+        # Positive check: every legitimate code carries a known ontology prefix.
+        assert alt.code.startswith(_KNOWN_CODE_PREFIXES), (
+            f"alt.code lacks a known ontology prefix (raw CUI leak or unknown route?): "
+            f"{alt.code!r}"
+        )
+        # Guard: doubled/embedded namespace (e.g. "SNOMEDCT:SNOMED:768500006") must
+        # not appear — the code body after the first ":" must contain no further ":".
+        _, _, _body = alt.code.partition(":")
+        assert ":" not in _body, (
+            f"doubled/embedded namespace in alt.code: {alt.code!r}"
+        )
         assert alt.term
         assert alt.ontology
         assert 0.0 <= alt.confidence <= 1.0
@@ -183,17 +203,24 @@ def _run_case(
             f"Expected HPO/HP/UNKNOWN in override case, got {result.ontology!r}"
         )
         assert result.ontology != "LOINC", "HPO override case must not return LOINC"
-    else:
-        assert result.ontology in {"LOINC", "UNKNOWN"}, (
-            f"Expected LOINC or UNKNOWN, got {result.ontology!r}"
+    elif target_ontology:
+        expected_ontology = target_ontology.upper()
+        assert result.ontology in {expected_ontology, "UNKNOWN"}, (
+            f"Expected {expected_ontology!r} or UNKNOWN, got {result.ontology!r}"
         )
-        if not _is_unmapped(result):
+        if not _is_unmapped(result) and expected_ontology == "LOINC":
             term = result.target_term.lower()
             assert (
                 result.target_code.startswith("LOINC:")
                 or "8480-6" in result.target_code
                 or ("systolic" in term and "blood pressure" in term)
             ), "Mapped public result does not look like a systolic BP LOINC result"
+    else:
+        # No target constraint: the pipeline picks the best-matching ontology freely.
+        # Assert the result carries a non-empty ontology string — we don't pin the value.
+        assert result.ontology, (
+            f"result.ontology must be non-empty in unconstrained mode, got {result.ontology!r}"
+        )
 
     if info:
         assert info.get("retrieval_mode") == "public", info

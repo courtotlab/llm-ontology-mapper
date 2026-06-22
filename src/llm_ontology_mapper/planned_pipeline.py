@@ -8,10 +8,13 @@ individual retriever contracts.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
 from llm_ontology_mapper.candidate_merger import CandidateMerger
-from llm_ontology_mapper.candidate_normalizer import CandidateNormalizer
+from llm_ontology_mapper.candidate_normalizer import CandidateNormalizationError, CandidateNormalizer
 from llm_ontology_mapper.disabled_mapping import DisabledMappingRunner
 from llm_ontology_mapper.llm_reranker import LLMReranker
 from llm_ontology_mapper.local_retriever import LocalSemanticRetriever
@@ -118,7 +121,7 @@ class PlannedPipeline:
             route_plan=route_plan,
             max_results_per_query=max_results_per_query,
         )
-        normalized_candidates = self._normalize_raw_candidates(
+        normalized_candidates, normalization_errors = self._normalize_raw_candidates(
             raw_candidates,
             query_plan=query_plan,
         )
@@ -134,6 +137,7 @@ class PlannedPipeline:
             raw_candidate_count=len(raw_candidates),
             merged_candidates=merged_candidates,
             rerank_decision=rerank_decision,
+            normalization_errors=normalization_errors,
         )
         return self._build_result(
             query_plan=query_plan,
@@ -227,10 +231,24 @@ class PlannedPipeline:
         raw_candidates: list[dict[str, Any]],
         *,
         query_plan: QueryPlan,
-    ) -> list[NormalizedCandidate]:
+    ) -> tuple[list[NormalizedCandidate], list[dict[str, Any]]]:
+        """Normalize raw candidates, skipping malformed records with a trace entry.
+
+        Returns:
+            (normalized, normalization_errors) where normalization_errors is a list
+            of dicts describing each skipped candidate (raw dict + error message).
+
+        Raises:
+            PlannedPipelineError: if more than half the batch fails normalization,
+                indicating systematic upstream breakage rather than isolated bad records.
+            PlannedPipelineError: if any non-CandidateNormalizationError exception
+                escapes normalization (unexpected component failure).
+        """
         normalized: list[NormalizedCandidate] = []
-        try:
-            for raw in raw_candidates:
+        normalization_errors: list[dict[str, Any]] = []
+
+        for raw in raw_candidates:
+            try:
                 normalized.append(
                     self._candidate_normalizer.normalize(
                         raw,
@@ -240,11 +258,25 @@ class PlannedPipeline:
                         default_source=_default_source(raw, query_plan),
                     )
                 )
-        except Exception as exc:
+            except CandidateNormalizationError as exc:
+                logger.warning(
+                    "CandidateNormalizer skipped malformed candidate: %s — raw=%r",
+                    exc,
+                    raw,
+                )
+                normalization_errors.append({"raw_candidate": raw, "error": str(exc)})
+            except Exception as exc:
+                raise PlannedPipelineError(
+                    "CandidateNormalizer raised an unexpected error during planned mapping."
+                ) from exc
+
+        if raw_candidates and len(normalization_errors) > len(raw_candidates) / 2:
             raise PlannedPipelineError(
-                "CandidateNormalizer failed during planned mapping."
-            ) from exc
-        return normalized
+                f"CandidateNormalizer failed on {len(normalization_errors)} of "
+                f"{len(raw_candidates)} candidates — systematic upstream breakage suspected."
+            )
+
+        return normalized, normalization_errors
 
     def _merge_candidates(
         self,
@@ -304,12 +336,14 @@ class PlannedPipeline:
         raw_candidate_count: int,
         merged_candidates: list[NormalizedCandidate],
         rerank_decision: RerankDecision,
+        normalization_errors: list[dict[str, Any]] | None = None,
     ) -> RetrievalTrace:
         selected_code = (
             rerank_decision.selected_code
             if rerank_decision.is_grounded and not rerank_decision.is_unmapped
             else None
         )
+        errors: list[dict[str, Any]] = list(normalization_errors) if normalization_errors else []
         return RetrievalTrace(
             query_plan=query_plan,
             retrieval_mode=query_plan.retrieval_mode,
@@ -319,7 +353,7 @@ class PlannedPipeline:
             route_calls=list(route_plan.route_calls),
             raw_candidate_count=raw_candidate_count,
             merged_candidate_count=len(merged_candidates),
-            errors=[],
+            errors=errors,
             selected_candidate_code=selected_code,
         )
 

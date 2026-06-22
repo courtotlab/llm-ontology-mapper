@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+from collections import defaultdict
 from typing import Any
 
 import requests  # type: ignore[import-untyped]
@@ -238,29 +239,54 @@ class SearchTools:
         return ""
 
     def search_rxnorm(self, query: str, top_k: int = 10) -> list[dict[str, Any]]:
-        """Search RxNav for *query* using the approximateTerm endpoint."""
+        """Search RxNav for *query* using the approximateTerm endpoint.
+
+        approximateTerm.json returns one record per source atom, not per concept.
+        Multiple atoms can share the same rxcui (e.g. GS and NDDF atoms have no
+        'name' field).  We group by rxcui, pick the best available name from within
+        the same response (preferring the RXNORM-source atom), and emit one candidate
+        per unique concept.  maxEntries is inflated so that dedup still yields up to
+        top_k distinct concepts.
+        """
+        max_entries = max(top_k * 4, 20)
         try:
             response = requests.get(
                 f"{self.rxnav_base_url}/approximateTerm.json",
-                params={'term': query, 'maxEntries': str(top_k)},
+                params={'term': query, 'maxEntries': str(max_entries)},
                 timeout=self.api_timeout,
             )
             response.raise_for_status()
-            candidate_list = response.json().get('approximateGroup', {}).get('candidate', [])
-            if not isinstance(candidate_list, list):
-                candidate_list = [candidate_list] if candidate_list else []
+            atom_list = response.json().get('approximateGroup', {}).get('candidate', [])
+            if not isinstance(atom_list, list):
+                atom_list = [atom_list] if atom_list else []
+
+            grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+            for atom in atom_list:
+                rxcui = (atom.get('rxcui') or '').strip()
+                if rxcui:
+                    grouped[rxcui].append(atom)
+
             candidates = []
-            for candidate in candidate_list[:top_k]:
-                rxcui = candidate.get('rxcui', '')
-                rank = candidate.get('rank', 0)
+            for rxcui, atoms in grouped.items():
+                name = _rxnorm_best_name(atoms)
+                if not name:
+                    logger.debug(
+                        "search_rxnorm: skipping rxcui=%s — no named atom in response",
+                        rxcui,
+                    )
+                    continue
+                rank = _rxnorm_best_rank(atoms)
                 candidates.append({
                     'code': f"RXNORM:{rxcui}",
-                    'term': candidate.get('name', ''),
-                    'score': 1.0 / (1.0 + float(rank)),
-                    'definition': '', 'source': 'RxNav',
+                    'term': name,
+                    'score': 1.0 / (1.0 + rank),
+                    'definition': '',
+                    'source': 'RxNav',
                 })
+
+            candidates.sort(key=lambda c: c['score'], reverse=True)
             time.sleep(self.request_delay)
-            return candidates
+            return candidates[:top_k]
         except Exception as e:
             logger.error(f"RxNorm search error: {e}")
             return []
@@ -304,9 +330,58 @@ class SearchTools:
             'RXNORM': 'RXNORM', 'RXCUI': 'RXNORM', 'UO': 'UO',
         }
         prefix = prefix_map.get(ontology.upper(), ontology.upper())
+
+        # Strip any existing namespace alias before applying the canonical prefix.
+        # OBO obo_id fields use alias namespaces (e.g. "SNOMED:" for SNOMED concepts)
+        # that differ from our canonical prefix ("SNOMEDCT:").  Without this strip
+        # _normalize_code would prepend the canonical prefix on top of the alias,
+        # producing doubled namespaces like "SNOMEDCT:SNOMED:768500006".
+        # Checking longest alias first prevents "SNOMED" from matching before "SNOMEDCT".
+        aliases = sorted(
+            {k for k, v in prefix_map.items() if v == prefix} | {prefix},
+            key=len, reverse=True,
+        )
+        raw_upper = raw_code.upper()
+        for alias in aliases:
+            ns = f"{alias}:"
+            if raw_upper.startswith(ns.upper()):
+                raw_code = raw_code[len(ns):]
+                break
+
         if not raw_code.startswith(f"{prefix}:"):
             if raw_code.startswith(prefix):
+                # Bare prefix without colon separator ("HP0001234" → "HP:0001234")
                 raw_code = raw_code.replace(prefix, f"{prefix}:", 1)
             else:
                 raw_code = f"{prefix}:{raw_code}"
         return raw_code
+
+
+# ── Module-level helpers for search_rxnorm ───────────────────────────────────
+
+def _rxnorm_best_name(atoms: list[dict[str, Any]]) -> str:
+    """Return the best display name from a group of atoms for the same rxcui.
+
+    Prefers the atom from the RXNORM source vocabulary; falls back to the first
+    atom that carries any non-blank name.
+    """
+    rxnorm_atom_first = sorted(
+        atoms,
+        key=lambda a: 0 if a.get('source') == 'RXNORM' else 1,
+    )
+    for atom in rxnorm_atom_first:
+        name = (atom.get('name') or '').strip()
+        if name:
+            return name
+    return ''
+
+
+def _rxnorm_best_rank(atoms: list[dict[str, Any]]) -> float:
+    """Return the minimum (best) rank across all atoms for the same rxcui."""
+    ranks: list[float] = []
+    for atom in atoms:
+        try:
+            ranks.append(float(atom.get('rank') or 0))
+        except (TypeError, ValueError):
+            continue
+    return min(ranks) if ranks else 0.0

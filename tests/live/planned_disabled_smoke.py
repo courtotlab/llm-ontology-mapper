@@ -35,7 +35,7 @@ __test__ = False
 
 PROVIDER = "openai"  # "openai" or "ollama"
 OPENAI_MODEL = "gpt-4.1-mini"
-OLLAMA_MODEL = "llama3.2:latest"
+OLLAMA_MODEL = "qwen2.5:14b-instruct"
 OLLAMA_BASE_URL = "http://localhost:11434"
 
 SOURCE_TERM = "hr"
@@ -113,12 +113,18 @@ def main() -> None:
         f"Expected logic_type=LLM, got {_logic_value(result)!r}"
     )
     assert 0.0 <= result.confidence <= 1.0, "confidence must be in [0, 1]"
-    assert result.ontology in {"LOINC", "UNKNOWN"}, (
-        f"Expected LOINC or UNKNOWN due to hard target, got {result.ontology!r}"
-    )
-    assert result.ontology not in {"HPO", "HP", "MONDO", "NCIT", "UO"}, (
-        f"Disabled mode violated target ontology constraint: {result.ontology!r}"
-    )
+    if target_ontology:
+        expected_ontology = target_ontology.upper()
+        assert result.ontology in {expected_ontology, "UNKNOWN"}, (
+            f"Expected {expected_ontology!r} or UNKNOWN due to hard target, "
+            f"got {result.ontology!r}"
+        )
+    else:
+        # No target constraint: pipeline picks freely; accept any non-empty ontology.
+        assert result.ontology, (
+            f"result.ontology must be non-empty in unconstrained mode, "
+            f"got {result.ontology!r}"
+        )
     assert result.alternatives == [], "disabled mode should not return alternatives"
 
     assert info, "Expected disabled-mode pipeline metadata"
