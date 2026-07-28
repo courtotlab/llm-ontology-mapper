@@ -9,6 +9,7 @@ Python enforces hard constraints after the LLM responds:
   - original_term and original_label are copied from the caller.
   - retrieval_mode is copied from the caller; the LLM cannot change it.
   - target_ontology overrides any ontology the LLM recommends.
+  - allowed_target_ontologies restricts candidate and preferred ontologies.
 """
 
 from __future__ import annotations
@@ -85,6 +86,7 @@ class QueryPlanner:
         source_label: str | None = None,
         clinical_area: str | None = None,
         target_ontology: str | None = None,
+        allowed_target_ontologies: list[str] | None = None,
         retrieval_mode: RetrievalMode | str = RetrievalMode.PUBLIC,
     ) -> QueryPlan:
         """
@@ -98,6 +100,7 @@ class QueryPlanner:
         - original_term / original_label from caller (not LLM).
         - retrieval_mode from caller.
         - target_ontology: overrides preferred_ontology and candidate_ontologies.
+        - allowed_target_ontologies: filters preferred/candidate ontologies.
         - expanded_queries: falls back to source_label or source_term if empty.
         - retrieval_disabled_reason: set for disabled mode.
 
@@ -105,22 +108,25 @@ class QueryPlanner:
             QueryPlanningError: LLM response is not valid JSON.
             ValueError:         retrieval_mode string is not a valid RetrievalMode.
         """
-        mode = (
-            RetrievalMode(retrieval_mode)
-            if isinstance(retrieval_mode, str)
-            else retrieval_mode
-        )
+        mode = RetrievalMode(retrieval_mode) if isinstance(retrieval_mode, str) else retrieval_mode
         target_norm = target_ontology.upper().strip() if target_ontology else None
+        allowed_norm = _normalize_ontology_list(allowed_target_ontologies)
+        if target_norm:
+            allowed_norm = [target_norm]
 
         messages = self._build_messages(
-            source_term, source_label, clinical_area, target_norm, mode
+            source_term, source_label, clinical_area, target_norm, allowed_norm, mode
         )
 
         logger.debug(
-            "QueryPlanner.plan: source_term=%r retrieval_mode=%s target_ontology=%r",
-            source_term, mode.value, target_norm,
+            "QueryPlanner.plan: source_term=%r retrieval_mode=%s "
+            "target_ontology=%r allowed_target_ontologies=%r",
+            source_term,
+            mode.value,
+            target_norm,
+            allowed_norm,
         )
-        response = self._provider.complete(messages, temperature=0.1, max_tokens=512)
+        response = self._provider.complete(messages, temperature=0.1, max_tokens=2048)
 
         raw = _strip_fences(response.content)
         try:
@@ -131,7 +137,14 @@ class QueryPlanner:
                 f"Response (first 500 chars): {response.content[:500]!r}"
             ) from exc
 
-        return self._build_plan(data, source_term, source_label, target_norm, mode)
+        return self._build_plan(
+            data,
+            source_term,
+            source_label,
+            target_norm,
+            allowed_norm,
+            mode,
+        )
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
@@ -141,15 +154,20 @@ class QueryPlanner:
         source_label: str | None,
         clinical_area: str | None,
         target_ontology: str | None,
+        allowed_target_ontologies: list[str] | None,
         mode: RetrievalMode,
     ) -> list[ChatMessage]:
         label_section = f"- Label: {source_label}\n" if source_label else ""
         area_section = f"- Clinical area: {clinical_area}\n" if clinical_area else ""
-        ontology_section = (
-            f"- Target ontology (HARD CONSTRAINT): {target_ontology}\n"
-            if target_ontology
-            else ""
-        )
+        if target_ontology:
+            ontology_section = f"- Target ontology (HARD CONSTRAINT): {target_ontology}\n"
+        elif allowed_target_ontologies:
+            ontology_section = (
+                "- Allowed target ontologies (HARD ALLOW-LIST): "
+                f"{', '.join(allowed_target_ontologies)}\n"
+            )
+        else:
+            ontology_section = ""
 
         content = self._prompt_template.format(
             source_term=source_term,
@@ -162,8 +180,7 @@ class QueryPlanner:
             ChatMessage(
                 role="system",
                 content=(
-                    "You are a biomedical retrieval planning assistant. "
-                    "Return only valid JSON."
+                    "You are a biomedical retrieval planning assistant. Return only valid JSON."
                 ),
             ),
             ChatMessage(role="user", content=content),
@@ -175,19 +192,16 @@ class QueryPlanner:
         source_term: str,
         source_label: str | None,
         target_ontology: str | None,
+        allowed_target_ontologies: list[str] | None,
         mode: RetrievalMode,
     ) -> QueryPlan:
         # ── Extract LLM-provided fields with safe type coercion ───────────────
 
-        normalized_term: str = (
-            str(data.get("normalized_term") or "").strip() or source_term.strip()
-        )
+        normalized_term: str = str(data.get("normalized_term") or "").strip() or source_term.strip()
 
         raw_queries = data.get("expanded_queries")
         if isinstance(raw_queries, list):
-            expanded_queries = [
-                str(q).strip() for q in raw_queries if q and str(q).strip()
-            ]
+            expanded_queries = [str(q).strip() for q in raw_queries if q and str(q).strip()]
         elif isinstance(raw_queries, str) and raw_queries.strip():
             expanded_queries = [raw_queries.strip()]
         else:
@@ -198,11 +212,9 @@ class QueryPlanner:
 
         raw_onto = data.get("candidate_ontologies")
         if isinstance(raw_onto, list):
-            candidate_ontologies = [
-                str(o).upper().strip() for o in raw_onto if o and str(o).upper().strip()
-            ]
+            candidate_ontologies = _normalize_ontology_list(raw_onto) or []
         elif isinstance(raw_onto, str) and raw_onto.strip():
-            candidate_ontologies = [raw_onto.upper().strip()]
+            candidate_ontologies = _normalize_ontology_list([raw_onto]) or []
         else:
             candidate_ontologies = []
 
@@ -221,11 +233,18 @@ class QueryPlanner:
         if target_ontology:
             preferred_ontology = target_ontology
             candidate_ontologies = [target_ontology]
+        elif allowed_target_ontologies:
+            allowed_set = set(allowed_target_ontologies)
+            candidate_ontologies = [
+                ontology for ontology in candidate_ontologies if ontology in allowed_set
+            ]
+            if preferred_ontology not in allowed_set:
+                preferred_ontology = candidate_ontologies[0] if candidate_ontologies else None
+            if not candidate_ontologies:
+                candidate_ontologies = list(allowed_target_ontologies)
 
         if not expanded_queries:
-            expanded_queries = [
-                source_label.strip() if source_label else source_term.strip()
-            ]
+            expanded_queries = [source_label.strip() if source_label else source_term.strip()]
 
         disabled_reason: str | None = None
         if mode == RetrievalMode.DISABLED:
@@ -240,6 +259,7 @@ class QueryPlanner:
             semantic_type=semantic_type,
             candidate_ontologies=candidate_ontologies,
             preferred_ontology=preferred_ontology,
+            allowed_target_ontologies=allowed_target_ontologies,
             retrieval_mode=mode,
             target_ontology_constraint=target_ontology,
             retrieval_disabled_reason=disabled_reason,
@@ -259,3 +279,18 @@ def _strip_fences(text: str) -> str:
     text = re.sub(r"^```(?:json)?\s*\n?", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\n?```\s*$", "", text)
     return text.strip()
+
+
+def _normalize_ontology_list(ontologies: list[Any] | None) -> list[str] | None:
+    if not ontologies:
+        return None
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for ontology in ontologies:
+        text = str(ontology or "").upper().strip()
+        if text and text not in seen:
+            normalized.append(text)
+            seen.add(text)
+
+    return normalized or None

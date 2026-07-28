@@ -9,13 +9,13 @@ Run with:  pytest tests/test_candidate_normalizer.py -v -m unit
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from llm_ontology_mapper.candidate_normalizer import (
     CandidateNormalizationError,
     CandidateNormalizer,
 )
 from llm_ontology_mapper.models import NormalizedCandidate, RetrievalMode
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures
@@ -91,9 +91,7 @@ def test_normalizes_local_candidate(normalizer: CandidateNormalizer) -> None:
 
 @pytest.mark.unit
 @pytest.mark.parametrize("mode", [RetrievalMode.DISABLED, "disabled"])
-def test_rejects_disabled_retrieval_mode(
-    normalizer: CandidateNormalizer, mode
-) -> None:
+def test_rejects_disabled_retrieval_mode(normalizer: CandidateNormalizer, mode) -> None:
     raw = {"code": "HP:0012735", "term": "Cough", "ontology": "HPO", "source": "OLS"}
     with pytest.raises(CandidateNormalizationError, match="disabled"):
         normalizer.normalize(raw, retrieval_mode=mode, matched_query="cough")
@@ -130,7 +128,7 @@ def test_rejects_missing_term(normalizer: CandidateNormalizer) -> None:
 
 @pytest.mark.unit
 def test_rejects_missing_ontology_with_no_default(normalizer: CandidateNormalizer) -> None:
-    raw = {"code": "HP:0012735", "term": "Cough", "source": "OLS"}
+    raw = {"code": "0012735", "term": "Cough", "source": "OLS"}
     with pytest.raises(CandidateNormalizationError, match="ontology"):
         normalizer.normalize(raw, retrieval_mode="public", matched_query="cough")
 
@@ -378,18 +376,24 @@ def test_preserves_raw_candidate_in_provenance(normalizer: CandidateNormalizer) 
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("ontology_input,expected", [
-    ("hpo", "HPO"),
-    ("HPO", "HPO"),
-    ("Hpo", "HPO"),
-    ("loinc", "LOINC"),
-    ("mondo", "MONDO"),
-])
+@pytest.mark.parametrize(
+    ("ontology_input", "code", "expected"),
+    [
+        ("hpo", "HP:0012735", "HPO"),
+        ("HPO", "HP:0012735", "HPO"),
+        ("Hpo", "HP:0012735", "HPO"),
+        ("loinc", "LOINC:8480-6", "LOINC"),
+        ("mondo", "MONDO:0004979", "MONDO"),
+    ],
+)
 def test_normalizes_ontology_casing(
-    normalizer: CandidateNormalizer, ontology_input: str, expected: str
+    normalizer: CandidateNormalizer,
+    ontology_input: str,
+    code: str,
+    expected: str,
 ) -> None:
     raw = {
-        "code": "HP:0012735",
+        "code": code,
         "term": "Cough",
         "ontology": ontology_input,
         "source": "OLS",
@@ -500,8 +504,20 @@ def test_supports_term_alias_display(normalizer: CandidateNormalizer) -> None:
 def test_normalize_many_returns_list(normalizer: CandidateNormalizer) -> None:
     raws = [
         {"code": "HP:0012735", "term": "Cough", "ontology": "HPO", "source": "OLS", "score": 0.95},
-        {"code": "HP:0002110", "term": "Bronchiectasis", "ontology": "HPO", "source": "OLS", "score": 0.80},
-        {"code": "HP:0001650", "term": "Aortic regurgitation", "ontology": "HPO", "source": "OLS", "score": 0.72},
+        {
+            "code": "HP:0002110",
+            "term": "Bronchiectasis",
+            "ontology": "HPO",
+            "source": "OLS",
+            "score": 0.80,
+        },
+        {
+            "code": "HP:0001650",
+            "term": "Aortic regurgitation",
+            "ontology": "HPO",
+            "source": "OLS",
+            "score": 0.72,
+        },
     ]
     results = normalizer.normalize_many(
         raws,
@@ -545,9 +561,7 @@ def test_no_both_mode_accepted(normalizer: CandidateNormalizer) -> None:
         normalizer.normalize(raw, retrieval_mode="both", matched_query="cough")
 
     # CandidateNormalizer produces no BOTH mode in its output
-    public_candidate = normalizer.normalize(
-        raw, retrieval_mode="public", matched_query="cough"
-    )
+    public_candidate = normalizer.normalize(raw, retrieval_mode="public", matched_query="cough")
     assert public_candidate.retrieval_mode != "both"
     assert not hasattr(RetrievalMode, "BOTH")
 
@@ -559,8 +573,8 @@ def test_no_both_mode_accepted(normalizer: CandidateNormalizer) -> None:
 
 @pytest.mark.unit
 def test_existing_retrieval_router_imports_unaffected() -> None:
-    from llm_ontology_mapper.retrieval_router import RetrievalRouter
     from llm_ontology_mapper.models import RetrievalRoutePlan
+    from llm_ontology_mapper.retrieval_router import RetrievalRouter
 
     assert RetrievalRouter is not None
     assert RetrievalRoutePlan is not None
@@ -577,11 +591,8 @@ def test_existing_query_planner_imports_unaffected() -> None:
 @pytest.mark.unit
 def test_existing_model_imports_unaffected() -> None:
     from llm_ontology_mapper.models import (
-        MappingResult,
         LogicType,
-        NormalizedCandidate,
-        RetrievalTrace,
-        RerankDecision,
+        MappingResult,
         QueryPlan,
     )
 
@@ -657,7 +668,7 @@ def test_explicit_normalized_score_used_when_present(
         "term": "Cough",
         "ontology": "HPO",
         "source": "OLS",
-        "score": 2.5,          # out of range — would not be promoted
+        "score": 2.5,  # out of range — would not be promoted
         "normalized_score": 0.82,  # explicit — should be used
     }
     candidate = normalizer.normalize(
@@ -693,6 +704,100 @@ def test_ols_style_candidate_without_ontology_uses_default(
     assert candidate.code == "HP:0012735"
     assert candidate.ontology == "HPO"
     assert candidate.source == "OLS"
+
+
+@pytest.mark.unit
+def test_code_namespace_overrides_requested_ontology_fallback(
+    normalizer: CandidateNormalizer,
+) -> None:
+    raw = {
+        "code": "HP:0002099",
+        "term": "Asthma",
+        "source": "OLS",
+        "requested_ontology": "MONDO",
+        "iri": "http://purl.obolibrary.org/obo/HP_0002099",
+    }
+
+    candidate = normalizer.normalize(
+        raw,
+        retrieval_mode=RetrievalMode.PUBLIC,
+        matched_query="asthma",
+        default_ontology="MONDO",
+    )
+
+    assert candidate.code == "HP:0002099"
+    assert candidate.ontology == "HPO"
+
+
+@pytest.mark.unit
+def test_malformed_nested_curie_candidate_is_rejected(
+    normalizer: CandidateNormalizer,
+) -> None:
+    raw = {
+        "code": "MONDO:HP:0002099",
+        "term": "Asthma",
+        "ontology": "MONDO",
+        "source": "OLS",
+    }
+
+    with pytest.raises(CandidateNormalizationError, match="identity"):
+        normalizer.normalize(
+            raw,
+            retrieval_mode=RetrievalMode.PUBLIC,
+            matched_query="asthma",
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("raw", "expected_code", "expected_ontology"),
+    [
+        (
+            {
+                "code": "MONDO:0004979",
+                "term": "asthma",
+                "ontology": "MONDO",
+                "source": "OLS",
+            },
+            "MONDO:0004979",
+            "MONDO",
+        ),
+        (
+            {
+                "code": "HP:0002099",
+                "term": "Asthma",
+                "ontology": "HPO",
+                "source": "OLS",
+            },
+            "HP:0002099",
+            "HPO",
+        ),
+        (
+            {
+                "code": "LOINC:8480-6",
+                "term": "Systolic blood pressure",
+                "ontology": "LOINC",
+                "source": "LOINC-Search-API",
+            },
+            "LOINC:8480-6",
+            "LOINC",
+        ),
+    ],
+)
+def test_valid_mondo_hpo_and_loinc_candidates_remain_unchanged(
+    normalizer: CandidateNormalizer,
+    raw: dict[str, str],
+    expected_code: str,
+    expected_ontology: str,
+) -> None:
+    candidate = normalizer.normalize(
+        raw,
+        retrieval_mode=RetrievalMode.PUBLIC,
+        matched_query="query",
+    )
+
+    assert candidate.code == expected_code
+    assert candidate.ontology == expected_ontology
 
 
 @pytest.mark.unit
@@ -770,7 +875,7 @@ def test_candidate_is_frozen(normalizer: CandidateNormalizer) -> None:
         matched_query="cough",
     )
 
-    with pytest.raises(Exception):  # ValidationError for frozen model
+    with pytest.raises(ValidationError):
         candidate.code = "CHANGED"  # type: ignore[misc]
 
 

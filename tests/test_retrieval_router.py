@@ -20,7 +20,6 @@ from llm_ontology_mapper.models import (
 )
 from llm_ontology_mapper.retrieval_router import RetrievalRouter
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures
 # ─────────────────────────────────────────────────────────────────────────────
@@ -184,13 +183,48 @@ def test_target_ontology_preserved_in_route_calls(router: RetrievalRouter) -> No
     plan = _public_plan(
         expanded_queries=["systolic blood pressure"],
         target_ontology_constraint="HPO",
+        allowed_target_ontologies=["HPO"],
     )
     route = router.route(plan)
 
     assert route.route_calls
+    assert route.allowed_target_ontologies == ["HPO"]
     for call in route.route_calls:
         assert call["target_ontology"] == "HPO"
+        assert call["allowed_target_ontologies"] == ["HPO"]
         assert call["candidate_ontologies"] == ["HPO"]
+
+
+@pytest.mark.unit
+def test_allowed_target_ontologies_restrict_candidates(router: RetrievalRouter) -> None:
+    plan = _public_plan(
+        candidate_ontologies=["LOINC", "HPO", "MONDO"],
+        target_ontology_constraint=None,
+        allowed_target_ontologies=["HPO", "MONDO"],
+    )
+    route = router.route(plan)
+
+    assert route.allowed_target_ontologies == ["HPO", "MONDO"]
+    assert route.candidate_ontologies == ["HPO", "MONDO"]
+    for call in route.route_calls:
+        assert call["allowed_target_ontologies"] == ["HPO", "MONDO"]
+        assert call["candidate_ontologies"] == ["HPO", "MONDO"]
+
+
+@pytest.mark.unit
+def test_allowed_target_ontologies_fall_back_when_no_candidate_survives(
+    router: RetrievalRouter,
+) -> None:
+    plan = _public_plan(
+        candidate_ontologies=["LOINC"],
+        target_ontology_constraint=None,
+        allowed_target_ontologies=["HPO", "MONDO"],
+    )
+    route = router.route(plan)
+
+    assert route.candidate_ontologies == ["HPO", "MONDO"]
+    for call in route.route_calls:
+        assert call["candidate_ontologies"] == ["HPO", "MONDO"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -258,10 +292,10 @@ def test_query_fallback_produces_unique_nonblank_queries(router: RetrievalRouter
     plan = _public_plan(
         expanded_queries=[
             "blood pressure",
-            "blood pressure",   # duplicate
+            "blood pressure",  # duplicate
             "systolic BP",
-            "",                 # blank
-            "   ",              # whitespace-only
+            "",  # blank
+            "   ",  # whitespace-only
         ],
     )
     route = router.route(plan)
@@ -315,9 +349,7 @@ def test_disabled_is_grounded_mode_false(router: RetrievalRouter) -> None:
 
 @pytest.mark.unit
 @pytest.mark.parametrize("plan_fn", [_public_plan, _local_plan])
-def test_public_local_is_grounded_mode_true(
-    router: RetrievalRouter, plan_fn
-) -> None:
+def test_public_local_is_grounded_mode_true(router: RetrievalRouter, plan_fn) -> None:
     route = router.route(plan_fn())
     assert route.is_grounded_mode is True
     assert route.retrieval_skipped is False
@@ -359,12 +391,6 @@ def test_existing_query_planner_imports_unaffected() -> None:
 
 @pytest.mark.unit
 def test_existing_model_imports_unaffected() -> None:
-    from llm_ontology_mapper.models import (
-        MappingResult,
-        NormalizedCandidate,
-        RerankDecision,
-        RetrievalTrace,
-    )
 
     # Phase 1 models should still construct cleanly
     plan = QueryPlan(original_term="cough", retrieval_mode=RetrievalMode.PUBLIC)
@@ -406,9 +432,7 @@ def test_route_calls_contain_route_name_local(router: RetrievalRouter) -> None:
 
 @pytest.mark.unit
 def test_one_route_call_per_query(router: RetrievalRouter) -> None:
-    plan = _public_plan(
-        expanded_queries=["systolic blood pressure", "systolic BP", "SBP"]
-    )
+    plan = _public_plan(expanded_queries=["systolic blood pressure", "systolic BP", "SBP"])
     route = router.route(plan)
 
     assert len(route.route_calls) == 3
@@ -449,6 +473,7 @@ def test_candidate_ontologies_used_when_no_target_constraint(
 
     assert route.candidate_ontologies == ["LOINC", "HPO", "MONDO"]
     assert route.target_ontology_constraint is None
+    assert route.allowed_target_ontologies is None
 
 
 @pytest.mark.unit

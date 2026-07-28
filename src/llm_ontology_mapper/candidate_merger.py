@@ -8,9 +8,11 @@ Phase 4B of the planned grounded mapping pipeline.
 
 from __future__ import annotations
 
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from llm_ontology_mapper.models import NormalizedCandidate
+from llm_ontology_mapper.ontology_identity import validate_candidate_identity
 
 
 class CandidateMergeError(Exception):
@@ -57,6 +59,7 @@ class CandidateMerger:
         candidates: Iterable[NormalizedCandidate],
         *,
         target_ontology_constraint: str | None = None,
+        allowed_target_ontologies: list[str] | None = None,
         max_candidates: int | None = None,
     ) -> list[NormalizedCandidate]:
         """
@@ -65,13 +68,14 @@ class CandidateMerger:
         Steps (in order):
           1. Validate that every item is a NormalizedCandidate.
           2. Deduplicate by canonical (ontology, code.upper()) key.
-          3. Apply target_ontology_constraint as a hard filter.
+          3. Apply target_ontology_constraint / allowed_target_ontologies as hard filters.
           4. Sort by score descending, then alphabetically.
           5. Apply max_candidates limit.
 
         Args:
             candidates:                  Iterable of NormalizedCandidate objects.
             target_ontology_constraint:  Hard ontology filter; case-insensitive.
+            allowed_target_ontologies:   Hard ontology allow-list; None means unrestricted.
             max_candidates:              Maximum number to return (applied last).
 
         Returns:
@@ -88,11 +92,16 @@ class CandidateMerger:
                     f"got {type(item).__name__}: {item!r}"
                 )
 
-        deduped = self._deduplicate(candidate_list)
+        valid_candidates = _filter_consistent_candidates(candidate_list)
+        deduped = self._deduplicate(valid_candidates)
 
         if target_ontology_constraint:
             target_upper = target_ontology_constraint.strip().upper()
             deduped = [c for c in deduped if c.ontology == target_upper]
+        elif allowed_target_ontologies is not None:
+            allowed = _normalize_ontology_set(allowed_target_ontologies)
+            if allowed:
+                deduped = [c for c in deduped if c.ontology in allowed]
 
         result = sorted(deduped, key=_sort_key)
 
@@ -107,9 +116,7 @@ class CandidateMerger:
     def _dedup_key(candidate: NormalizedCandidate) -> tuple[str, str]:
         return (candidate.ontology, candidate.code.upper())
 
-    def _deduplicate(
-        self, candidates: list[NormalizedCandidate]
-    ) -> list[NormalizedCandidate]:
+    def _deduplicate(self, candidates: list[NormalizedCandidate]) -> list[NormalizedCandidate]:
         """Group by canonical key; resolve each group to one candidate."""
         groups: dict[tuple[str, str], list[NormalizedCandidate]] = {}
         for candidate in candidates:
@@ -134,12 +141,34 @@ def _sort_key(c: NormalizedCandidate) -> tuple:
     ns = c.normalized_score
     rs = c.raw_score
     return (
-        0 if ns is not None else 1,          # candidates with a score come first
-        -(ns if ns is not None else 0.0),    # higher ns → more negative → earlier
+        0 if ns is not None else 1,  # candidates with a score come first
+        -(ns if ns is not None else 0.0),  # higher ns → more negative → earlier
         0 if rs is not None else 1,
         -(rs if rs is not None else 0.0),
-        c.term,                               # alphabetical tiebreaker
+        c.term,  # alphabetical tiebreaker
     )
+
+
+def _normalize_ontology_set(ontologies: list[str]) -> set[str]:
+    return {
+        str(ontology or "").upper().strip()
+        for ontology in ontologies
+        if str(ontology or "").strip()
+    }
+
+
+def _filter_consistent_candidates(
+    candidates: list[NormalizedCandidate],
+) -> list[NormalizedCandidate]:
+    result: list[NormalizedCandidate] = []
+    for candidate in candidates:
+        validation = validate_candidate_identity(
+            ontology=candidate.ontology,
+            code=candidate.code,
+        )
+        if validation.valid:
+            result.append(candidate)
+    return result
 
 
 def _winner_key(c: NormalizedCandidate) -> tuple:
@@ -152,7 +181,7 @@ def _winner_key(c: NormalizedCandidate) -> tuple:
         -(ns if ns is not None else 0.0),
         0 if rs is not None else 1,
         -(rs if rs is not None else 0.0),
-        -has_def,                            # has definition → -1 → wins on tie
+        -has_def,  # has definition → -1 → wins on tie
     )
     # Python's min() returns the first item with the minimum key on ties,
     # which preserves earlier-input-order as the final tiebreaker.
@@ -167,9 +196,7 @@ def _merge_group(group: list[NormalizedCandidate]) -> NormalizedCandidate:
     """
     winner = min(group, key=_winner_key)
 
-    all_matched_queries: list[str] = list(
-        dict.fromkeys(c.matched_query for c in group)
-    )
+    all_matched_queries: list[str] = list(dict.fromkeys(c.matched_query for c in group))
     merged_provenance: dict[str, Any] = {
         "merged": True,
         "duplicate_count": len(group),

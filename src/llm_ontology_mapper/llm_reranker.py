@@ -12,6 +12,8 @@ Hard constraints enforced by Python (LLM cannot override):
   - alternatives and alternative_codes must resolve to retrieved candidates.
   - target_ontology_constraint is enforced: selected candidate's ontology
     must match when the constraint is present.
+  - allowed_target_ontologies is enforced: selected candidate and alternatives
+    must belong to the allow-list when present.
   - disabled mode raises immediately — it does not produce candidates.
 
 Phase 5A of the planned grounded mapping pipeline.
@@ -22,8 +24,9 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from llm_ontology_mapper.models import (
     GroundingSource,
@@ -33,6 +36,7 @@ from llm_ontology_mapper.models import (
     RerankDecision,
     RetrievalMode,
 )
+from llm_ontology_mapper.ontology_identity import validate_candidate_identity
 from llm_ontology_mapper.providers import (
     BaseLLMProvider,
     ChatMessage,
@@ -143,9 +147,13 @@ class LLMReranker:
             if mode == RetrievalMode.PUBLIC
             else GroundingSource.LOCAL_SAPBERT
         )
+        allowed_ontologies = _normalize_allowed_target_ontologies(
+            query_plan.allowed_target_ontologies
+        )
+        eligible_candidates = _filter_allowed_candidates(candidates, allowed_ontologies)
 
         # Empty candidate list — return unmapped without calling the provider
-        if not candidates:
+        if not eligible_candidates:
             return RerankDecision(
                 selected_code=None,
                 selected_candidate_id=None,
@@ -162,9 +170,9 @@ class LLMReranker:
 
         # Stable candidate ID map: C1, C2, C3, ...
         candidate_map: dict[str, NormalizedCandidate] = {
-            f"C{i + 1}": c for i, c in enumerate(candidates)
+            f"C{i + 1}": c for i, c in enumerate(eligible_candidates)
         }
-        candidate_codes: set[str] = {c.code for c in candidates}
+        candidate_codes: set[str] = {c.code for c in eligible_candidates}
 
         messages = self._build_messages(query_plan, candidate_map)
 
@@ -172,7 +180,7 @@ class LLMReranker:
             "LLMReranker.rerank: source_term=%r mode=%s num_candidates=%d",
             query_plan.original_term,
             mode.value,
-            len(candidates),
+            len(eligible_candidates),
         )
 
         response = self._complete_rerank(messages)
@@ -183,7 +191,7 @@ class LLMReranker:
                 "retrying once with a larger completion budget. source_term=%r "
                 "candidate_count=%d model=%s",
                 query_plan.original_term,
-                len(candidates),
+                len(eligible_candidates),
                 getattr(self._provider, "model", None),
             )
             response = self._complete_rerank(
@@ -199,7 +207,7 @@ class LLMReranker:
                 "indicate max_completion_tokens was too low or no visible output "
                 "was produced. "
                 f"source_term={query_plan.original_term!r} "
-                f"candidate_count={len(candidates)} "
+                f"candidate_count={len(eligible_candidates)} "
                 f"model={getattr(self._provider, 'model', None)!r}"
             )
 
@@ -260,8 +268,7 @@ class LLMReranker:
             ChatMessage(
                 role="system",
                 content=(
-                    "You are a biomedical ontology reranking assistant. "
-                    "Return only valid JSON."
+                    "You are a biomedical ontology reranking assistant. Return only valid JSON."
                 ),
             ),
             ChatMessage(role="user", content=content),
@@ -280,9 +287,7 @@ class LLMReranker:
         is_unmapped = bool(data.get("is_unmapped", False))
         selected_cid: str | None = data.get("selected_candidate_id")
         selected_code_raw: str | None = data.get("selected_code")
-        selected_code: str | None = (
-            str(selected_code_raw).strip() if selected_code_raw else None
-        )
+        selected_code: str | None = str(selected_code_raw).strip() if selected_code_raw else None
 
         # Parse confidence — reject values outside [0, 1]
         try:
@@ -348,13 +353,30 @@ class LLMReranker:
                     f"but target_ontology_constraint={target_upper!r}; "
                     f"selected candidate must belong to the constrained ontology."
                 )
+        allowed_ontologies = _normalize_allowed_target_ontologies(
+            query_plan.allowed_target_ontologies
+        )
+        if allowed_ontologies is not None and selected_candidate.ontology not in allowed_ontologies:
+            raise LLMRerankerError(
+                f"LLM selected candidate with ontology={selected_candidate.ontology!r} "
+                f"outside allowed_target_ontologies={sorted(allowed_ontologies)!r}; "
+                f"selected candidate must belong to the caller-selected allow-list."
+            )
 
         alternative_codes, alternatives = _parse_alternatives(
             data=data,
             candidate_map=candidate_map,
             candidate_codes=candidate_codes,
             selected_code=selected_code,
+            allowed_ontologies=allowed_ontologies,
         )
+        higher_alternatives = [alt for alt in alternatives if alt.confidence > confidence]
+        if higher_alternatives:
+            raise LLMRerankerError(
+                "LLM returned alternative confidence greater than selected "
+                "confidence; alternatives must use the same final confidence "
+                "scale and be less than or equal to the selected candidate."
+            )
 
         return RerankDecision(
             selected_code=selected_code,
@@ -374,6 +396,47 @@ class LLMReranker:
 # ─────────────────────────────────────────────────────────────────────────────
 # Module-level helpers
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+def _normalize_allowed_target_ontologies(
+    ontologies: list[str] | None,
+) -> set[str] | None:
+    if ontologies is None:
+        return None
+    allowed = {
+        str(ontology or "").upper().strip()
+        for ontology in ontologies
+        if str(ontology or "").strip()
+    }
+    return allowed or None
+
+
+def _filter_allowed_candidates(
+    candidates: Sequence[NormalizedCandidate],
+    allowed_ontologies: set[str] | None,
+) -> list[NormalizedCandidate]:
+    if allowed_ontologies is None:
+        return _filter_consistent_candidates(candidates)
+    return [
+        candidate
+        for candidate in _filter_consistent_candidates(candidates)
+        if candidate.ontology in allowed_ontologies
+    ]
+
+
+def _filter_consistent_candidates(
+    candidates: Sequence[NormalizedCandidate],
+) -> list[NormalizedCandidate]:
+    result: list[NormalizedCandidate] = []
+    for candidate in candidates:
+        validation = validate_candidate_identity(
+            ontology=candidate.ontology,
+            code=candidate.code,
+        )
+        if validation.valid:
+            result.append(candidate)
+    return result
+
 
 def fallback_alternative_explanation(candidate: NormalizedCandidate) -> str:
     """Return a concise reviewer-facing fallback explanation for a candidate."""
@@ -422,10 +485,15 @@ def _parse_alternatives(
     candidate_map: dict[str, NormalizedCandidate],
     candidate_codes: set[str],
     selected_code: str | None,
+    allowed_ontologies: set[str] | None,
     max_alternatives: int = 5,
 ) -> tuple[list[str], list[RerankAlternative]]:
-    """Parse structured and legacy alternatives, dropping invalid entries."""
-    code_to_candidate_id = {candidate.code: cid for cid, candidate in candidate_map.items()}
+    """Parse alternatives from LLM output.
+
+    Structured alternatives carry final reranker confidence and are safe to
+    expose as MappingResult alternatives. Legacy alternative_codes are retained
+    only as compatibility identifiers; they do not have comparable confidence.
+    """
     alternatives: list[RerankAlternative] = []
     seen_codes: set[str] = set()
 
@@ -441,6 +509,7 @@ def _parse_alternatives(
                 candidate_map=candidate_map,
                 candidate_codes=candidate_codes,
                 selected_code=selected_code,
+                allowed_ontologies=allowed_ontologies,
             )
             if alt is None or alt.code in seen_codes:
                 continue
@@ -460,20 +529,11 @@ def _parse_alternatives(
                 continue
             legacy_codes.append(code)
 
-            if code not in seen_codes and len(alternatives) < max_alternatives:
-                candidate_id = code_to_candidate_id.get(code)
-                if candidate_id:
-                    candidate = candidate_map[candidate_id]
-                    alternatives.append(
-                        RerankAlternative(
-                            candidate_id=candidate_id,
-                            code=code,
-                            confidence=_candidate_confidence(candidate),
-                            explanation=fallback_alternative_explanation(candidate),
-                        )
-                    )
-                    seen_codes.add(code)
-
+    alternatives = sorted(
+        alternatives[:max_alternatives],
+        key=lambda alt: alt.confidence,
+        reverse=True,
+    )
     alternative_codes = [alt.code for alt in alternatives]
     for code in legacy_codes:
         if len(alternative_codes) >= max_alternatives:
@@ -481,7 +541,7 @@ def _parse_alternatives(
         if code not in alternative_codes:
             alternative_codes.append(code)
 
-    return alternative_codes, alternatives[:max_alternatives]
+    return alternative_codes, alternatives
 
 
 def _parse_structured_alternative(
@@ -490,18 +550,24 @@ def _parse_structured_alternative(
     candidate_map: dict[str, NormalizedCandidate],
     candidate_codes: set[str],
     selected_code: str | None,
+    allowed_ontologies: set[str] | None,
 ) -> RerankAlternative | None:
     candidate_id = str(item.get("candidate_id") or "").strip()
     if candidate_id not in candidate_map:
         return None
 
     candidate = candidate_map[candidate_id]
+    if allowed_ontologies is not None and candidate.ontology not in allowed_ontologies:
+        return None
     code = str(item.get("code") or "").strip()
     if code != candidate.code or code == selected_code or code not in candidate_codes:
         return None
 
+    raw_confidence = item.get("confidence")
+    if raw_confidence is None:
+        return None
     try:
-        confidence = float(item.get("confidence"))
+        confidence = float(raw_confidence)
     except (TypeError, ValueError):
         return None
     if not (0.0 <= confidence <= 1.0):
@@ -532,14 +598,6 @@ def _resolve_legacy_alternative_code(
     if value in candidate_map:
         return candidate_map[value].code
     return value
-
-
-def _candidate_confidence(candidate: NormalizedCandidate) -> float:
-    if candidate.normalized_score is not None:
-        return candidate.normalized_score
-    if candidate.raw_score is not None and 0.0 <= candidate.raw_score <= 1.0:
-        return candidate.raw_score
-    return 0.5
 
 
 def _candidate_body_site(lower_term: str) -> str | None:
@@ -607,8 +665,10 @@ def _build_query_context(plan: QueryPlan) -> str:
     if plan.semantic_type:
         lines.append(f"- Semantic type: {plan.semantic_type}")
     if plan.target_ontology_constraint:
+        lines.append(f"- Target ontology constraint (HARD): {plan.target_ontology_constraint}")
+    if plan.allowed_target_ontologies:
         lines.append(
-            f"- Target ontology constraint (HARD): {plan.target_ontology_constraint}"
+            f"- Allowed target ontologies (HARD): {', '.join(plan.allowed_target_ontologies)}"
         )
     lines.append(f"- Retrieval mode: {plan.retrieval_mode.value}")
     if plan.reasoning:
@@ -631,11 +691,7 @@ def _build_candidate_list(candidate_map: dict[str, NormalizedCandidate]) -> str:
         fields.append(f"Source: {c.source}")
         fields.append(f"Query: '{c.matched_query}'")
         if c.definition:
-            defn = (
-                c.definition[:200] + "..."
-                if len(c.definition) > 200
-                else c.definition
-            )
+            defn = c.definition[:200] + "..." if len(c.definition) > 200 else c.definition
             fields.append(f"Def: {defn}")
         parts.append(" | ".join(fields))
     return "\n".join(parts)

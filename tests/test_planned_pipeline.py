@@ -12,8 +12,6 @@ from typing import Any
 
 import pytest
 
-pytestmark = pytest.mark.unit
-
 from llm_ontology_mapper.candidate_merger import CandidateMerger
 from llm_ontology_mapper.candidate_normalizer import CandidateNormalizer
 from llm_ontology_mapper.llm_reranker import LLMReranker
@@ -32,6 +30,8 @@ from llm_ontology_mapper.models import (
 )
 from llm_ontology_mapper.planned_pipeline import PlannedPipeline, PlannedPipelineError
 from llm_ontology_mapper.providers import BaseLLMProvider, ChatMessage, CompletionResponse
+
+pytestmark = pytest.mark.unit
 
 
 class _StubProvider(BaseLLMProvider):
@@ -62,6 +62,7 @@ class _Planner:
         source_label: str | None = None,
         clinical_area: str | None = None,
         target_ontology: str | None = None,
+        allowed_target_ontologies: list[str] | None = None,
         retrieval_mode: RetrievalMode | str = RetrievalMode.PUBLIC,
     ) -> QueryPlan:
         self.calls.append("planner")
@@ -70,9 +71,14 @@ class _Planner:
             "source_label": source_label,
             "clinical_area": clinical_area,
             "target_ontology": target_ontology,
+            "allowed_target_ontologies": allowed_target_ontologies,
             "retrieval_mode": retrieval_mode,
         }
-        mode = retrieval_mode if isinstance(retrieval_mode, RetrievalMode) else RetrievalMode(retrieval_mode)
+        mode = (
+            retrieval_mode
+            if isinstance(retrieval_mode, RetrievalMode)
+            else RetrievalMode(retrieval_mode)
+        )
         target = target_ontology.upper() if target_ontology else "LOINC"
         return QueryPlan(
             original_term=source_term,
@@ -83,6 +89,7 @@ class _Planner:
             semantic_type="measurement",
             candidate_ontologies=[target],
             preferred_ontology=target,
+            allowed_target_ontologies=allowed_target_ontologies,
             retrieval_mode=mode,
             target_ontology_constraint=target_ontology.upper() if target_ontology else None,
             retrieval_disabled_reason=(
@@ -107,6 +114,7 @@ class _Router:
                 grounding_source=GroundingSource.NONE,
                 queries=list(query_plan.expanded_queries),
                 target_ontology_constraint=query_plan.target_ontology_constraint,
+                allowed_target_ontologies=query_plan.allowed_target_ontologies,
                 candidate_ontologies=list(query_plan.candidate_ontologies),
                 route_calls=[],
                 retrieval_disabled_reason=query_plan.retrieval_disabled_reason,
@@ -117,9 +125,7 @@ class _Router:
             else GroundingSource.LOCAL_SAPBERT
         )
         route_name = (
-            "public_api"
-            if query_plan.retrieval_mode == RetrievalMode.PUBLIC
-            else "local_sapbert"
+            "public_api" if query_plan.retrieval_mode == RetrievalMode.PUBLIC else "local_sapbert"
         )
         return RetrievalRoutePlan(
             retrieval_mode=query_plan.retrieval_mode,
@@ -128,12 +134,14 @@ class _Router:
             grounding_source=grounding_source,
             queries=list(query_plan.expanded_queries),
             target_ontology_constraint=query_plan.target_ontology_constraint,
+            allowed_target_ontologies=query_plan.allowed_target_ontologies,
             candidate_ontologies=list(query_plan.candidate_ontologies),
             route_calls=[
                 {
                     "route": route_name,
                     "query": query_plan.expanded_queries[0],
                     "target_ontology": query_plan.target_ontology_constraint,
+                    "allowed_target_ontologies": query_plan.allowed_target_ontologies,
                     "candidate_ontologies": list(query_plan.candidate_ontologies),
                 }
             ],
@@ -195,6 +203,7 @@ class _RecordingMerger:
         self.inner = CandidateMerger()
         self.last_candidates: list[NormalizedCandidate] | None = None
         self.last_target_ontology_constraint: str | None = None
+        self.last_allowed_target_ontologies: list[str] | None = None
         self.last_max_candidates: int | None = None
 
     def merge(
@@ -202,15 +211,18 @@ class _RecordingMerger:
         candidates,
         *,
         target_ontology_constraint: str | None = None,
+        allowed_target_ontologies: list[str] | None = None,
         max_candidates: int | None = None,
     ) -> list[NormalizedCandidate]:
         self.calls.append("merger")
         self.last_candidates = list(candidates)
         self.last_target_ontology_constraint = target_ontology_constraint
+        self.last_allowed_target_ontologies = allowed_target_ontologies
         self.last_max_candidates = max_candidates
         return self.inner.merge(
             self.last_candidates,
             target_ontology_constraint=target_ontology_constraint,
+            allowed_target_ontologies=allowed_target_ontologies,
             max_candidates=max_candidates,
         )
 
@@ -504,7 +516,38 @@ def test_target_ontology_passed_to_query_planner_and_metadata() -> None:
     result = pipeline.map_term("sys_bp", target_ontology="loinc")
 
     assert parts["planner"].last_kwargs["target_ontology"] == "loinc"
+    assert parts["planner"].last_kwargs["allowed_target_ontologies"] is None
     assert _meta(result)["target_ontology_constraint"] == "LOINC"
+
+
+def test_allowed_target_ontologies_passed_to_query_planner_and_route() -> None:
+    pipeline, parts = _pipeline()
+
+    pipeline.map_term(
+        "sys_bp",
+        allowed_target_ontologies=["LOINC", "HPO"],
+        retrieval_mode=RetrievalMode.PUBLIC,
+    )
+
+    assert parts["planner"].last_kwargs["allowed_target_ontologies"] == [
+        "LOINC",
+        "HPO",
+    ]
+    assert parts["router"].last_plan.allowed_target_ontologies == ["LOINC", "HPO"]
+
+
+def test_allowed_target_ontologies_filter_all_candidates_to_unmapped() -> None:
+    pipeline, parts = _pipeline(public_raw=[_public_raw(ontology="LOINC")])
+
+    result = pipeline.map_term(
+        "sys_bp",
+        allowed_target_ontologies=["HPO"],
+        retrieval_mode=RetrievalMode.PUBLIC,
+    )
+
+    assert parts["merger"].last_allowed_target_ontologies == ["HPO"]
+    assert result.target_code == "UNKNOWN:UNMAPPED"
+    assert result.ontology == "UNKNOWN"
 
 
 def test_clinical_area_and_source_label_passed_to_query_planner() -> None:

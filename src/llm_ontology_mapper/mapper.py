@@ -41,6 +41,7 @@ _DEFAULT_CONFIG = _ASSETS / "ontology_config.yaml"
 def _load_config_cached(path: Path) -> dict[str, Any]:
     """Load ontology_config.yaml, cached at module level to avoid lru_cache memory leak on methods."""
     import yaml  # noqa: PLC0415  # type: ignore[import-untyped]
+
     if not path.exists():
         logger.warning("Ontology config not found at %s — using empty config", path)
         return {}
@@ -103,7 +104,7 @@ class OntologyMapper:
         max_candidates: int | None = 10,
         max_alternatives: int = 5,
         # ── Legacy compat flags ───────────────────────────────────────────────
-        use_ontogpt: bool = False,   # deprecated no-op
+        use_ontogpt: bool = False,  # deprecated no-op
         **provider_kwargs: Any,
     ) -> None:
         # ── LLM backend ───────────────────────────────────────────────────────
@@ -118,15 +119,15 @@ class OntologyMapper:
             )
 
         # ── Config ────────────────────────────────────────────────────────────
-        self._explicit_ontologies: list[str] | None = ontologies  # None = auto-detect
-        self.ontologies = ontologies or ["HPO", "MONDO", "NCIT", "LOINC", "UO"]
         config_path = Path(ontology_config_path) if ontology_config_path else _DEFAULT_CONFIG
         self._ontology_config = self._load_config(config_path)
+        self._explicit_ontologies = self._normalize_ontology_list(ontologies)
+        self.ontologies = self._explicit_ontologies or ["HPO", "MONDO", "NCIT", "LOINC", "UO"]
 
         # ── RAG ───────────────────────────────────────────────────────────────
-        self.use_rag                  = use_rag
-        self._retriever               = ontology_retriever
-        self.rag_top_k                = rag_top_k
+        self.use_rag = use_rag
+        self._retriever = ontology_retriever
+        self.rag_top_k = rag_top_k
         self.rag_auto_accept_threshold = rag_auto_accept_threshold
         self.max_candidates = max_candidates
         self.max_alternatives = max_alternatives
@@ -134,14 +135,10 @@ class OntologyMapper:
         # ── Planned pipeline (explicit opt-in only) ───────────────────────────
         self.use_planned_pipeline = use_planned_pipeline
         if use_planned_pipeline:
-            self._planned_retrieval_mode = self._coerce_planned_retrieval_mode(
-                retrieval_mode
-            )
+            self._planned_retrieval_mode = self._coerce_planned_retrieval_mode(retrieval_mode)
         else:
             if not self._is_public_retrieval_mode(retrieval_mode):
-                raise ValueError(
-                    "retrieval_mode is only supported when use_planned_pipeline=True"
-                )
+                raise ValueError("retrieval_mode is only supported when use_planned_pipeline=True")
             self._planned_retrieval_mode = RetrievalMode.PUBLIC
         self._planned_pipeline = planned_pipeline
 
@@ -183,16 +180,12 @@ class OntologyMapper:
             MappingResult with confidence score and logic_type.
         """
         planned_enabled = (
-            self.use_planned_pipeline
-            if use_planned_pipeline is None
-            else use_planned_pipeline
+            self.use_planned_pipeline if use_planned_pipeline is None else use_planned_pipeline
         )
 
         if planned_enabled:
             mode = self._coerce_planned_retrieval_mode(
-                retrieval_mode
-                if retrieval_mode is not None
-                else self._planned_retrieval_mode
+                retrieval_mode if retrieval_mode is not None else self._planned_retrieval_mode
             )
             return self._map_term_with_planned_pipeline(
                 source_term=source_term,
@@ -203,9 +196,7 @@ class OntologyMapper:
             )
 
         if retrieval_mode is not None:
-            raise ValueError(
-                "retrieval_mode is only supported when use_planned_pipeline=True"
-            )
+            raise ValueError("retrieval_mode is only supported when use_planned_pipeline=True")
 
         t0 = time.monotonic()
 
@@ -242,8 +233,11 @@ class OntologyMapper:
 
         logger.info(
             "Mapped %r → %s (%s, conf=%.2f, logic=%s)",
-            source_term, result.target_code, result.target_term,
-            result.confidence, result.logic_type.value,
+            source_term,
+            result.target_code,
+            result.target_term,
+            result.confidence,
+            result.logic_type.value,
         )
         return result
 
@@ -308,27 +302,15 @@ class OntologyMapper:
             self._planned_pipeline = PlannedPipeline(provider=self._llm)
         return self._planned_pipeline
 
-    def _planned_target_ontology(self) -> str | None:
+    def _planned_allowed_target_ontologies(self) -> list[str] | None:
         """
-        Resolve the explicit constructor ontology list into a planned target.
+        Resolve constructor ontologies into a planned-mode allow-list.
 
-        Policy for Phase 10: planned mode accepts zero or one explicit target
-        ontology. Multiple explicit ontologies are rejected until the planned
-        pipeline supports a richer target-selection contract.
+        None means unrestricted planner behavior.  A one-item list is still
+        treated as a singular target by PlannedPipeline for backward
+        compatibility; multi-item lists are strict allow-lists.
         """
-        if self._explicit_ontologies is None:
-            return None
-
-        ontologies = [o.strip() for o in self._explicit_ontologies if o and o.strip()]
-        if not ontologies:
-            return None
-        if len(ontologies) > 1:
-            raise ValueError(
-                "PlannedPipeline integration currently supports at most one "
-                "explicit target ontology. Provide a single ontology or leave "
-                "ontologies=None."
-            )
-        return ontologies[0].upper()
+        return list(self._explicit_ontologies) if self._explicit_ontologies else None
 
     def _map_term_with_planned_pipeline(
         self,
@@ -339,14 +321,19 @@ class OntologyMapper:
         entity_type: str | None,
         retrieval_mode: RetrievalMode,
     ) -> MappingResult:
-        target_ontology = self._planned_target_ontology()
+        allowed_target_ontologies = self._planned_allowed_target_ontologies()
         pipeline = self._get_planned_pipeline()
         return pipeline.map_term(
             source_term=source_term,
             source_label=source_label,
             source_type=source_type,
             clinical_area=entity_type,
-            target_ontology=target_ontology,
+            target_ontology=(
+                allowed_target_ontologies[0]
+                if allowed_target_ontologies and len(allowed_target_ontologies) == 1
+                else None
+            ),
+            allowed_target_ontologies=allowed_target_ontologies,
             retrieval_mode=retrieval_mode,
             max_results_per_query=self.rag_top_k,
             max_candidates=self.max_candidates,
@@ -370,87 +357,141 @@ class OntologyMapper:
         return p.read_text(encoding="utf-8")
 
     def _get_ontology_description(self, ontology: str) -> str:
-        return self._ontology_config.get('ontologies', {}).get(ontology, {}).get('description', ontology)
+        return (
+            self._ontology_config.get("ontologies", {})
+            .get(ontology, {})
+            .get("description", ontology)
+        )
 
     def _get_ontology_prefix(self, ontology: str) -> str:
-        return self._ontology_config.get('ontologies', {}).get(ontology, {}).get('curie_prefix', ontology)
+        return (
+            self._ontology_config.get("ontologies", {})
+            .get(ontology, {})
+            .get("curie_prefix", ontology)
+        )
 
     def get_recommended_ontologies(self, entity_type: str | None = None) -> list[str]:
         if not entity_type:
-            entity_type = 'default'
-        mapping = self._ontology_config.get('entity_ontology_mapping', {})
+            entity_type = "default"
+        mapping = self._ontology_config.get("entity_ontology_mapping", {})
         et_lower = entity_type.lower()
         if et_lower in mapping:
-            return mapping[et_lower].get('ontologies', ['HPO'])
+            return mapping[et_lower].get("ontologies", ["HPO"])
         for key in mapping:
             if key in et_lower or et_lower in key:
-                return mapping[key].get('ontologies', ['HPO'])
-        return mapping.get('default', {}).get('ontologies', ['HPO', 'MONDO', 'NCIT'])
+                return mapping[key].get("ontologies", ["HPO"])
+        return mapping.get("default", {}).get("ontologies", ["HPO", "MONDO", "NCIT"])
 
     def _infer_ontology_from_entity(self, entity_type: str | None) -> str:
         if not entity_type:
-            entity_type = 'default'
-        mapping = self._ontology_config.get('entity_ontology_mapping', {})
+            entity_type = "default"
+        mapping = self._ontology_config.get("entity_ontology_mapping", {})
         et_lower = entity_type.lower()
         if et_lower in mapping:
-            primary = mapping[et_lower].get('primary')
+            primary = mapping[et_lower].get("primary")
             if primary:
                 return primary
         for key in mapping:
             if key in et_lower:
-                primary = mapping[key].get('primary')
+                primary = mapping[key].get("primary")
                 if primary:
                     return primary
-        return mapping.get('default', {}).get('primary', 'HPO')
+        return mapping.get("default", {}).get("primary", "HPO")
 
     def _infer_ontology_source_from_code(self, code: str, fallback: str) -> str:
-        if not code or ':' not in code:
+        if not code or ":" not in code:
             return fallback
-        prefix = code.split(':', 1)[0].upper()
-        for onto_key, onto_cfg in self._ontology_config.get('ontologies', {}).items():
-            if onto_cfg.get('curie_prefix', onto_key).upper() == prefix:
+        prefix = code.split(":", 1)[0].upper()
+        for onto_key, onto_cfg in self._ontology_config.get("ontologies", {}).items():
+            if onto_cfg.get("curie_prefix", onto_key).upper() == prefix:
                 return onto_key
-        prefix_aliases = self._ontology_config.get('prefix_aliases', {})
+        prefix_aliases = self._ontology_config.get("prefix_aliases", {})
         if prefix in prefix_aliases:
             return prefix_aliases[prefix]
         if not prefix_aliases:
             _FB = {
-                'HP': 'HPO', 'HPO': 'HPO', 'MONDO': 'MONDO', 'NCIT': 'NCIT',
-                'LOINC': 'LOINC', 'ICD10': 'ICD10', 'ICD10CM': 'ICD10',
-                'RXNORM': 'RxNorm', 'RXCUI': 'RxNorm',
-                'SCTID': 'SNOMED-CT', 'SNOMEDCT': 'SNOMED-CT',
+                "HP": "HPO",
+                "HPO": "HPO",
+                "MONDO": "MONDO",
+                "NCIT": "NCIT",
+                "LOINC": "LOINC",
+                "ICD10": "ICD10",
+                "ICD10CM": "ICD10",
+                "RXNORM": "RxNorm",
+                "RXCUI": "RxNorm",
+                "SCTID": "SNOMED-CT",
+                "SNOMEDCT": "SNOMED-CT",
             }
             return _FB.get(prefix, fallback)
         return fallback
 
+    def _normalize_ontology_list(self, ontologies: Any | None) -> list[str] | None:
+        if ontologies is None:
+            return None
+        raw_values = [ontologies] if isinstance(ontologies, str) else list(ontologies)
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in raw_values:
+            ontology = self._normalize_ontology_name(raw)
+            if ontology and ontology not in seen:
+                normalized.append(ontology)
+                seen.add(ontology)
+        return normalized or None
+
+    def _normalize_ontology_name(self, ontology: Any) -> str | None:
+        text = str(ontology or "").strip()
+        if not text:
+            return None
+
+        upper = text.upper()
+        aliases = self._ontology_config.get("prefix_aliases", {})
+        alias_map = {str(k).upper(): str(v).strip() for k, v in aliases.items()}
+        alias_value = alias_map.get(upper)
+        if alias_value:
+            return alias_value.upper()
+
+        ontology_keys = self._ontology_config.get("ontologies", {})
+        for key in ontology_keys:
+            if str(key).upper() == upper:
+                return str(key).upper()
+
+        return upper
+
     def _normalize_ontology_code(self, code: str, target_ontology: str) -> str:
-        if not code or ':' not in code:
+        if not code or ":" not in code:
             return code
-        current_prefix, code_id = code.split(':', 1)
+        current_prefix, code_id = code.split(":", 1)
         current_prefix = current_prefix.strip()
-        ontologies_meta = self._ontology_config.get('ontologies', {})
-        correct_prefix = ontologies_meta.get(target_ontology, {}).get('curie_prefix')
-        prefix_aliases = self._ontology_config.get('prefix_aliases', {})
+        ontologies_meta = self._ontology_config.get("ontologies", {})
+        correct_prefix = ontologies_meta.get(target_ontology, {}).get("curie_prefix")
+        prefix_aliases = self._ontology_config.get("prefix_aliases", {})
         if not prefix_aliases:
             prefix_aliases = {
-                'HPO': 'HPO', 'HP': 'HPO', 'SCTID': 'SNOMED-CT',
-                'SNOMED': 'SNOMED-CT', 'SNOMEDCT': 'SNOMED-CT',
-                'LOINC': 'LOINC', 'MONDO': 'MONDO', 'NCIT': 'NCIT',
-                'RXNORM': 'RxNorm', 'RXCUI': 'RxNorm',
+                "HPO": "HPO",
+                "HP": "HPO",
+                "SCTID": "SNOMED-CT",
+                "SNOMED": "SNOMED-CT",
+                "SNOMEDCT": "SNOMED-CT",
+                "LOINC": "LOINC",
+                "MONDO": "MONDO",
+                "NCIT": "NCIT",
+                "RXNORM": "RxNorm",
+                "RXCUI": "RxNorm",
             }
         alias_ontology = prefix_aliases.get(current_prefix.upper())
         if alias_ontology and alias_ontology in ontologies_meta:
-            correct_prefix = ontologies_meta[alias_ontology].get('curie_prefix', alias_ontology)
+            correct_prefix = ontologies_meta[alias_ontology].get("curie_prefix", alias_ontology)
         if correct_prefix and correct_prefix != current_prefix:
             return f"{correct_prefix}:{code_id}"
         return code
 
     def _extract_json_from_response(self, response: str) -> str:
         import re
-        fence_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', response, re.DOTALL)
+
+        fence_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", response, re.DOTALL)
         if fence_match:
             return fence_match.group(1)
-        obj_match = re.search(r'\{.*\}', response, re.DOTALL)
+        obj_match = re.search(r"\{.*\}", response, re.DOTALL)
         if obj_match:
             return obj_match.group(0)
         return response.strip()
@@ -466,13 +507,13 @@ class OntologyMapper:
         """Build prompt messages from assets/prompts/*.txt templates."""
         target_ontologies = self._effective_ontologies(entity_type)
         ontologies_block = "\n".join(
-            f"  {i+1}. {o} — {self._get_ontology_description(o)}"
+            f"  {i + 1}. {o} — {self._get_ontology_description(o)}"
             for i, o in enumerate(target_ontologies)
         )
 
         if rag_candidates:
             candidates_block = "\n".join(
-                f"  {i+1}. {c.get('code', '?')} — {c.get('term', '?')}  (score: {c.get('score', 0):.3f})"
+                f"  {i + 1}. {c.get('code', '?')} — {c.get('term', '?')}  (score: {c.get('score', 0):.3f})"
                 for i, c in enumerate(rag_candidates)
             )
             template = self._load_prompt_template("rag_prompt")
@@ -536,7 +577,7 @@ class OntologyMapper:
 
         if isinstance(completion, str):
             text = completion
-        elif hasattr(completion, 'content'):
+        elif hasattr(completion, "content"):
             text = completion.content
         else:
             text = str(completion)
@@ -546,7 +587,9 @@ class OntologyMapper:
         try:
             data = _json.loads(json_str)
         except Exception:
-            logger.warning("Failed to parse LLM response | model=%s text=%r", self._llm.model, text[:500])
+            logger.warning(
+                "Failed to parse LLM response | model=%s text=%r", self._llm.model, text[:500]
+            )
             return MappingResult(
                 source_term=source_term,
                 source_label=source_label,
@@ -572,9 +615,7 @@ class OntologyMapper:
             rank = int(data.get("selected_rank") or 0)
             confidence = float(data.get("confidence") or 0.5)
             reasoning = data.get("notes") or data.get("reasoning") or ""
-            candidates: list[dict[str, Any]] = (
-                rag_debug.candidates_retrieved if rag_debug else []
-            )
+            candidates: list[dict[str, Any]] = rag_debug.candidates_retrieved if rag_debug else []
             if 1 <= rank <= len(candidates):
                 chosen = candidates[rank - 1]
                 curie = chosen.get("code") or "UNMAPPED"

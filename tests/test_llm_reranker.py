@@ -12,6 +12,7 @@ import json
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from llm_ontology_mapper.llm_reranker import LLMReranker, LLMRerankerError
 from llm_ontology_mapper.models import (
@@ -23,7 +24,6 @@ from llm_ontology_mapper.models import (
     RetrievalMode,
 )
 from llm_ontology_mapper.providers import BaseLLMProvider, ChatMessage, CompletionResponse
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stub provider
@@ -47,11 +47,13 @@ class _StubProvider(BaseLLMProvider):
         **kwargs: Any,
     ) -> CompletionResponse:
         self.calls.append(list(messages))
-        self.call_kwargs.append({
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            **kwargs,
-        })
+        self.call_kwargs.append(
+            {
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                **kwargs,
+            }
+        )
         return CompletionResponse(content=self._response_content, model=self.model)
 
 
@@ -72,11 +74,13 @@ class _SequenceProvider(BaseLLMProvider):
         **kwargs: Any,
     ) -> CompletionResponse:
         self.calls.append(list(messages))
-        self.call_kwargs.append({
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            **kwargs,
-        })
+        self.call_kwargs.append(
+            {
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                **kwargs,
+            }
+        )
         content = self._responses.pop(0) if self._responses else ""
         return CompletionResponse(content=content, model=self.model)
 
@@ -114,6 +118,7 @@ def _make_plan(
     original_term: str = "sys_bp",
     retrieval_mode: RetrievalMode = RetrievalMode.PUBLIC,
     target_ontology_constraint: str | None = None,
+    allowed_target_ontologies: list[str] | None = None,
     inferred_meaning: str | None = "systolic blood pressure",
     semantic_type: str | None = "measurement",
     expanded_queries: list[str] | None = None,
@@ -130,6 +135,7 @@ def _make_plan(
         semantic_type=semantic_type,
         retrieval_mode=retrieval_mode,
         target_ontology_constraint=target_ontology_constraint,
+        allowed_target_ontologies=allowed_target_ontologies,
         reasoning=reasoning,
     )
 
@@ -142,14 +148,16 @@ def _response(
     reasoning: str = "Best matching candidate for the source term.",
     alternative_codes: list[str] | None = None,
 ) -> str:
-    return json.dumps({
-        "selected_candidate_id": selected_cid,
-        "selected_code": selected_code,
-        "is_unmapped": is_unmapped,
-        "confidence": confidence,
-        "reasoning": reasoning,
-        "alternative_codes": alternative_codes or [],
-    })
+    return json.dumps(
+        {
+            "selected_candidate_id": selected_cid,
+            "selected_code": selected_code,
+            "is_unmapped": is_unmapped,
+            "confidence": confidence,
+            "reasoning": reasoning,
+            "alternative_codes": alternative_codes or [],
+        }
+    )
 
 
 def _structured_response(
@@ -158,14 +166,16 @@ def _structured_response(
     selected_code: str = "LOINC:8480-6",
     alternatives: list[dict[str, Any]] | None = None,
 ) -> str:
-    return json.dumps({
-        "selected_candidate_id": selected_cid,
-        "selected_code": selected_code,
-        "is_unmapped": False,
-        "confidence": 0.95,
-        "reasoning": "Best direct match.",
-        "alternatives": alternatives or [],
-    })
+    return json.dumps(
+        {
+            "selected_candidate_id": selected_cid,
+            "selected_code": selected_code,
+            "is_unmapped": False,
+            "confidence": 0.95,
+            "reasoning": "Best direct match.",
+            "alternatives": alternatives or [],
+        }
+    )
 
 
 def _assert_specific_fallback(
@@ -183,14 +193,16 @@ def _assert_specific_fallback(
     assert "this is another possible match" not in lower
 
 
-_UNMAPPED_RESPONSE = json.dumps({
-    "selected_candidate_id": None,
-    "selected_code": None,
-    "is_unmapped": True,
-    "confidence": 0.0,
-    "reasoning": "None of the retrieved candidates match the source term.",
-    "alternative_codes": [],
-})
+_UNMAPPED_RESPONSE = json.dumps(
+    {
+        "selected_candidate_id": None,
+        "selected_code": None,
+        "is_unmapped": True,
+        "confidence": 0.0,
+        "reasoning": "None of the retrieved candidates match the source term.",
+        "alternative_codes": [],
+    }
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -294,9 +306,7 @@ def test_public_mode_grounding_source_public_api() -> None:
 
 @pytest.mark.unit
 def test_local_mode_is_grounded() -> None:
-    candidate = _make_candidate(
-        retrieval_mode=RetrievalMode.LOCAL, source="SapBERT"
-    )
+    candidate = _make_candidate(retrieval_mode=RetrievalMode.LOCAL, source="SapBERT")
     provider = _StubProvider(_response())
     plan = _make_plan(retrieval_mode=RetrievalMode.LOCAL)
     reranker = LLMReranker(provider)
@@ -313,9 +323,7 @@ def test_local_mode_is_grounded() -> None:
 
 @pytest.mark.unit
 def test_local_mode_grounding_source_local_sapbert() -> None:
-    candidate = _make_candidate(
-        retrieval_mode=RetrievalMode.LOCAL, source="SapBERT"
-    )
+    candidate = _make_candidate(retrieval_mode=RetrievalMode.LOCAL, source="SapBERT")
     provider = _StubProvider(_response())
     plan = _make_plan(retrieval_mode=RetrievalMode.LOCAL)
     reranker = LLMReranker(provider)
@@ -472,9 +480,7 @@ def test_alternative_codes_outside_candidate_list_are_dropped() -> None:
 def test_target_ontology_constraint_rejects_wrong_ontology() -> None:
     # Candidate is HPO; plan constrains to LOINC
     hpo_candidate = _make_candidate(code="HP:0012735", ontology="HPO")
-    provider = _StubProvider(
-        _response(selected_cid="C1", selected_code="HP:0012735")
-    )
+    provider = _StubProvider(_response(selected_cid="C1", selected_code="HP:0012735"))
     reranker = LLMReranker(provider)
 
     plan = _make_plan(target_ontology_constraint="LOINC")
@@ -682,10 +688,7 @@ def test_no_retrieval_calls() -> None:
     # The only call the reranker makes is provider.complete().
     # route_calls and candidate fetching are upstream — the reranker never
     # fetches from OLS, LOINC, SapBERT, etc.
-    candidates = [
-        _make_candidate(code=f"HP:{i:07d}", term=f"Term {i}")
-        for i in range(5)
-    ]
+    candidates = [_make_candidate(code=f"HP:{i:07d}", term=f"Term {i}") for i in range(5)]
     provider = _StubProvider(_response(selected_cid="C1", selected_code="HP:0000000"))
     reranker = LLMReranker(provider)
 
@@ -779,11 +782,7 @@ def test_alternative_codes_in_candidate_list_are_accepted() -> None:
     result = reranker.rerank(_make_plan(), [c1, c2])
 
     assert result.alternative_codes == ["HP:0002110"]
-    assert result.alternatives[0].code == "HP:0002110"
-    _assert_specific_fallback(
-        result.alternatives[0].explanation,
-        expected_fragment="average",
-    )
+    assert result.alternatives == []
 
 
 @pytest.mark.unit
@@ -830,6 +829,104 @@ def test_structured_alternatives_are_parsed() -> None:
 
 
 @pytest.mark.unit
+def test_allowed_target_ontologies_filter_candidates_before_prompt() -> None:
+    loinc = _make_candidate(
+        code="LOINC:8480-6",
+        term="Disallowed systolic candidate qzx",
+        ontology="LOINC",
+    )
+    hpo = _make_candidate(code="HP:0012735", ontology="HPO")
+    provider = _StubProvider(_response(selected_cid="C1", selected_code="HP:0012735"))
+    reranker = LLMReranker(provider)
+
+    result = reranker.rerank(
+        _make_plan(allowed_target_ontologies=["HPO"]),
+        [loinc, hpo],
+    )
+
+    assert result.selected_code == "HP:0012735"
+    prompt = " ".join(message.content for message in provider.calls[0])
+    assert "HP:0012735" in prompt
+    assert "Disallowed systolic candidate qzx" not in prompt
+
+
+@pytest.mark.unit
+def test_allowed_target_ontologies_empty_candidate_set_returns_unmapped() -> None:
+    candidate = _make_candidate(code="LOINC:8480-6", ontology="LOINC")
+    provider = _StubProvider(_response(selected_cid="C1", selected_code="LOINC:8480-6"))
+    reranker = LLMReranker(provider)
+
+    result = reranker.rerank(
+        _make_plan(allowed_target_ontologies=["HPO"]),
+        [candidate],
+    )
+
+    assert result.is_unmapped is True
+    assert result.selected_code is None
+    assert provider.calls == []
+
+
+@pytest.mark.unit
+def test_allowed_target_ontologies_reject_unprompted_selection() -> None:
+    loinc = _make_candidate(code="LOINC:8480-6", ontology="LOINC")
+    hpo = _make_candidate(code="HP:0012735", ontology="HPO")
+    provider = _StubProvider(_response(selected_cid="C2", selected_code="LOINC:8480-6"))
+    reranker = LLMReranker(provider)
+
+    with pytest.raises(LLMRerankerError, match="selected_candidate_id"):
+        reranker.rerank(
+            _make_plan(allowed_target_ontologies=["HPO"]),
+            [hpo, loinc],
+        )
+
+
+@pytest.mark.unit
+def test_allowed_target_ontologies_alternatives_remain_inside_list() -> None:
+    hpo = _make_candidate(code="HP:0012735", ontology="HPO")
+    loinc = _make_candidate(code="LOINC:8480-6", ontology="LOINC")
+    mondo = _make_candidate(code="MONDO:0000001", ontology="MONDO")
+    response = _structured_response(
+        selected_cid="C1",
+        selected_code="HP:0012735",
+        alternatives=[
+            {
+                "candidate_id": "C2",
+                "code": "MONDO:0000001",
+                "confidence": 0.7,
+                "explanation": "Allowed disease alternative.",
+            },
+            {
+                "candidate_id": "C3",
+                "code": "LOINC:8480-6",
+                "confidence": 0.6,
+                "explanation": "Unselected ontology.",
+            },
+        ],
+    )
+    reranker = LLMReranker(_StubProvider(response))
+
+    result = reranker.rerank(
+        _make_plan(allowed_target_ontologies=["HPO", "MONDO"]),
+        [hpo, loinc, mondo],
+    )
+
+    assert [alt.code for alt in result.alternatives] == ["MONDO:0000001"]
+
+
+@pytest.mark.unit
+def test_reranker_prompt_asks_for_reviewer_notes_to_use_actual_codes() -> None:
+    hpo = _make_candidate(code="HP:0012735", ontology="HPO")
+    provider = _StubProvider(_response(selected_cid="C1", selected_code="HP:0012735"))
+    reranker = LLMReranker(provider)
+
+    reranker.rerank(_make_plan(allowed_target_ontologies=["HPO"]), [hpo])
+
+    prompt = "\n".join(message.content for message in provider.calls[0])
+    assert "actual ontology codes" in prompt
+    assert "not internal candidate IDs" in prompt
+
+
+@pytest.mark.unit
 def test_structured_alternative_code_mismatch_is_dropped() -> None:
     c1 = _make_candidate(code="LOINC:60984-2", ontology="LOINC")
     c2 = _make_candidate(code="LOINC:8462-4", ontology="LOINC")
@@ -872,12 +969,7 @@ def test_legacy_alternative_codes_with_candidate_ids_are_converted() -> None:
     result = reranker.rerank(_make_plan(target_ontology_constraint="LOINC"), [c1, c2, c3])
 
     assert result.alternative_codes == ["LOINC:60984-2"]
-    assert result.alternatives[0].code == "LOINC:60984-2"
-    assert result.alternatives[0].code != "C1"
-    _assert_specific_fallback(
-        result.alternatives[0].explanation,
-        expected_fragment="aorta",
-    )
+    assert result.alternatives == []
 
 
 @pytest.mark.unit
@@ -912,17 +1004,15 @@ def test_blank_structured_alternative_explanation_gets_candidate_specific_fallba
 
 @pytest.mark.unit
 def test_structured_alternatives_are_capped() -> None:
-    candidates = [
-        _make_candidate(code=f"LOINC:{i}", ontology="LOINC")
-        for i in range(1, 9)
-    ]
+    codes = [f"LOINC:{1000 + i}-{i % 10}" for i in range(1, 9)]
+    candidates = [_make_candidate(code=code, ontology="LOINC") for code in codes]
     response = _structured_response(
         selected_cid="C8",
-        selected_code="LOINC:8",
+        selected_code=codes[7],
         alternatives=[
             {
                 "candidate_id": f"C{i}",
-                "code": f"LOINC:{i}",
+                "code": codes[i - 1],
                 "confidence": 0.6,
                 "explanation": f"Alternative {i}.",
             }
@@ -935,6 +1025,63 @@ def test_structured_alternatives_are_capped() -> None:
 
     assert len(result.alternatives) == 5
     assert len(result.alternative_codes) == 5
+
+
+@pytest.mark.unit
+def test_structured_alternatives_are_sorted_by_final_confidence() -> None:
+    codes = [f"LOINC:{1000 + i}-{i % 10}" for i in range(1, 5)]
+    candidates = [_make_candidate(code=code, ontology="LOINC") for code in codes]
+    response = _structured_response(
+        selected_cid="C4",
+        selected_code=codes[3],
+        alternatives=[
+            {
+                "candidate_id": "C1",
+                "code": codes[0],
+                "confidence": 0.5,
+                "explanation": "Lower-ranked alternative.",
+            },
+            {
+                "candidate_id": "C2",
+                "code": codes[1],
+                "confidence": 0.8,
+                "explanation": "Higher-ranked alternative.",
+            },
+        ],
+    )
+    reranker = LLMReranker(_StubProvider(response))
+
+    result = reranker.rerank(_make_plan(target_ontology_constraint="LOINC"), candidates)
+
+    assert [alt.code for alt in result.alternatives] == [codes[1], codes[0]]
+    assert result.alternative_codes[:2] == [codes[1], codes[0]]
+
+
+@pytest.mark.unit
+def test_alternative_confidence_above_selected_raises() -> None:
+    c1 = _make_candidate(code="LOINC:1001-1", ontology="LOINC")
+    c2 = _make_candidate(code="LOINC:1002-2", ontology="LOINC")
+    response = json.dumps(
+        {
+            "selected_candidate_id": "C1",
+            "selected_code": "LOINC:1001-1",
+            "is_unmapped": False,
+            "confidence": 0.7,
+            "reasoning": "Best direct match.",
+            "alternatives": [
+                {
+                    "candidate_id": "C2",
+                    "code": "LOINC:1002-2",
+                    "confidence": 0.9,
+                    "explanation": "Inconsistent runner-up.",
+                }
+            ],
+        }
+    )
+    reranker = LLMReranker(_StubProvider(response))
+
+    with pytest.raises(LLMRerankerError, match="alternative confidence"):
+        reranker.rerank(_make_plan(target_ontology_constraint="LOINC"), [c1, c2])
 
 
 @pytest.mark.unit
@@ -969,9 +1116,7 @@ def test_selected_candidate_is_not_repeated_as_structured_alternative() -> None:
 @pytest.mark.unit
 def test_empty_alternative_codes_is_fine() -> None:
     candidate = _make_candidate(code="HP:0012735")
-    resp = _response(
-        selected_cid="C1", selected_code="HP:0012735", alternative_codes=[]
-    )
+    resp = _response(selected_cid="C1", selected_code="HP:0012735", alternative_codes=[])
     provider = _StubProvider(resp)
     reranker = LLMReranker(provider)
 
@@ -1013,10 +1158,7 @@ def test_query_context_includes_target_ontology_constraint() -> None:
 
 @pytest.mark.unit
 def test_multiple_candidates_get_sequential_ids() -> None:
-    candidates = [
-        _make_candidate(code=f"HP:{i:07d}", term=f"Term {i}")
-        for i in range(4)
-    ]
+    candidates = [_make_candidate(code=f"HP:{i:07d}", term=f"Term {i}") for i in range(4)]
     # LLM selects C3 (the third candidate, index 2)
     third_code = "HP:0000002"
     resp = _response(selected_cid="C3", selected_code=third_code)
@@ -1050,7 +1192,7 @@ def test_result_is_frozen_rerank_decision() -> None:
 
     result = reranker.rerank(_make_plan(), [candidate])
 
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         result.selected_code = "CHANGED"  # type: ignore[misc]
 
 

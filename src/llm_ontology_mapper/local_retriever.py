@@ -154,8 +154,7 @@ class SapBERTClient:
             data: Any = resp.json()
         except Exception as exc:
             raise LocalRetrievalError(
-                f"Local SapBERT response is not valid JSON "
-                f"(query={query!r}): {exc}"
+                f"Local SapBERT response is not valid JSON (query={query!r}): {exc}"
             ) from exc
 
         if not isinstance(data, dict) or "results" not in data:
@@ -286,9 +285,7 @@ class LocalSemanticRetriever:
         if not ontologies:
             # Broad semantic search: no ontology filter
             for query in queries:
-                logger.debug(
-                    "LocalSemanticRetriever: query=%r ontology=None (broad)", query
-                )
+                logger.debug("LocalSemanticRetriever: query=%r ontology=None (broad)", query)
                 raw = self._call_client(query, None, max_results_per_query)
                 for candidate in raw:
                     enriched: dict[str, Any] = dict(candidate)
@@ -303,7 +300,9 @@ class LocalSemanticRetriever:
                     index_key = _SAPBERT_INDEX_MAP.get(ontology.upper(), ontology.upper())
                     logger.debug(
                         "LocalSemanticRetriever: query=%r ontology=%r index_key=%r",
-                        query, ontology, index_key,
+                        query,
+                        ontology,
+                        index_key,
                     )
                     raw = self._call_client(query, index_key, max_results_per_query)
                     for candidate in raw:
@@ -360,14 +359,20 @@ class LocalSemanticRetriever:
 
         target_ontology_constraint is always a hard constraint.
         When absent, preferred_ontology comes first, then candidate_ontologies.
+        allowed_target_ontologies is a hard allow-list. When present, only
+        ontologies in that list are returned; if no preferred/candidate
+        ontology survives, the full allow-list is returned.
         Returns [] when no ontology can be inferred (signals broad search).
         """
-        constraint = (
-            query_plan.target_ontology_constraint
-            or (route_plan.target_ontology_constraint if route_plan else None)
+        constraint = query_plan.target_ontology_constraint or (
+            route_plan.target_ontology_constraint if route_plan else None
         )
+        allowed = _resolve_allowed_target_ontologies(query_plan, route_plan)
         if constraint:
-            return [constraint.upper()]
+            constraint_upper = constraint.upper()
+            if allowed is not None and constraint_upper not in allowed:
+                return []
+            return [constraint_upper]
 
         ontologies: list[str] = []
         seen: set[str] = set()
@@ -389,7 +394,11 @@ class LocalSemanticRetriever:
         for onto in candidates_source:
             _add(onto)
 
-        return ontologies
+        if allowed is None:
+            return ontologies
+
+        filtered = [onto for onto in ontologies if onto in allowed]
+        return filtered or list(allowed)
 
     def _call_client(
         self,
@@ -412,3 +421,25 @@ class LocalSemanticRetriever:
                 f"Unexpected error from local semantic client "
                 f"(query={query!r}, ontology={ontology!r}): {exc}"
             ) from exc
+
+
+def _resolve_allowed_target_ontologies(
+    query_plan: QueryPlan,
+    route_plan: RetrievalRoutePlan | None,
+) -> list[str] | None:
+    raw = (
+        query_plan.allowed_target_ontologies
+        if query_plan.allowed_target_ontologies is not None
+        else (route_plan.allowed_target_ontologies if route_plan is not None else None)
+    )
+    if raw is None:
+        return None
+
+    result: list[str] = []
+    seen: set[str] = set()
+    for ontology in raw:
+        key = str(ontology or "").upper().strip()
+        if key and key not in seen:
+            result.append(key)
+            seen.add(key)
+    return result or None

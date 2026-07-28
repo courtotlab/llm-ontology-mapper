@@ -6,7 +6,8 @@ Validates:
 - UNMAPPED results (empty candidates, LLM decision)
 - MappingResult field values: source_term, target_code, confidence, notes, etc.
 - Pipeline metadata stored in result.metadata.rag_debug.candidates_retrieved[0]
-- Alternative mappings: built from alternative_codes, ordered, selected excluded
+- Alternative mappings: built from structured reranker alternatives, ordered,
+  selected excluded
 - Error cases: disabled mode, absent selected_code, ontology constraint mismatch,
   ungrounded selected decision, empty candidates for non-unmapped
 
@@ -34,7 +35,6 @@ from llm_ontology_mapper.models import (
     RetrievalMode,
     RetrievalTrace,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Factory helpers
@@ -136,21 +136,6 @@ def _make_trace(
         raw_candidate_count=5,
         merged_candidate_count=3,
     )
-
-
-def _assert_specific_fallback(
-    explanation: str | None,
-    *,
-    expected_fragment: str,
-) -> None:
-    assert explanation
-    assert len(explanation.split()) <= 25
-    lower = explanation.lower()
-    assert expected_fragment in lower
-    assert "retrieved as a related candidate" not in lower
-    assert "review the term and context" not in lower
-    assert "may be appropriate if context matches" not in lower
-    assert "this is another possible match" not in lower
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -329,9 +314,7 @@ def test_metadata_includes_grounding_source() -> None:
     builder = MappingResultBuilder()
     result = builder.build(
         query_plan=_make_plan(),
-        rerank_decision=_make_selected_decision(
-            grounding_source=GroundingSource.PUBLIC_API
-        ),
+        rerank_decision=_make_selected_decision(grounding_source=GroundingSource.PUBLIC_API),
         candidates=[_make_candidate()],
     )
     assert _get_pipeline_info(result)["grounding_source"] == "public_api"
@@ -426,7 +409,7 @@ def test_metadata_provider_is_grounded_pipeline() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_alternatives_built_from_alternative_codes() -> None:
+def test_alternatives_built_from_structured_reranker_alternatives() -> None:
     builder = MappingResultBuilder()
     c1 = _make_candidate("LOINC:8480-6", "Systolic BP")
     c2 = _make_candidate("LOINC:8462-4", "Diastolic BP")
@@ -434,6 +417,20 @@ def test_alternatives_built_from_alternative_codes() -> None:
     decision = _make_selected_decision(
         selected_code="LOINC:8480-6",
         alternative_codes=["LOINC:8462-4", "LOINC:55284-4"],
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C2",
+                code="LOINC:8462-4",
+                confidence=0.7,
+                explanation="Could fit if this is diastolic blood pressure.",
+            ),
+            RerankAlternative(
+                candidate_id="C3",
+                code="LOINC:55284-4",
+                confidence=0.6,
+                explanation="Could fit if this is a blood pressure panel.",
+            ),
+        ],
     )
     result = builder.build(
         query_plan=_make_plan(),
@@ -445,14 +442,59 @@ def test_alternatives_built_from_alternative_codes() -> None:
     assert "LOINC:55284-4" in alt_codes
 
 
-def test_selected_candidate_not_in_alternatives() -> None:
+def test_allowed_target_ontologies_filter_result_alternatives() -> None:
+    builder = MappingResultBuilder()
+    selected = _make_candidate("HP:0012735", "Cough", "HPO")
+    allowed_alt = _make_candidate("MONDO:0000001", "Respiratory disease", "MONDO")
+    unselected_alt = _make_candidate("LOINC:8480-6", "Systolic BP", "LOINC")
+    decision = _make_selected_decision(
+        selected_code="HP:0012735",
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C2",
+                code="MONDO:0000001",
+                confidence=0.7,
+                explanation="Allowed disease alternative.",
+            ),
+            RerankAlternative(
+                candidate_id="C3",
+                code="LOINC:8480-6",
+                confidence=0.6,
+                explanation="Unselected ontology.",
+            ),
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(allowed_target_ontologies=["HPO", "MONDO"]),
+        rerank_decision=decision,
+        candidates=[selected, allowed_alt, unselected_alt],
+    )
+
+    assert [alt.ontology for alt in result.alternatives] == ["MONDO"]
+
+
+def test_selected_candidate_not_in_alternatives_by_stable_identity() -> None:
     builder = MappingResultBuilder()
     c1 = _make_candidate("LOINC:8480-6", "Systolic BP")
     c2 = _make_candidate("LOINC:8462-4", "Diastolic BP")
-    # alternative_codes erroneously includes the selected code
     decision = _make_selected_decision(
         selected_code="LOINC:8480-6",
         alternative_codes=["LOINC:8480-6", "LOINC:8462-4"],
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C1",
+                code="LOINC:8480-6",
+                confidence=0.8,
+                explanation="Selected candidate should be excluded.",
+            ),
+            RerankAlternative(
+                candidate_id="C2",
+                code="LOINC:8462-4",
+                confidence=0.7,
+                explanation="Could fit if this is diastolic blood pressure.",
+            ),
+        ],
     )
     result = builder.build(
         query_plan=_make_plan(),
@@ -464,26 +506,37 @@ def test_selected_candidate_not_in_alternatives() -> None:
     assert "LOINC:8462-4" in alt_codes
 
 
-def test_alternative_order_follows_alternative_codes() -> None:
-    """Alternatives must follow the order of alternative_codes, not confidence."""
+def test_alternative_order_follows_final_reranker_confidence() -> None:
+    """Alternatives are ordered by comparable final reranker confidence."""
     builder = MappingResultBuilder()
     c1 = _make_candidate("LOINC:8480-6", "Systolic BP", normalized_score=0.9)
     c2 = _make_candidate("LOINC:8462-4", "Diastolic BP", normalized_score=0.7)
     c3 = _make_candidate("LOINC:55284-4", "BP panel", normalized_score=0.5)
     decision = _make_selected_decision(
         selected_code="LOINC:8480-6",
-        alternative_codes=["LOINC:55284-4", "LOINC:8462-4"],  # low score first
+        alternative_codes=["LOINC:55284-4", "LOINC:8462-4"],
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C3",
+                code="LOINC:55284-4",
+                confidence=0.55,
+                explanation="Could fit if this is a panel.",
+            ),
+            RerankAlternative(
+                candidate_id="C2",
+                code="LOINC:8462-4",
+                confidence=0.8,
+                explanation="Could fit if this is diastolic blood pressure.",
+            ),
+        ],
     )
     result = builder.build(
         query_plan=_make_plan(),
         rerank_decision=decision,
         candidates=[c1, c2, c3],
     )
-    # MappingResult.normalise_and_sort re-sorts by confidence descending, so
-    # we just check both are present (order enforced by MappingResult model)
-    alt_codes = [a.code for a in result.alternatives]
-    assert "LOINC:55284-4" in alt_codes
-    assert "LOINC:8462-4" in alt_codes
+    assert [a.code for a in result.alternatives] == ["LOINC:8462-4", "LOINC:55284-4"]
+    assert [a.confidence for a in result.alternatives] == [0.8, 0.55]
 
 
 def test_no_alternatives_when_alternative_codes_empty() -> None:
@@ -503,7 +556,14 @@ def test_alternatives_source_is_rag() -> None:
     c2 = _make_candidate("LOINC:8462-4", "Diastolic BP")
     decision = _make_selected_decision(
         selected_code="LOINC:8480-6",
-        alternative_codes=["LOINC:8462-4"],
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C2",
+                code="LOINC:8462-4",
+                confidence=0.7,
+                explanation="Could fit if this is diastolic blood pressure.",
+            )
+        ],
     )
     result = builder.build(
         query_plan=_make_plan(),
@@ -543,7 +603,7 @@ def test_structured_alternative_explanation_is_preserved() -> None:
     )
 
 
-def test_legacy_alternative_codes_get_fallback_explanation() -> None:
+def test_legacy_alternative_codes_are_not_exposed_without_final_confidence() -> None:
     builder = MappingResultBuilder()
     c1 = _make_candidate("LOINC:8480-6", "Systolic BP")
     c2 = _make_candidate("LOINC:8462-4", "Mean systolic BP")
@@ -558,14 +618,13 @@ def test_legacy_alternative_codes_get_fallback_explanation() -> None:
         candidates=[c1, c2],
     )
 
-    assert result.alternatives[0].code == "LOINC:8462-4"
-    _assert_specific_fallback(
-        result.alternatives[0].explanation,
-        expected_fragment="average",
-    )
+    assert result.alternatives == []
+    info = _get_pipeline_info(result)
+    assert info["candidate_score_provenance"][1]["code"] == "LOINC:8462-4"
+    assert info["candidate_score_provenance"][1]["normalized_retrieval_score"] == 0.92
 
 
-def test_empty_alternatives_fall_back_to_retrieved_candidates() -> None:
+def test_empty_alternatives_do_not_fall_back_to_retrieval_scores() -> None:
     builder = MappingResultBuilder()
     c1 = _make_candidate("LOINC:8480-6", "Systolic BP")
     c2 = _make_candidate("LOINC:8462-4", "Diastolic BP")
@@ -582,26 +641,32 @@ def test_empty_alternatives_fall_back_to_retrieved_candidates() -> None:
         candidates=[c1, c2, c3],
     )
 
-    alt_codes = [alt.code for alt in result.alternatives]
-    assert alt_codes == ["LOINC:8462-4", "LOINC:55284-4"]
-    _assert_specific_fallback(
-        result.alternatives[0].explanation,
-        expected_fragment="diastolic",
-    )
-    _assert_specific_fallback(
-        result.alternatives[1].explanation,
-        expected_fragment="exercise",
-    )
+    assert result.alternatives == []
 
 
 def test_alternatives_are_capped_by_builder() -> None:
     builder = MappingResultBuilder()
-    selected = _make_candidate("LOINC:100", "Selected")
+    selected = _make_candidate("LOINC:1000-0", "Selected")
     others = [
-        _make_candidate(f"LOINC:{i}", f"Candidate {i}", normalized_score=0.9 - i * 0.01)
+        _make_candidate(
+            f"LOINC:{1000 + i}-{i % 10}",
+            f"Candidate {i}",
+            normalized_score=0.9 - i * 0.01,
+        )
         for i in range(1, 8)
     ]
-    decision = _make_selected_decision(selected_code="LOINC:100")
+    decision = _make_selected_decision(
+        selected_code="LOINC:1000-0",
+        alternatives=[
+            RerankAlternative(
+                candidate_id=f"C{i + 1}",
+                code=f"LOINC:{1000 + i}-{i % 10}",
+                confidence=0.9 - i * 0.01,
+                explanation=f"Alternative {i}.",
+            )
+            for i in range(1, 8)
+        ],
+    )
 
     result = builder.build(
         query_plan=_make_plan(),
@@ -611,6 +676,154 @@ def test_alternatives_are_capped_by_builder() -> None:
     )
 
     assert len(result.alternatives) == 5
+
+
+def test_retrieval_score_is_not_exposed_as_final_alternative_confidence() -> None:
+    builder = MappingResultBuilder()
+    selected = _make_candidate(
+        "SNOMEDCT:104847001",
+        "Oxygen saturation measurement",
+        ontology="SNOMEDCT",
+        raw_score=0.84,
+        normalized_score=0.84,
+    )
+    loinc_alt = _make_candidate(
+        "LOINC:73804-7",
+        "Oxygen saturation sensor name",
+        ontology="LOINC",
+        raw_score=1.0,
+        normalized_score=1.0,
+    )
+    decision = _make_selected_decision(
+        selected_code="SNOMEDCT:104847001",
+        selected_candidate_id="C1",
+        confidence=0.91,
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C2",
+                code="LOINC:73804-7",
+                confidence=0.62,
+                explanation="Could fit if the field records the sensor name.",
+            )
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(original_term="oxygen_sat"),
+        rerank_decision=decision,
+        candidates=[selected, loinc_alt],
+    )
+
+    assert result.confidence == 0.91
+    assert result.alternatives[0].confidence == 0.62
+    assert result.alternatives[0].confidence != 1.0
+    assert all(alt.confidence <= result.confidence for alt in result.alternatives)
+
+
+def test_final_confidence_provenance_is_retained_in_debug_trace() -> None:
+    builder = MappingResultBuilder()
+    selected = _make_candidate(raw_score=0.95, normalized_score=0.92)
+    alternative = _make_candidate(
+        "LOINC:8462-4",
+        "Diastolic BP",
+        raw_score=1.0,
+        normalized_score=1.0,
+    )
+    decision = _make_selected_decision(
+        confidence=0.91,
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C2",
+                code="LOINC:8462-4",
+                confidence=0.63,
+                explanation="Could fit if this is diastolic blood pressure.",
+            )
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[selected, alternative],
+    )
+    info = _get_pipeline_info(result)
+
+    assert "final LLM reranker confidences" in info["confidence_contract"]
+    assert info["candidate_score_provenance"][1]["raw_retrieval_score"] == 1.0
+    assert info["candidate_score_provenance"][1]["normalized_retrieval_score"] == 1.0
+    assert info["final_ranking_trace"][0]["final_confidence"] == 0.91
+    assert info["final_ranking_trace"][0]["confidence_source"] == "llm_reranker"
+    assert info["final_ranking_trace"][1]["final_confidence"] == 0.63
+    assert info["final_ranking_trace"][1]["normalized_retrieval_score"] == 1.0
+
+
+def test_alternative_confidence_above_selected_raises() -> None:
+    builder = MappingResultBuilder()
+    selected = _make_candidate("LOINC:8480-6", "Systolic BP")
+    alternative = _make_candidate("LOINC:8462-4", "Diastolic BP")
+    decision = _make_selected_decision(
+        confidence=0.5,
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C2",
+                code="LOINC:8462-4",
+                confidence=0.8,
+                explanation="Inconsistent confidence.",
+            )
+        ],
+    )
+
+    with pytest.raises(MappingResultBuilderError, match="greater than selected"):
+        builder.build(
+            query_plan=_make_plan(),
+            rerank_decision=decision,
+            candidates=[selected, alternative],
+        )
+
+
+@pytest.mark.parametrize("mode", [RetrievalMode.PUBLIC, RetrievalMode.LOCAL])
+def test_grounded_routes_share_final_confidence_contract(mode: RetrievalMode) -> None:
+    builder = MappingResultBuilder()
+    source = (
+        GroundingSource.PUBLIC_API
+        if mode == RetrievalMode.PUBLIC
+        else GroundingSource.LOCAL_SAPBERT
+    )
+    selected = _make_candidate(
+        "LOINC:8480-6",
+        "Systolic BP",
+        retrieval_mode=mode,
+        normalized_score=1.0,
+    )
+    alternative = _make_candidate(
+        "LOINC:8462-4",
+        "Diastolic BP",
+        retrieval_mode=mode,
+        normalized_score=1.0,
+    )
+    decision = _make_selected_decision(
+        retrieval_mode=mode,
+        grounding_source=source,
+        confidence=0.86,
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C2",
+                code="LOINC:8462-4",
+                confidence=0.6,
+                explanation="Could fit if this is diastolic blood pressure.",
+            )
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(retrieval_mode=mode),
+        rerank_decision=decision,
+        candidates=[selected, alternative],
+    )
+
+    assert result.confidence == 0.86
+    assert result.alternatives[0].confidence == 0.6
+    assert _get_pipeline_info(result)["retrieval_mode"] == mode.value
 
 
 def test_selected_code_never_appears_in_structured_alternatives() -> None:
@@ -726,6 +939,112 @@ def test_unmapped_local_mode() -> None:
     )
     assert result.target_code == "UNKNOWN:UNMAPPED"
     assert _get_pipeline_info(result)["retrieval_mode"] == "local"
+
+
+def test_allowed_target_ontologies_unselected_final_selection_becomes_unmapped() -> None:
+    builder = MappingResultBuilder()
+    candidate = _make_candidate("LOINC:8480-6", "Systolic BP", "LOINC")
+
+    result = builder.build(
+        query_plan=_make_plan(allowed_target_ontologies=["HPO"]),
+        rerank_decision=_make_selected_decision(selected_code="LOINC:8480-6"),
+        candidates=[candidate],
+    )
+
+    assert result.target_code == "UNKNOWN:UNMAPPED"
+    assert result.ontology == "UNKNOWN"
+    assert result.confidence == 0.0
+
+
+def test_allowed_target_ontologies_none_applies_no_result_filter() -> None:
+    builder = MappingResultBuilder()
+    candidate = _make_candidate("LOINC:8480-6", "Systolic BP", "LOINC")
+
+    result = builder.build(
+        query_plan=_make_plan(allowed_target_ontologies=None),
+        rerank_decision=_make_selected_decision(selected_code="LOINC:8480-6"),
+        candidates=[candidate],
+    )
+
+    assert result.target_code == "LOINC:8480-6"
+    assert result.ontology == "LOINC"
+
+
+def test_single_allowed_target_ontology_valid_result_still_works() -> None:
+    builder = MappingResultBuilder()
+    candidate = _make_candidate("LOINC:8480-6", "Systolic BP", "LOINC")
+
+    result = builder.build(
+        query_plan=_make_plan(allowed_target_ontologies=["LOINC"]),
+        rerank_decision=_make_selected_decision(selected_code="LOINC:8480-6"),
+        candidates=[candidate],
+    )
+
+    assert result.target_code == "LOINC:8480-6"
+    assert result.ontology == "LOINC"
+
+
+def test_inconsistent_primary_candidate_becomes_unmapped() -> None:
+    builder = MappingResultBuilder()
+    candidate = NormalizedCandidate.model_construct(
+        code="MONDO:HP:0002099",
+        term="Asthma",
+        ontology="MONDO",
+        source="OLS",
+        matched_query="asthma",
+        retrieval_mode=RetrievalMode.PUBLIC,
+        raw_score=0.9,
+        normalized_score=0.9,
+        definition=None,
+        provenance=None,
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=_make_selected_decision(
+            selected_code="MONDO:HP:0002099",
+            selected_candidate_id="C1",
+        ),
+        candidates=[candidate],
+    )
+
+    assert result.target_code == "UNKNOWN:UNMAPPED"
+    assert result.ontology == "UNKNOWN"
+
+
+def test_inconsistent_alternative_candidate_is_not_returned() -> None:
+    builder = MappingResultBuilder()
+    selected = _make_candidate("HP:0002099", "Asthma", "HPO")
+    malformed_alt = NormalizedCandidate.model_construct(
+        code="MONDO:HP:0012735",
+        term="Cough",
+        ontology="MONDO",
+        source="OLS",
+        matched_query="cough",
+        retrieval_mode=RetrievalMode.PUBLIC,
+        raw_score=0.8,
+        normalized_score=0.8,
+        definition=None,
+        provenance=None,
+    )
+    malformed_rerank_alt = RerankAlternative.model_construct(
+        candidate_id="C2",
+        code="MONDO:HP:0012735",
+        confidence=0.6,
+        explanation="Malformed namespace should not reach the public result.",
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=_make_selected_decision(
+            selected_code="HP:0002099",
+            alternatives=[malformed_rerank_alt],
+        ),
+        candidates=[selected, malformed_alt],
+    )
+
+    assert result.target_code == "HP:0002099"
+    assert result.alternatives == []
 
 
 # ─────────────────────────────────────────────────────────────────────────────

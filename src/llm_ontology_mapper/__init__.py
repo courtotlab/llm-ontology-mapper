@@ -19,7 +19,9 @@ Quick start::
     print(result.logic_type)     # LogicType.RAG
 """
 
+from importlib import import_module
 from importlib.metadata import PackageNotFoundError, version
+from typing import Any
 
 # ── Version ───────────────────────────────────────────────────────────────────
 try:
@@ -27,16 +29,18 @@ try:
 except PackageNotFoundError:
     __version__ = "0.0.0.dev0"  # running from source without install
 
-# ── Public data contracts (always importable — no heavy deps) ─────────────────
-# ── Evaluator (needs pandas; install the 'eval' extra) ─────────────────────────
-from .evaluator import (
-    EvaluationDetail,
-    EvaluationMetrics,
-    EvaluationReport,
-    MatchType,
-    OntologyBreakdown,
-    OntologyMappingEvaluator,
-)
+# ── Optional public exports ───────────────────────────────────────────────────
+# Evaluator symbols need pandas, which belongs to the optional 'eval' extra.
+# Keep them available through package-level imports without making every import
+# of llm_ontology_mapper require pandas.
+_EVALUATOR_EXPORTS = {
+    "EvaluationDetail",
+    "EvaluationMetrics",
+    "EvaluationReport",
+    "MatchType",
+    "OntologyBreakdown",
+    "OntologyMappingEvaluator",
+}
 
 # ── Core mapper (imported here so users don't need to know the submodule) ──────
 from .mapper import OntologyMapper
@@ -110,6 +114,28 @@ from .agentic_mapper import AgenticMapper, normalize_code
 
 # ── Validator (optional — needs requests for live API calls) ───────────────────
 from .validator import OntologyValidator
+
+
+def __getattr__(name: str) -> Any:
+    """Lazily expose optional evaluator exports."""
+    if name in _EVALUATOR_EXPORTS:
+        try:
+            module = import_module(".evaluator", __name__)
+        except ModuleNotFoundError as exc:
+            if exc.name == "pandas":
+                raise ModuleNotFoundError(
+                    "Evaluator exports require pandas. Install the eval extra with "
+                    "`uv sync --extra eval` or `pip install 'llm-ontology-mapper[eval]'`."
+                ) from exc
+            raise
+        value = getattr(module, name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | _EVALUATOR_EXPORTS)
 
 __all__ = [
     # Version

@@ -24,6 +24,13 @@ def _loinc_response(status_code: int = 200) -> MagicMock:
     return response
 
 
+def _ols_response(docs: list[dict]) -> MagicMock:
+    response = MagicMock()
+    response.raise_for_status.return_value = None
+    response.json.return_value = {"response": {"docs": docs}}
+    return response
+
+
 @pytest.mark.unit
 def test_search_loinc_passes_basic_auth() -> None:
     tools = SearchTools(
@@ -38,13 +45,11 @@ def test_search_loinc_passes_basic_auth() -> None:
     auth = mock_get.call_args.kwargs["auth"]
     assert auth.username == "service-user"
     assert auth.password == "service-password"
-    assert mock_get.call_args.args[0] == (
-        "https://loinc.regenstrief.org/searchapi/loincs"
-    )
+    assert mock_get.call_args.args[0] == ("https://loinc.regenstrief.org/searchapi/loincs")
     assert mock_get.call_args.kwargs["params"] == {
         "query": "systolic blood pressure",
-        "rows": 10,
-        "offset": 0,
+        "rows": "10",
+        "offset": "0",
     }
     assert results[0]["code"] == "LOINC:8480-6"
     assert results[0]["ontology"] == "LOINC"
@@ -126,10 +131,13 @@ def test_search_loinc_http_error_returns_empty_without_logging_credentials(
         request_delay=0,
     )
 
-    with patch(
-        "requests.get",
-        return_value=_loinc_response(status_code),
-    ), caplog.at_level(logging.ERROR):
+    with (
+        patch(
+            "requests.get",
+            return_value=_loinc_response(status_code),
+        ),
+        caplog.at_level(logging.ERROR),
+    ):
         results = tools.search_loinc("systolic blood pressure")
 
     assert results == []
@@ -174,6 +182,7 @@ def test_search_loinc_parser_accepts_field_name_variants() -> None:
 
 
 # ── _normalize_code tests ─────────────────────────────────────────────────────
+
 
 @pytest.mark.unit
 def test_normalize_code_snomed_obo_id_strips_alias_prefix() -> None:
@@ -226,6 +235,34 @@ def test_normalize_code_clean_codes_unchanged() -> None:
 
 
 @pytest.mark.unit
+def test_normalize_code_keeps_authoritative_hp_namespace_for_mondo_request() -> None:
+    tools = SearchTools(request_delay=0)
+
+    result = tools._normalize_code("HP:0002099", "MONDO")
+
+    assert result == "HP:0002099"
+    assert result != "MONDO:HP:0002099"
+
+
+@pytest.mark.unit
+def test_search_ols_classifies_hp_result_from_mondo_scoped_request_as_hpo() -> None:
+    tools = SearchTools(request_delay=0)
+    doc = {
+        "obo_id": "HP:0002099",
+        "iri": "http://purl.obolibrary.org/obo/HP_0002099",
+        "label": "Asthma",
+        "description": ["A respiratory phenotype."],
+    }
+
+    with patch("requests.get", return_value=_ols_response([doc])):
+        results = tools.search_ols("asthma", ontology="MONDO", top_k=1)
+
+    assert results[0]["code"] == "HP:0002099"
+    assert results[0]["ontology"] == "HPO"
+    assert results[0]["code"] != "MONDO:HP:0002099"
+
+
+@pytest.mark.unit
 def test_normalize_code_idempotent_all_prefix_map_ontologies() -> None:
     """For every ontology in the prefix map, normalizing twice equals normalizing once."""
     tools = SearchTools(request_delay=0)
@@ -254,6 +291,7 @@ def test_normalize_code_idempotent_all_prefix_map_ontologies() -> None:
 
 # ── search_rxnorm tests ───────────────────────────────────────────────────────
 
+
 def _rxnorm_response(candidates: list[dict]) -> MagicMock:
     response = MagicMock()
     response.raise_for_status.return_value = None
@@ -272,7 +310,13 @@ def test_search_rxnorm_deduplicates_atoms() -> None:
     Must emit exactly one candidate carrying the RXNORM atom's name."""
     atoms = [
         {"rxcui": "6809", "rxaui": "10328664", "rank": "1", "source": "GS"},
-        {"rxcui": "6809", "rxaui": "12251601", "rank": "1", "name": "metformin", "source": "RXNORM"},
+        {
+            "rxcui": "6809",
+            "rxaui": "12251601",
+            "rank": "1",
+            "name": "metformin",
+            "source": "RXNORM",
+        },
     ]
     tools = SearchTools(request_delay=0)
 
@@ -296,8 +340,10 @@ def test_search_rxnorm_skips_all_unnamed_rxcui(
     ]
     tools = SearchTools(request_delay=0)
 
-    with patch("requests.get", return_value=_rxnorm_response(atoms)), \
-            caplog.at_level(logging.DEBUG):
+    with (
+        patch("requests.get", return_value=_rxnorm_response(atoms)),
+        caplog.at_level(logging.DEBUG),
+    ):
         results = tools.search_rxnorm("unknown", top_k=6)
 
     assert results == []
@@ -310,8 +356,20 @@ def test_search_rxnorm_multiple_concepts() -> None:
     ordered by score descending (best rank first)."""
     atoms = [
         {"rxcui": "6809", "rxaui": "A1", "rank": "1", "name": "metformin", "source": "RXNORM"},
-        {"rxcui": "1161611", "rxaui": "B1", "rank": "2", "name": "metformin Pill", "source": "RXNORM"},
-        {"rxcui": "583194", "rxaui": "C1", "rank": "3", "name": "metformin Oral Tablet", "source": "RXNORM"},
+        {
+            "rxcui": "1161611",
+            "rxaui": "B1",
+            "rank": "2",
+            "name": "metformin Pill",
+            "source": "RXNORM",
+        },
+        {
+            "rxcui": "583194",
+            "rxaui": "C1",
+            "rank": "3",
+            "name": "metformin Oral Tablet",
+            "source": "RXNORM",
+        },
     ]
     tools = SearchTools(request_delay=0)
 
@@ -321,7 +379,9 @@ def test_search_rxnorm_multiple_concepts() -> None:
     codes = [r["code"] for r in results]
     assert len(codes) == 3
     assert len(set(codes)) == 3, "duplicate codes present"
-    assert codes == sorted(codes, key=lambda c: -next(r["score"] for r in results if r["code"] == c))
+    assert codes == sorted(
+        codes, key=lambda c: -next(r["score"] for r in results if r["code"] == c)
+    )
     assert results[0]["score"] > results[1]["score"] > results[2]["score"]
 
 

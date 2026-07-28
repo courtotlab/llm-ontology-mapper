@@ -62,10 +62,13 @@ class RetrievalRouter:
         queries = self._resolve_queries(query_plan)
         candidate_ontologies = self._resolve_candidate_ontologies(query_plan)
         target_constraint = query_plan.target_ontology_constraint
+        allowed_target_ontologies = query_plan.allowed_target_ontologies
 
         logger.debug(
             "RetrievalRouter.route: mode=%s queries=%r target=%r",
-            mode.value, queries, target_constraint,
+            mode.value,
+            queries,
+            target_constraint,
         )
 
         if mode == RetrievalMode.DISABLED:
@@ -76,11 +79,11 @@ class RetrievalRouter:
                 grounding_source=GroundingSource.NONE,
                 queries=queries,
                 target_ontology_constraint=target_constraint,
+                allowed_target_ontologies=allowed_target_ontologies,
                 candidate_ontologies=candidate_ontologies,
                 route_calls=[],
                 retrieval_disabled_reason=(
-                    query_plan.retrieval_disabled_reason
-                    or "Retrieval disabled by caller"
+                    query_plan.retrieval_disabled_reason or "Retrieval disabled by caller"
                 ),
             )
 
@@ -90,7 +93,11 @@ class RetrievalRouter:
             else GroundingSource.LOCAL_SAPBERT
         )
         route_calls = self._build_route_calls(
-            mode, queries, target_constraint, candidate_ontologies
+            mode,
+            queries,
+            target_constraint,
+            allowed_target_ontologies,
+            candidate_ontologies,
         )
 
         return RetrievalRoutePlan(
@@ -100,8 +107,10 @@ class RetrievalRouter:
             grounding_source=grounding_source,
             queries=queries,
             target_ontology_constraint=target_constraint,
+            allowed_target_ontologies=allowed_target_ontologies,
             candidate_ontologies=candidate_ontologies,
             route_calls=route_calls,
+            retrieval_disabled_reason=None,
         )
 
     # ── Private helpers ───────────────────────────────────────────────────────
@@ -138,10 +147,18 @@ class RetrievalRouter:
         Respect target_ontology_constraint as a hard constraint.
 
         If set, restrict to that single ontology.
+        If an allow-list is set, intersect the planner's candidates with it;
+        fall back to the full allow-list when no planner candidate survives.
         Otherwise use the planner's candidate_ontologies list.
         """
         if plan.target_ontology_constraint:
             return [plan.target_ontology_constraint]
+        if plan.allowed_target_ontologies:
+            allowed = set(plan.allowed_target_ontologies)
+            candidate_ontologies = [
+                ontology for ontology in plan.candidate_ontologies if ontology in allowed
+            ]
+            return candidate_ontologies or list(plan.allowed_target_ontologies)
         return list(plan.candidate_ontologies)
 
     @staticmethod
@@ -149,6 +166,7 @@ class RetrievalRouter:
         mode: RetrievalMode,
         queries: list[str],
         target_ontology: str | None,
+        allowed_target_ontologies: list[str] | None,
         candidate_ontologies: list[str],
     ) -> list[dict[str, Any]]:
         """
@@ -158,14 +176,15 @@ class RetrievalRouter:
         constraint, and the candidate ontologies to search.  These are
         descriptions only — no HTTP request is made.
         """
-        route_name = (
-            "public_api" if mode == RetrievalMode.PUBLIC else "local_sapbert"
-        )
+        route_name = "public_api" if mode == RetrievalMode.PUBLIC else "local_sapbert"
         return [
             {
                 "route": route_name,
                 "query": q,
                 "target_ontology": target_ontology,
+                "allowed_target_ontologies": (
+                    list(allowed_target_ontologies) if allowed_target_ontologies else None
+                ),
                 "candidate_ontologies": list(candidate_ontologies),
             }
             for q in queries

@@ -25,8 +25,6 @@ from __future__ import annotations
 
 import pytest
 
-pytestmark = pytest.mark.unit
-
 from llm_ontology_mapper.disabled_mapping import (
     DisabledMappingError,
     DisabledMappingRunner,
@@ -38,6 +36,7 @@ from llm_ontology_mapper.models import (
 )
 from llm_ontology_mapper.providers import BaseLLMProvider, ChatMessage, CompletionResponse
 
+pytestmark = pytest.mark.unit
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stub provider
@@ -50,9 +49,7 @@ class _StubProvider(BaseLLMProvider):
         self._response_content = response_content
         self.calls: list[list[ChatMessage]] = []
 
-    def complete(
-        self, messages, temperature=0.1, max_tokens=1024, **kwargs
-    ) -> CompletionResponse:
+    def complete(self, messages, temperature=0.1, max_tokens=1024, **kwargs) -> CompletionResponse:
         self.calls.append(list(messages))
         return CompletionResponse(content=self._response_content, model=self.model)
 
@@ -240,9 +237,7 @@ def test_metadata_retrieval_skipped_true() -> None:
 
 def test_metadata_includes_retrieval_disabled_reason() -> None:
     runner, _ = _runner()
-    plan = _disabled_plan(
-        retrieval_disabled_reason="User explicitly disabled retrieval."
-    )
+    plan = _disabled_plan(retrieval_disabled_reason="User explicitly disabled retrieval.")
     result = runner.map(plan)
     assert "retrieval_disabled_reason" in _meta(result)
     assert "disabled" in _meta(result)["retrieval_disabled_reason"].lower()
@@ -313,6 +308,41 @@ def test_target_ontology_mismatch_does_not_raise_for_unmapped() -> None:
     result = runner.map(plan)
     assert result.target_code == "UNKNOWN:UNMAPPED"
     assert result.ontology == "UNKNOWN"
+
+
+def test_allowed_target_ontologies_mismatch_becomes_unmapped() -> None:
+    hpo_json = """{
+      "target_code": "HP:0012735",
+      "target_term": "Cough",
+      "ontology": "HPO",
+      "confidence": 0.7,
+      "notes": "HPO mapping.",
+      "alternatives": []
+    }"""
+    runner, _ = _runner(hpo_json)
+    plan = _disabled_plan(allowed_target_ontologies=["LOINC", "MONDO"])
+
+    result = runner.map(plan)
+
+    assert result.target_code == "UNKNOWN:UNMAPPED"
+    assert result.ontology == "UNKNOWN"
+
+
+def test_allowed_target_ontologies_none_applies_no_disabled_filter() -> None:
+    hpo_json = """{
+      "target_code": "HP:0012735",
+      "target_term": "Cough",
+      "ontology": "HPO",
+      "confidence": 0.7,
+      "notes": "HPO mapping.",
+      "alternatives": []
+    }"""
+    runner, _ = _runner(hpo_json)
+
+    result = runner.map(_disabled_plan(allowed_target_ontologies=None))
+
+    assert result.target_code == "HP:0012735"
+    assert result.ontology == "HPO"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -493,13 +523,13 @@ def test_llm_reranker_still_importable() -> None:
 
 
 def test_candidate_merger_still_importable() -> None:
-    from llm_ontology_mapper import CandidateMerger, CandidateMergeError  # noqa: F401
+    from llm_ontology_mapper import CandidateMergeError, CandidateMerger  # noqa: F401
 
     assert CandidateMerger is not None
 
 
 def test_candidate_normalizer_still_importable() -> None:
-    from llm_ontology_mapper import CandidateNormalizer, CandidateNormalizationError  # noqa: F401
+    from llm_ontology_mapper import CandidateNormalizationError, CandidateNormalizer  # noqa: F401
 
     assert CandidateNormalizer is not None
 

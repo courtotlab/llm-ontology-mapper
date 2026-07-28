@@ -22,6 +22,11 @@ from typing import Any
 import requests  # type: ignore[import-untyped]
 from requests.auth import HTTPBasicAuth  # type: ignore[import-untyped]
 
+from llm_ontology_mapper.ontology_identity import (
+    normalize_code_for_ontology,
+    resolve_candidate_identity,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -44,10 +49,18 @@ class SearchTools:
     """
 
     OLS_ONTOLOGY_MAP: dict[str, str] = {
-        'MONDO': 'mondo', 'HP': 'hp', 'HPO': 'hp', 'NCIT': 'ncit',
-        'SNOMED': 'snomed', 'SNOMEDCT': 'snomed', 'UO': 'uo',
-        'UBERON': 'uberon', 'CHEBI': 'chebi', 'GO': 'go',
-        'DOID': 'doid', 'MESH': 'mesh',
+        "MONDO": "mondo",
+        "HP": "hp",
+        "HPO": "hp",
+        "NCIT": "ncit",
+        "SNOMED": "snomed",
+        "SNOMEDCT": "snomed",
+        "UO": "uo",
+        "UBERON": "uberon",
+        "CHEBI": "chebi",
+        "GO": "go",
+        "DOID": "doid",
+        "MESH": "mesh",
     }
 
     def __init__(
@@ -64,9 +77,9 @@ class SearchTools:
         loinc_password: str | None = None,
         loinc_search_url: str = "https://loinc.regenstrief.org/searchapi/loincs",
     ) -> None:
-        self.ols_base       = ols_base
+        self.ols_base = ols_base
         self.rxnav_base_url = rxnav_base_url
-        self.icd10_nih_url  = icd10_nih_url
+        self.icd10_nih_url = icd10_nih_url
         self.loinc_fhir_url = loinc_fhir_url
         self.loinc_search_url = loinc_search_url
         self.loinc_username = (
@@ -74,22 +87,20 @@ class SearchTools:
             if loinc_username is not None
             else loinc_fhir_user
             if loinc_fhir_user is not None
-            else os.environ.get("LOINC_USERNAME")
-            or os.environ.get("LOINC_FHIR_USER")
+            else os.environ.get("LOINC_USERNAME") or os.environ.get("LOINC_FHIR_USER")
         )
         self.loinc_password = (
             loinc_password
             if loinc_password is not None
             else loinc_fhir_pass
             if loinc_fhir_pass is not None
-            else os.environ.get("LOINC_PASSWORD")
-            or os.environ.get("LOINC_FHIR_PASS")
+            else os.environ.get("LOINC_PASSWORD") or os.environ.get("LOINC_FHIR_PASS")
         )
         # Backward-compatible aliases for callers that inspect these attributes.
         self.loinc_fhir_user = self.loinc_username
         self.loinc_fhir_pass = self.loinc_password
-        self.api_timeout    = api_timeout
-        self.request_delay  = request_delay
+        self.api_timeout = api_timeout
+        self.request_delay = request_delay
 
     # ------------------------------------------------------------------
     # Public search methods
@@ -104,26 +115,58 @@ class SearchTools:
         try:
             response = requests.get(
                 f"{self.ols_base}/search",
-                params={'q': query, 'ontology': ontology_id, 'rows': str(top_k),
-                        'exact': 'false', 'groupField': 'iri', 'start': '0'},
+                params={
+                    "q": query,
+                    "ontology": ontology_id,
+                    "rows": str(top_k),
+                    "exact": "false",
+                    "groupField": "iri",
+                    "start": "0",
+                },
                 timeout=self.api_timeout,
             )
             response.raise_for_status()
-            docs = response.json().get('response', {}).get('docs', [])
+            docs = response.json().get("response", {}).get("docs", [])
             candidates = []
             for idx, doc in enumerate(docs[:top_k]):
-                obo_id = doc.get('obo_id')
-                iri = doc.get('iri', '')
-                code = obo_id if obo_id else iri.split('/')[-1].replace('_', ':')
-                code = self._normalize_code(code, ontology)
-                term = doc.get('label', '')
-                _desc = doc.get('description', '')
-                definition = (_desc[0] if isinstance(_desc, list) and _desc else _desc) or ''
-                candidates.append({
-                    'code': code, 'term': term,
-                    'score': 1.0 - (idx * 0.05),
-                    'definition': definition, 'source': 'OLS', 'iri': iri,
-                })
+                obo_id = doc.get("obo_id")
+                iri = doc.get("iri", "")
+                code = obo_id if obo_id else iri.split("/")[-1].replace("_", ":")
+                identity = resolve_candidate_identity(
+                    code=code,
+                    iri=iri,
+                    explicit_ontology=(
+                        doc.get("ontology")
+                        or doc.get("ontology_id")
+                        or doc.get("ontology_name")
+                        or doc.get("ontology_prefix")
+                    ),
+                    fallback_ontology=ontology,
+                )
+                if identity is None:
+                    logger.debug(
+                        "OLS result skipped because ontology/code identity could not "
+                        "be resolved consistently. requested_ontology=%r iri=%r code=%r",
+                        ontology,
+                        iri,
+                        code,
+                    )
+                    continue
+                term = doc.get("label", "")
+                _desc = doc.get("description", "")
+                definition = (_desc[0] if isinstance(_desc, list) and _desc else _desc) or ""
+                candidates.append(
+                    {
+                        "code": identity.code,
+                        "term": term,
+                        "ontology": identity.ontology,
+                        "score": 1.0 - (idx * 0.05),
+                        "definition": definition,
+                        "source": "OLS",
+                        "iri": iri,
+                        "identity_resolution": identity.reason,
+                    }
+                )
             time.sleep(self.request_delay)
             return candidates
         except requests.exceptions.RequestException as e:
@@ -145,28 +188,24 @@ class SearchTools:
         try:
             response = requests.get(
                 self.loinc_search_url,
-                params={'query': query, 'rows': top_k, 'offset': 0},
+                params={"query": query, "rows": str(top_k), "offset": "0"},
                 auth=HTTPBasicAuth(self.loinc_username, self.loinc_password),
                 timeout=self.api_timeout,
             )
             if response.status_code in (401, 403):
                 logger.error(
                     "LOINC Search API authentication failed (HTTP %s). "
-                    "Check the configured LOINC service credentials."
-                    % response.status_code
+                    "Check the configured LOINC service credentials.",
+                    response.status_code,
                 )
                 return []
             if response.status_code == 400:
-                logger.error(
-                    "LOINC Search API rejected the search request (HTTP 400)."
-                )
+                logger.error("LOINC Search API rejected the search request (HTTP 400).")
                 return []
             response.raise_for_status()
             candidates: list[dict[str, Any]] = []
             for idx, concept in enumerate(self._loinc_results(response.json())[:top_k]):
-                code = self._loinc_value(
-                    concept, "loincNum", "LOINC_NUM", "loincNumber", "code"
-                )
+                code = self._loinc_value(concept, "loincNum", "LOINC_NUM", "loincNumber", "code")
                 if not code:
                     continue
                 term = self._loinc_value(
@@ -181,14 +220,16 @@ class SearchTools:
                 definition = self._loinc_value(
                     concept, "definition", "definitionDescription", "shortName"
                 )
-                candidates.append({
-                    'code': f"LOINC:{code}" if not code.startswith('LOINC:') else code,
-                    'term': term,
-                    'ontology': 'LOINC',
-                    'score': 1.0 - (idx * 0.05),
-                    'definition': definition,
-                    'source': 'LOINC-Search-API',
-                })
+                candidates.append(
+                    {
+                        "code": f"LOINC:{code}" if not code.startswith("LOINC:") else code,
+                        "term": term,
+                        "ontology": "LOINC",
+                        "score": 1.0 - (idx * 0.05),
+                        "definition": definition,
+                        "source": "LOINC-Search-API",
+                    }
+                )
             time.sleep(self.request_delay)
             return candidates
         except requests.exceptions.RequestException as exc:
@@ -206,7 +247,13 @@ class SearchTools:
         if not isinstance(payload, dict):
             return []
         for key in (
-            "results", "Results", "loincs", "docs", "items", "content", "data",
+            "results",
+            "Results",
+            "loincs",
+            "docs",
+            "items",
+            "content",
+            "data",
         ):
             value = payload.get(key)
             if isinstance(value, list):
@@ -227,13 +274,11 @@ class SearchTools:
     def _loinc_value(row: dict[str, Any], *field_names: str) -> str:
         """Read a LOINC field while tolerating case and separator variants."""
         normalized = {
-            ''.join(ch for ch in str(key).lower() if ch.isalnum()): value
+            "".join(ch for ch in str(key).lower() if ch.isalnum()): value
             for key, value in row.items()
         }
         for field_name in field_names:
-            value = normalized.get(
-                ''.join(ch for ch in field_name.lower() if ch.isalnum())
-            )
+            value = normalized.get("".join(ch for ch in field_name.lower() if ch.isalnum()))
             if value is not None and str(value).strip():
                 return str(value).strip()
         return ""
@@ -252,21 +297,21 @@ class SearchTools:
         try:
             response = requests.get(
                 f"{self.rxnav_base_url}/approximateTerm.json",
-                params={'term': query, 'maxEntries': str(max_entries)},
+                params={"term": query, "maxEntries": str(max_entries)},
                 timeout=self.api_timeout,
             )
             response.raise_for_status()
-            atom_list = response.json().get('approximateGroup', {}).get('candidate', [])
+            atom_list = response.json().get("approximateGroup", {}).get("candidate", [])
             if not isinstance(atom_list, list):
                 atom_list = [atom_list] if atom_list else []
 
             grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
             for atom in atom_list:
-                rxcui = (atom.get('rxcui') or '').strip()
+                rxcui = (atom.get("rxcui") or "").strip()
                 if rxcui:
                     grouped[rxcui].append(atom)
 
-            candidates = []
+            candidates: list[dict[str, Any]] = []
             for rxcui, atoms in grouped.items():
                 name = _rxnorm_best_name(atoms)
                 if not name:
@@ -276,15 +321,17 @@ class SearchTools:
                     )
                     continue
                 rank = _rxnorm_best_rank(atoms)
-                candidates.append({
-                    'code': f"RXNORM:{rxcui}",
-                    'term': name,
-                    'score': 1.0 / (1.0 + rank),
-                    'definition': '',
-                    'source': 'RxNav',
-                })
+                candidates.append(
+                    {
+                        "code": f"RXNORM:{rxcui}",
+                        "term": name,
+                        "score": 1.0 / (1.0 + rank),
+                        "definition": "",
+                        "source": "RxNav",
+                    }
+                )
 
-            candidates.sort(key=lambda c: c['score'], reverse=True)
+            candidates.sort(key=lambda c: float(c["score"]), reverse=True)
             time.sleep(self.request_delay)
             return candidates[:top_k]
         except Exception as e:
@@ -296,7 +343,7 @@ class SearchTools:
         try:
             response = requests.get(
                 self.icd10_nih_url,
-                params={'sf': 'code,name', 'terms': query, 'maxList': str(top_k)},
+                params={"sf": "code,name", "terms": query, "maxList": str(top_k)},
                 timeout=self.api_timeout,
             )
             response.raise_for_status()
@@ -305,12 +352,15 @@ class SearchTools:
             if len(data) >= 4 and isinstance(data[3], list):
                 for idx, item in enumerate(data[3][:top_k]):
                     if isinstance(item, list) and len(item) >= 2:
-                        candidates.append({
-                            'code': f"ICD10:{item[0]}",
-                            'term': item[1],
-                            'score': 1.0 - (idx * 0.05),
-                            'definition': '', 'source': 'NIH-ClinicalTables',
-                        })
+                        candidates.append(
+                            {
+                                "code": f"ICD10:{item[0]}",
+                                "term": item[1],
+                                "score": 1.0 - (idx * 0.05),
+                                "definition": "",
+                                "source": "NIH-ClinicalTables",
+                            }
+                        )
             time.sleep(self.request_delay)
             return candidates
         except Exception as e:
@@ -322,42 +372,11 @@ class SearchTools:
     # ------------------------------------------------------------------
 
     def _normalize_code(self, raw_code: str, ontology: str) -> str:
-        raw_code = str(raw_code).replace('_', ':')
-        prefix_map = {
-            'HP': 'HP', 'HPO': 'HP', 'MONDO': 'MONDO', 'NCIT': 'NCIT',
-            'LOINC': 'LOINC', 'ICD10': 'ICD10', 'ICD10CM': 'ICD10',
-            'SNOMEDCT': 'SNOMEDCT', 'SNOMED': 'SNOMEDCT',
-            'RXNORM': 'RXNORM', 'RXCUI': 'RXNORM', 'UO': 'UO',
-        }
-        prefix = prefix_map.get(ontology.upper(), ontology.upper())
-
-        # Strip any existing namespace alias before applying the canonical prefix.
-        # OBO obo_id fields use alias namespaces (e.g. "SNOMED:" for SNOMED concepts)
-        # that differ from our canonical prefix ("SNOMEDCT:").  Without this strip
-        # _normalize_code would prepend the canonical prefix on top of the alias,
-        # producing doubled namespaces like "SNOMEDCT:SNOMED:768500006".
-        # Checking longest alias first prevents "SNOMED" from matching before "SNOMEDCT".
-        aliases = sorted(
-            {k for k, v in prefix_map.items() if v == prefix} | {prefix},
-            key=len, reverse=True,
-        )
-        raw_upper = raw_code.upper()
-        for alias in aliases:
-            ns = f"{alias}:"
-            if raw_upper.startswith(ns.upper()):
-                raw_code = raw_code[len(ns):]
-                break
-
-        if not raw_code.startswith(f"{prefix}:"):
-            if raw_code.startswith(prefix):
-                # Bare prefix without colon separator ("HP0001234" → "HP:0001234")
-                raw_code = raw_code.replace(prefix, f"{prefix}:", 1)
-            else:
-                raw_code = f"{prefix}:{raw_code}"
-        return raw_code
+        return normalize_code_for_ontology(raw_code, ontology)
 
 
 # ── Module-level helpers for search_rxnorm ───────────────────────────────────
+
 
 def _rxnorm_best_name(atoms: list[dict[str, Any]]) -> str:
     """Return the best display name from a group of atoms for the same rxcui.
@@ -367,13 +386,13 @@ def _rxnorm_best_name(atoms: list[dict[str, Any]]) -> str:
     """
     rxnorm_atom_first = sorted(
         atoms,
-        key=lambda a: 0 if a.get('source') == 'RXNORM' else 1,
+        key=lambda a: 0 if a.get("source") == "RXNORM" else 1,
     )
     for atom in rxnorm_atom_first:
-        name = (atom.get('name') or '').strip()
+        name = (atom.get("name") or "").strip()
         if name:
             return name
-    return ''
+    return ""
 
 
 def _rxnorm_best_rank(atoms: list[dict[str, Any]]) -> float:
@@ -381,7 +400,7 @@ def _rxnorm_best_rank(atoms: list[dict[str, Any]]) -> float:
     ranks: list[float] = []
     for atom in atoms:
         try:
-            ranks.append(float(atom.get('rank') or 0))
+            ranks.append(float(atom.get("rank") or 0))
         except (TypeError, ValueError):
             continue
     return min(ranks) if ranks else 0.0

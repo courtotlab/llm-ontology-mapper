@@ -16,6 +16,8 @@ Hard constraints enforced by Python (LLM cannot override):
   - Only QueryPlan with retrieval_mode=DISABLED is accepted.
   - target_ontology_constraint is enforced: the returned ontology must match if
     one is present, unless the result is UNKNOWN/UNMAPPED.
+  - allowed_target_ontologies is enforced: the returned ontology must be in the
+    allow-list when present, unless the result is UNKNOWN/UNMAPPED.
   - Confidence must be in [0, 1]; values outside this range raise an error.
 
 The result is always marked:
@@ -225,9 +227,21 @@ class DisabledMappingRunner:
                         f"the disabled-mode LLM must not return codes outside the "
                         f"constrained ontology."
                     )
-            target_code = raw_code
-            target_term = raw_term
-            ontology = raw_ontology
+            allowed_ontologies = _normalize_allowed_target_ontologies(
+                query_plan.allowed_target_ontologies
+            )
+            if allowed_ontologies is not None and raw_ontology not in allowed_ontologies:
+                target_code = _UNMAPPED_CODE
+                target_term = _UNMAPPED_TERM
+                ontology = _UNMAPPED_ONTOLOGY
+                notes = _append_note(
+                    notes,
+                    "Disabled-mode LLM output used an ontology outside allowed_target_ontologies.",
+                )
+            else:
+                target_code = raw_code
+                target_term = raw_term
+                ontology = raw_ontology
 
         metadata = _build_metadata(
             query_plan=query_plan,
@@ -265,9 +279,7 @@ def _is_unmapped(code: str, term: str, ontology: str) -> bool:
         return True
     if ontology.upper() == "UNKNOWN":
         return True
-    if code.upper() in ("UNMAPPED", "UNKNOWN:UNMAPPED"):
-        return True
-    return False
+    return code.upper() in ("UNMAPPED", "UNKNOWN:UNMAPPED")
 
 
 def _build_query_context(plan: QueryPlan) -> str:
@@ -288,6 +300,8 @@ def _build_query_context(plan: QueryPlan) -> str:
         lines.append(f"- Candidate ontologies: {', '.join(plan.candidate_ontologies)}")
     if plan.preferred_ontology:
         lines.append(f"- Preferred ontology: {plan.preferred_ontology}")
+    if plan.allowed_target_ontologies:
+        lines.append(f"- Allowed target ontologies: {', '.join(plan.allowed_target_ontologies)}")
     if plan.retrieval_disabled_reason:
         lines.append(f"- Retrieval disabled reason: {plan.retrieval_disabled_reason}")
     if plan.reasoning:
@@ -297,13 +311,21 @@ def _build_query_context(plan: QueryPlan) -> str:
 
 def _build_target_constraint_section(plan: QueryPlan) -> str:
     """Return the target-ontology constraint block for the prompt, or empty string."""
-    if not plan.target_ontology_constraint:
+    if not plan.target_ontology_constraint and not plan.allowed_target_ontologies:
         return ""
-    constraint = plan.target_ontology_constraint.upper()
+    if plan.target_ontology_constraint:
+        constraint = plan.target_ontology_constraint.upper()
+        return (
+            f"## Target ontology constraint (HARD)\n"
+            f"You MUST only return a code from the {constraint} ontology. "
+            f"If you cannot map to {constraint}, return UNKNOWN:UNMAPPED.\n\n"
+        )
+
+    allowed = ", ".join(plan.allowed_target_ontologies or [])
     return (
-        f"## Target ontology constraint (HARD)\n"
-        f"You MUST only return a code from the {constraint} ontology. "
-        f"If you cannot map to {constraint}, return UNKNOWN:UNMAPPED.\n\n"
+        f"## Target ontology allow-list (HARD)\n"
+        f"You MUST only return a code from one of these ontologies: {allowed}. "
+        f"If you cannot map to one of them, return UNKNOWN:UNMAPPED.\n\n"
     )
 
 
@@ -336,25 +358,31 @@ def _build_metadata(
             "semantic_type": query_plan.semantic_type,
             "expanded_queries": list(query_plan.expanded_queries),
             "target_ontology_constraint": query_plan.target_ontology_constraint,
+            "allowed_target_ontologies": query_plan.allowed_target_ontologies,
             "preferred_ontology": query_plan.preferred_ontology,
             "reasoning": query_plan.reasoning,
         },
     }
 
     if query_plan.target_ontology_constraint:
-        disabled_info["target_ontology_constraint"] = (
-            query_plan.target_ontology_constraint
-        )
+        disabled_info["target_ontology_constraint"] = query_plan.target_ontology_constraint
+    if query_plan.allowed_target_ontologies is not None:
+        disabled_info["allowed_target_ontologies"] = list(query_plan.allowed_target_ontologies)
 
     rag_debug = RAGDebugInfo(
         query_sent=query_plan.original_term,
         candidates_retrieved=[disabled_info],
         top_k=0,
+        auto_accepted=False,
+        auto_accept_threshold=0.0,
     )
 
     return MappingMetadata(
         model=response_model,
         provider=provider_name,
+        latency_ms=None,
+        prompt_tokens=None,
+        completion_tokens=None,
         rag_debug=rag_debug,
     )
 
@@ -365,3 +393,22 @@ def _strip_fences(text: str) -> str:
     text = re.sub(r"^```(?:json)?\s*\n?", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\n?```\s*$", "", text)
     return text.strip()
+
+
+def _normalize_allowed_target_ontologies(
+    ontologies: list[str] | None,
+) -> set[str] | None:
+    if ontologies is None:
+        return None
+    allowed = {
+        str(ontology or "").upper().strip()
+        for ontology in ontologies
+        if str(ontology or "").strip()
+    }
+    return allowed or None
+
+
+def _append_note(existing: str | None, note: str) -> str:
+    if not existing:
+        return note
+    return f"{note} {existing}"

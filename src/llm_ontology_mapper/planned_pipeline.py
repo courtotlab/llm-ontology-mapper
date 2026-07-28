@@ -11,10 +11,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from llm_ontology_mapper.candidate_merger import CandidateMerger
-from llm_ontology_mapper.candidate_normalizer import CandidateNormalizationError, CandidateNormalizer
+from llm_ontology_mapper.candidate_normalizer import (
+    CandidateNormalizationError,
+    CandidateNormalizer,
+)
 from llm_ontology_mapper.disabled_mapping import DisabledMappingRunner
 from llm_ontology_mapper.llm_reranker import LLMReranker
 from llm_ontology_mapper.local_retriever import LocalSemanticRetriever
@@ -32,6 +33,8 @@ from llm_ontology_mapper.models import (
 from llm_ontology_mapper.public_retriever import PublicOntologyRetriever
 from llm_ontology_mapper.query_planner import QueryPlanner
 from llm_ontology_mapper.retrieval_router import RetrievalRouter
+
+logger = logging.getLogger(__name__)
 
 
 class PlannedPipelineError(Exception):
@@ -76,9 +79,7 @@ class PlannedPipeline:
         self._candidate_merger = candidate_merger or CandidateMerger()
         self._llm_reranker = llm_reranker or LLMReranker(provider)
         self._mapping_result_builder = mapping_result_builder or MappingResultBuilder()
-        self._disabled_mapping_runner = (
-            disabled_mapping_runner or DisabledMappingRunner(provider)
-        )
+        self._disabled_mapping_runner = disabled_mapping_runner or DisabledMappingRunner(provider)
 
     def map_term(
         self,
@@ -87,6 +88,7 @@ class PlannedPipeline:
         source_type: str | None = None,
         clinical_area: str | None = None,
         target_ontology: str | None = None,
+        allowed_target_ontologies: list[str] | None = None,
         retrieval_mode: RetrievalMode | str = RetrievalMode.PUBLIC,
         max_results_per_query: int = 10,
         max_candidates: int | None = None,
@@ -109,6 +111,7 @@ class PlannedPipeline:
             source_label=source_label,
             clinical_area=clinical_area,
             target_ontology=target_ontology,
+            allowed_target_ontologies=allowed_target_ontologies,
             retrieval_mode=mode,
         )
         route_plan = self._route(query_plan)
@@ -128,6 +131,7 @@ class PlannedPipeline:
         merged_candidates = self._merge_candidates(
             normalized_candidates,
             target_ontology_constraint=query_plan.target_ontology_constraint,
+            allowed_target_ontologies=query_plan.allowed_target_ontologies,
             max_candidates=max_candidates,
         )
         rerank_decision = self._rerank(query_plan, merged_candidates)
@@ -161,6 +165,7 @@ class PlannedPipeline:
         source_label: str | None,
         clinical_area: str | None,
         target_ontology: str | None,
+        allowed_target_ontologies: list[str] | None,
         retrieval_mode: RetrievalMode,
     ) -> QueryPlan:
         try:
@@ -169,6 +174,7 @@ class PlannedPipeline:
                 source_label=source_label,
                 clinical_area=clinical_area,
                 target_ontology=target_ontology,
+                allowed_target_ontologies=allowed_target_ontologies,
                 retrieval_mode=retrieval_mode,
             )
         except Exception as exc:
@@ -283,12 +289,14 @@ class PlannedPipeline:
         candidates: list[NormalizedCandidate],
         *,
         target_ontology_constraint: str | None,
+        allowed_target_ontologies: list[str] | None,
         max_candidates: int | None,
     ) -> list[NormalizedCandidate]:
         try:
             return self._candidate_merger.merge(
                 candidates,
                 target_ontology_constraint=target_ontology_constraint,
+                allowed_target_ontologies=allowed_target_ontologies,
                 max_candidates=max_candidates,
             )
         except Exception as exc:
@@ -355,6 +363,7 @@ class PlannedPipeline:
             merged_candidate_count=len(merged_candidates),
             errors=errors,
             selected_candidate_code=selected_code,
+            retrieval_disabled_reason=None,
         )
 
 

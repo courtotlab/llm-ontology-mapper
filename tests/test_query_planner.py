@@ -17,15 +17,11 @@ from llm_ontology_mapper.models import (
     GroundingSource,
     LogicType,
     MappingResult,
-    NormalizedCandidate,
     QueryPlan,
-    RerankDecision,
     RetrievalMode,
-    RetrievalTrace,
 )
 from llm_ontology_mapper.providers import BaseLLMProvider, ChatMessage, CompletionResponse
 from llm_ontology_mapper.query_planner import QueryPlanner, QueryPlanningError
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stub provider
@@ -39,6 +35,7 @@ class _RecordingStubProvider(BaseLLMProvider):
         super().__init__(model=model)
         self._response_content = response_content
         self.calls: list[list[ChatMessage]] = []
+        self.call_kwargs: list[dict[str, Any]] = []
 
     def complete(
         self,
@@ -48,6 +45,13 @@ class _RecordingStubProvider(BaseLLMProvider):
         **kwargs: Any,
     ) -> CompletionResponse:
         self.calls.append(list(messages))
+        self.call_kwargs.append(
+            {
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                **kwargs,
+            }
+        )
         return CompletionResponse(content=self._response_content, model=self.model)
 
 
@@ -55,34 +59,40 @@ class _RecordingStubProvider(BaseLLMProvider):
 # Shared fake LLM responses
 # ─────────────────────────────────────────────────────────────────────────────
 
-_SYS_BP_RESPONSE = json.dumps({
-    "normalized_term": "systolic blood pressure",
-    "expanded_queries": ["systolic blood pressure", "systolic BP"],
-    "inferred_meaning": (
-        "systolic blood pressure — peak arterial pressure during cardiac contraction"
-    ),
-    "semantic_type": "measurement",
-    "candidate_ontologies": ["LOINC", "HPO"],
-    "preferred_ontology": "LOINC",
-    "reasoning": (
-        "sys_bp is a standard clinical abbreviation for systolic blood pressure, "
-        "a vital sign measurement."
-    ),
-    "confidence": 0.95,
-})
+_SYS_BP_RESPONSE = json.dumps(
+    {
+        "normalized_term": "systolic blood pressure",
+        "expanded_queries": ["systolic blood pressure", "systolic BP"],
+        "inferred_meaning": (
+            "systolic blood pressure — peak arterial pressure during cardiac contraction"
+        ),
+        "semantic_type": "measurement",
+        "candidate_ontologies": ["LOINC", "HPO"],
+        "preferred_ontology": "LOINC",
+        "reasoning": (
+            "sys_bp is a standard clinical abbreviation for systolic blood pressure, "
+            "a vital sign measurement."
+        ),
+        "confidence": 0.95,
+    }
+)
 
-_ELEVATED_SBP_RESPONSE = json.dumps({
-    "normalized_term": "elevated systolic blood pressure",
-    "expanded_queries": [
-        "elevated systolic blood pressure", "hypertension", "high blood pressure"
-    ],
-    "inferred_meaning": "abnormally elevated systolic blood pressure, a phenotypic finding",
-    "semantic_type": "phenotype",
-    "candidate_ontologies": ["HPO", "MONDO"],
-    "preferred_ontology": "HPO",
-    "reasoning": "Phrased as an abnormal finding. HPO is appropriate for phenotypic observations.",
-    "confidence": 0.9,
-})
+_ELEVATED_SBP_RESPONSE = json.dumps(
+    {
+        "normalized_term": "elevated systolic blood pressure",
+        "expanded_queries": [
+            "elevated systolic blood pressure",
+            "hypertension",
+            "high blood pressure",
+        ],
+        "inferred_meaning": "abnormally elevated systolic blood pressure, a phenotypic finding",
+        "semantic_type": "phenotype",
+        "candidate_ontologies": ["HPO", "MONDO"],
+        "preferred_ontology": "HPO",
+        "reasoning": "Phrased as an abnormal finding. HPO is appropriate for phenotypic observations.",
+        "confidence": 0.9,
+    }
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -113,6 +123,16 @@ def test_query_planner_calls_provider(sys_bp_stub: _RecordingStubProvider) -> No
     assert len(sys_bp_stub.calls) == 1
     all_content = " ".join(m.content for m in sys_bp_stub.calls[0])
     assert "sys_bp" in all_content
+
+
+@pytest.mark.unit
+def test_query_planner_uses_planning_token_budget(
+    sys_bp_stub: _RecordingStubProvider,
+) -> None:
+    planner = QueryPlanner(sys_bp_stub)
+    planner.plan("sys_bp")
+
+    assert sys_bp_stub.call_kwargs == [{"temperature": 0.1, "max_tokens": 2048}]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -216,6 +236,7 @@ def test_target_ontology_hpo_overrides_loinc(
 
     assert plan.preferred_ontology == "HPO"
     assert plan.target_ontology_constraint == "HPO"
+    assert plan.allowed_target_ontologies == ["HPO"]
     assert plan.candidate_ontologies == ["HPO"]
 
 
@@ -228,6 +249,7 @@ def test_target_ontology_mondo_overrides_loinc(
 
     assert plan.preferred_ontology == "MONDO"
     assert plan.target_ontology_constraint == "MONDO"
+    assert plan.allowed_target_ontologies == ["MONDO"]
     assert plan.candidate_ontologies == ["MONDO"]
 
 
@@ -328,16 +350,18 @@ def test_handles_plain_code_fences() -> None:
 
 @pytest.mark.unit
 def test_fallback_expanded_queries_uses_source_label_when_present() -> None:
-    response = json.dumps({
-        "normalized_term": "systolic blood pressure",
-        "expanded_queries": [],
-        "inferred_meaning": "systolic blood pressure",
-        "semantic_type": "measurement",
-        "candidate_ontologies": ["LOINC"],
-        "preferred_ontology": "LOINC",
-        "reasoning": "abbreviation",
-        "confidence": 0.8,
-    })
+    response = json.dumps(
+        {
+            "normalized_term": "systolic blood pressure",
+            "expanded_queries": [],
+            "inferred_meaning": "systolic blood pressure",
+            "semantic_type": "measurement",
+            "candidate_ontologies": ["LOINC"],
+            "preferred_ontology": "LOINC",
+            "reasoning": "abbreviation",
+            "confidence": 0.8,
+        }
+    )
     planner = QueryPlanner(_RecordingStubProvider(response))
     plan = planner.plan("sys_bp", source_label="Systolic Blood Pressure")
 
@@ -346,16 +370,18 @@ def test_fallback_expanded_queries_uses_source_label_when_present() -> None:
 
 @pytest.mark.unit
 def test_fallback_expanded_queries_uses_source_term_when_no_label() -> None:
-    response = json.dumps({
-        "normalized_term": "systolic blood pressure",
-        "expanded_queries": [],
-        "inferred_meaning": "systolic blood pressure",
-        "semantic_type": "measurement",
-        "candidate_ontologies": ["LOINC"],
-        "preferred_ontology": "LOINC",
-        "reasoning": "abbreviation",
-        "confidence": 0.8,
-    })
+    response = json.dumps(
+        {
+            "normalized_term": "systolic blood pressure",
+            "expanded_queries": [],
+            "inferred_meaning": "systolic blood pressure",
+            "semantic_type": "measurement",
+            "candidate_ontologies": ["LOINC"],
+            "preferred_ontology": "LOINC",
+            "reasoning": "abbreviation",
+            "confidence": 0.8,
+        }
+    )
     planner = QueryPlanner(_RecordingStubProvider(response))
     plan = planner.plan("sys_bp")
 
@@ -473,21 +499,71 @@ def test_target_ontology_absent_uses_llm_candidate_ontologies() -> None:
     assert "LOINC" in plan.candidate_ontologies
     assert "HPO" in plan.candidate_ontologies
     assert plan.target_ontology_constraint is None
+    assert plan.allowed_target_ontologies is None
+
+
+@pytest.mark.unit
+def test_allowed_target_ontologies_filter_planner_candidates() -> None:
+    stub = _RecordingStubProvider(_SYS_BP_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    plan = planner.plan(
+        "sys_bp",
+        allowed_target_ontologies=["MONDO", "HPO"],
+    )
+
+    assert plan.allowed_target_ontologies == ["MONDO", "HPO"]
+    assert plan.target_ontology_constraint is None
+    assert plan.candidate_ontologies == ["HPO"]
+    assert plan.preferred_ontology == "HPO"
+    assert "LOINC" not in plan.candidate_ontologies
+
+
+@pytest.mark.unit
+def test_allowed_target_ontologies_fall_back_when_planner_selects_none() -> None:
+    stub = _RecordingStubProvider(_SYS_BP_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    plan = planner.plan(
+        "sys_bp",
+        allowed_target_ontologies=["MONDO", "NCIT"],
+    )
+
+    assert plan.allowed_target_ontologies == ["MONDO", "NCIT"]
+    assert plan.candidate_ontologies == ["MONDO", "NCIT"]
+    assert plan.preferred_ontology is None
+
+
+@pytest.mark.unit
+def test_allowed_target_ontologies_are_deduplicated_and_blank_filtered() -> None:
+    stub = _RecordingStubProvider(_SYS_BP_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    plan = planner.plan(
+        "sys_bp",
+        allowed_target_ontologies=[" loinc ", "", "LOINC", " hpo "],
+    )
+
+    assert plan.allowed_target_ontologies == ["LOINC", "HPO"]
+    assert plan.candidate_ontologies == ["LOINC", "HPO"]
+    assert plan.preferred_ontology == "LOINC"
 
 
 @pytest.mark.unit
 def test_confidence_clamped_to_valid_range() -> None:
     # LLM returns confidence > 1.0; Python must clamp it.
-    response = json.dumps({
-        "normalized_term": "systolic blood pressure",
-        "expanded_queries": ["systolic blood pressure"],
-        "inferred_meaning": "systolic blood pressure",
-        "semantic_type": "measurement",
-        "candidate_ontologies": ["LOINC"],
-        "preferred_ontology": "LOINC",
-        "reasoning": "test",
-        "confidence": 1.5,
-    })
+    response = json.dumps(
+        {
+            "normalized_term": "systolic blood pressure",
+            "expanded_queries": ["systolic blood pressure"],
+            "inferred_meaning": "systolic blood pressure",
+            "semantic_type": "measurement",
+            "candidate_ontologies": ["LOINC"],
+            "preferred_ontology": "LOINC",
+            "reasoning": "test",
+            "confidence": 1.5,
+        }
+    )
     stub = _RecordingStubProvider(response)
     planner = QueryPlanner(stub)
     plan = planner.plan("sys_bp")

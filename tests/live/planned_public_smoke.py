@@ -5,6 +5,9 @@ OntologyMapper(use_planned_pipeline=True), not AgenticMapper.
 
 Run with:
     uv run python tests/live/planned_public_smoke.py
+
+TARGET_ONTOLOGY accepts one ontology or a comma-separated allow-list, e.g.
+    TARGET_ONTOLOGY = "LOINC,HPO,MONDO"
 """
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ from _planned_smoke_helpers import (
     print_result_summary,
     print_trace_summary,
 )
+
 from llm_ontology_mapper.mapper import OntologyMapper
 from llm_ontology_mapper.planned_pipeline import PlannedPipeline
 from llm_ontology_mapper.providers import OllamaProvider, OpenAIProvider
@@ -36,14 +40,14 @@ __test__ = False
 # =============================================================================
 
 PROVIDER = "openai"  # "openai" or "ollama"
-OPENAI_MODEL = "gpt-5"
+OPENAI_MODEL = "gpt-5.5"
 OLLAMA_MODEL = "gpt-oss:120b"
 OLLAMA_BASE_URL = "http://localhost:11528"
 
-SOURCE_TERM = "sys_bp"
-SOURCE_LABEL = ""
+SOURCE_TERM = "oxygen_sat"
+SOURCE_LABEL = "ovygen saturation"
 CLINICAL_AREA = "measurement"
-TARGET_ONTOLOGY = "LOINC"
+TARGET_ONTOLOGY = "LOINC,HPO"
 RETRIEVAL_MODE = "public"
 
 MAX_RESULTS_PER_QUERY = int(os.environ.get("MAX_RESULTS_PER_QUERY", "6"))
@@ -57,6 +61,26 @@ OVERRIDE_TARGET_ONTOLOGY = "HPO"
 def _optional(value: str) -> str | None:
     value = value.strip()
     return value or None
+
+
+def _target_ontologies(value: str | None) -> list[str] | None:
+    if value is None:
+        return None
+    ontologies: list[str] = []
+    seen: set[str] = set()
+    for item in value.split(","):
+        ontology = item.strip().upper()
+        if ontology and ontology not in seen:
+            ontologies.append(ontology)
+            seen.add(ontology)
+    return ontologies or None
+
+
+def _allowed_ontology_set(target_ontologies: list[str] | None) -> set[str] | None:
+    if target_ontologies is None:
+        return None
+    allowed = {ontology.upper().strip() for ontology in target_ontologies if ontology.strip()}
+    return allowed or None
 
 
 def _build_provider() -> OpenAIProvider | OllamaProvider | None:
@@ -81,44 +105,60 @@ def _is_unmapped(result: object) -> bool:
 # All code prefixes that the public retrieval routes can legitimately emit, derived
 # from search_tools._normalize_code prefix_map and OLS_ONTOLOGY_MAP.
 _KNOWN_CODE_PREFIXES: tuple[str, ...] = (
-    "CHEBI:", "DOID:", "GO:", "HP:", "ICD10:", "LOINC:",
-    "MESH:", "MONDO:", "NCIT:", "RXNORM:", "SNOMEDCT:",
-    "UBERON:", "UO:",
+    "CHEBI:",
+    "DOID:",
+    "GO:",
+    "HP:",
+    "ICD10:",
+    "LOINC:",
+    "MESH:",
+    "MONDO:",
+    "NCIT:",
+    "RXNORM:",
+    "SNOMEDCT:",
+    "UBERON:",
+    "UO:",
 )
 
 
-def _validate_alternatives(result: object) -> None:
+def _validate_alternatives(
+    result: object,
+    *,
+    target_ontologies: list[str] | None,
+) -> None:
     alternatives = getattr(result, "alternatives", [])
     assert len(alternatives) <= MAX_ALTERNATIVES
+    allowed = _allowed_ontology_set(target_ontologies)
 
     for alt in alternatives:
         assert alt.code
         # Guard: bare UMLS CUIs (C0000000) must not leak as ontology codes.
         # Positive check: every legitimate code carries a known ontology prefix.
         assert alt.code.startswith(_KNOWN_CODE_PREFIXES), (
-            f"alt.code lacks a known ontology prefix (raw CUI leak or unknown route?): "
-            f"{alt.code!r}"
+            f"alt.code lacks a known ontology prefix (raw CUI leak or unknown route?): {alt.code!r}"
         )
         # Guard: doubled/embedded namespace (e.g. "SNOMEDCT:SNOMED:768500006") must
         # not appear — the code body after the first ":" must contain no further ":".
         _, _, _body = alt.code.partition(":")
-        assert ":" not in _body, (
-            f"doubled/embedded namespace in alt.code: {alt.code!r}"
-        )
+        assert ":" not in _body, f"doubled/embedded namespace in alt.code: {alt.code!r}"
         assert alt.term
         assert alt.ontology
         assert 0.0 <= alt.confidence <= 1.0
-        assert getattr(alt, "explanation", None), (
-            "each alternative should include an explanation"
-        )
+        assert getattr(alt, "explanation", None), "each alternative should include an explanation"
         if not _is_unmapped(result):
             assert alt.code != result.target_code
+        if allowed is not None:
+            alt_ontology = str(alt.ontology).upper().strip()
+            assert alt_ontology in allowed, (
+                f"Alternative ontology {alt_ontology!r} is outside "
+                f"TARGET_ONTOLOGY allow-list {sorted(allowed)!r}"
+            )
 
 
 def _make_mapper(
     provider: OpenAIProvider | OllamaProvider,
     *,
-    target_ontology: str | None,
+    target_ontologies: list[str] | None,
 ) -> OntologyMapper:
     search_tools = SearchTools(
         api_timeout=15,
@@ -132,7 +172,7 @@ def _make_mapper(
     )
     return OntologyMapper(
         llm_provider=provider,
-        ontologies=[target_ontology] if target_ontology else None,
+        ontologies=target_ontologies,
         use_planned_pipeline=True,
         retrieval_mode=RETRIEVAL_MODE,
         planned_pipeline=pipeline,
@@ -145,14 +185,16 @@ def _print_context(
     *,
     provider_name: str,
     model: str,
-    target_ontology: str | None,
+    target_ontologies: list[str] | None,
 ) -> None:
     context: dict[str, Any] = {
         "provider": provider_name,
         "model": model,
         "source_term": SOURCE_TERM,
         "source_label": _optional(SOURCE_LABEL),
-        "target_ontology": target_ontology,
+        "target_ontology": ",".join(target_ontologies) if target_ontologies else None,
+        "target_ontologies": target_ontologies,
+        "hard_filter_active": target_ontologies is not None,
         "clinical_area": _optional(CLINICAL_AREA),
         "retrieval_mode": RETRIEVAL_MODE,
         "max_results_per_query": MAX_RESULTS_PER_QUERY,
@@ -167,7 +209,7 @@ def _print_context(
 def _run_case(
     provider: OpenAIProvider | OllamaProvider,
     *,
-    target_ontology: str | None,
+    target_ontologies: list[str] | None,
     override_case: bool = False,
 ) -> None:
     provider_name = PROVIDER.strip().lower()
@@ -175,10 +217,10 @@ def _run_case(
     _print_context(
         provider_name=provider_name,
         model=model,
-        target_ontology=target_ontology,
+        target_ontologies=target_ontologies,
     )
 
-    mapper = _make_mapper(provider, target_ontology=target_ontology)
+    mapper = _make_mapper(provider, target_ontologies=target_ontologies)
     result = mapper.map_term(
         source_term=SOURCE_TERM,
         source_label=_optional(SOURCE_LABEL),
@@ -196,25 +238,27 @@ def _run_case(
     print_full_debug_result(result, enabled=SMOKE_DEBUG)
 
     assert 0.0 <= result.confidence <= 1.0, "confidence must be in [0, 1]"
-    _validate_alternatives(result)
+    _validate_alternatives(result, target_ontologies=target_ontologies)
+    assert not any(
+        alternative.confidence > result.confidence for alternative in result.alternatives
+    ), "alternative confidence must not exceed selected result confidence"
 
     if override_case:
-        assert result.ontology in {"HPO", "HP", "UNKNOWN"}, (
-            f"Expected HPO/HP/UNKNOWN in override case, got {result.ontology!r}"
+        allowed = _allowed_ontology_set(target_ontologies) or {"HPO"}
+        assert result.ontology.upper() in {*allowed, "UNKNOWN"}, (
+            f"Expected {sorted(allowed)!r}/UNKNOWN in override case, got {result.ontology!r}"
         )
         assert result.ontology != "LOINC", "HPO override case must not return LOINC"
-    elif target_ontology:
-        expected_ontology = target_ontology.upper()
-        assert result.ontology in {expected_ontology, "UNKNOWN"}, (
-            f"Expected {expected_ontology!r} or UNKNOWN, got {result.ontology!r}"
+    elif target_ontologies:
+        allowed = _allowed_ontology_set(target_ontologies) or set()
+        result_ontology = result.ontology.upper()
+        assert result_ontology in {*allowed, "UNKNOWN"}, (
+            f"Expected one of {sorted(allowed)!r} or UNKNOWN, got {result.ontology!r}"
         )
-        if not _is_unmapped(result) and expected_ontology == "LOINC":
-            term = result.target_term.lower()
-            assert (
-                result.target_code.startswith("LOINC:")
-                or "8480-6" in result.target_code
-                or ("systolic" in term and "blood pressure" in term)
-            ), "Mapped public result does not look like a systolic BP LOINC result"
+        if not _is_unmapped(result) and result_ontology == "LOINC":
+            assert result.target_code.startswith("LOINC:"), (
+                f"LOINC result should use a LOINC code prefix, got {result.target_code!r}"
+            )
     else:
         # No target constraint: the pipeline picks the best-matching ontology freely.
         # Assert the result carries a non-empty ontology string — we don't pin the value.
@@ -233,12 +277,12 @@ def main() -> None:
     if provider is None:
         sys.exit(0)
 
-    _run_case(provider, target_ontology=_optional(TARGET_ONTOLOGY))
+    _run_case(provider, target_ontologies=_target_ontologies(TARGET_ONTOLOGY))
     if RUN_TARGET_OVERRIDE_CASE:
         print("\n--- Running target ontology override case ---")
         _run_case(
             provider,
-            target_ontology=_optional(OVERRIDE_TARGET_ONTOLOGY),
+            target_ontologies=_target_ontologies(OVERRIDE_TARGET_ONTOLOGY),
             override_case=True,
         )
     print("PASS: planned public smoke completed")

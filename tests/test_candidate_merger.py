@@ -10,10 +10,10 @@ Run with:  pytest tests/test_candidate_merger.py -v -m unit
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from llm_ontology_mapper.candidate_merger import CandidateMergeError, CandidateMerger
 from llm_ontology_mapper.models import NormalizedCandidate, RetrievalMode
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Shared factory helper
@@ -149,8 +149,8 @@ def test_no_dedup_same_term_different_code(merger: CandidateMerger) -> None:
 
 @pytest.mark.unit
 def test_no_dedup_same_code_different_ontologies(merger: CandidateMerger) -> None:
-    a = _c(ontology="HPO", code="0012735")
-    b = _c(ontology="LOINC", code="0012735")
+    a = _c(ontology="HPO", code="HP:0012735")
+    b = _c(ontology="LOINC", code="8480-6")
 
     result = merger.merge([a, b])
 
@@ -403,6 +403,74 @@ def test_target_ontology_can_return_empty_list(merger: CandidateMerger) -> None:
     assert result == []
 
 
+@pytest.mark.unit
+def test_allowed_target_ontologies_keep_several_selected_candidates(
+    merger: CandidateMerger,
+) -> None:
+    hpo = _c(code="HP:0012735", ontology="HPO")
+    loinc = _c(code="LOINC:8480-6", ontology="LOINC")
+    mondo = _c(code="MONDO:0000001", ontology="MONDO")
+
+    result = merger.merge(
+        [hpo, loinc, mondo],
+        allowed_target_ontologies=["HPO", "LOINC"],
+    )
+
+    assert {candidate.ontology for candidate in result} == {"HPO", "LOINC"}
+
+
+@pytest.mark.unit
+def test_allowed_target_ontologies_remove_unselected_candidates(
+    merger: CandidateMerger,
+) -> None:
+    hpo = _c(code="HP:0012735", ontology="HPO")
+    loinc = _c(code="LOINC:8480-6", ontology="LOINC")
+
+    result = merger.merge(
+        [hpo, loinc],
+        allowed_target_ontologies=["LOINC"],
+    )
+
+    assert result == [loinc]
+
+
+@pytest.mark.unit
+def test_allowed_target_ontologies_none_is_unrestricted(
+    merger: CandidateMerger,
+) -> None:
+    hpo = _c(code="HP:0012735", ontology="HPO")
+    loinc = _c(code="LOINC:8480-6", ontology="LOINC")
+
+    result = merger.merge(
+        [hpo, loinc],
+        allowed_target_ontologies=None,
+    )
+
+    assert {candidate.ontology for candidate in result} == {"HPO", "LOINC"}
+
+
+@pytest.mark.unit
+def test_hp_candidate_from_mondo_scoped_search_removed_when_only_mondo_allowed(
+    merger: CandidateMerger,
+) -> None:
+    candidate = _c(code="HP:0002099", ontology="HPO", term="Asthma")
+
+    result = merger.merge([candidate], allowed_target_ontologies=["MONDO"])
+
+    assert result == []
+
+
+@pytest.mark.unit
+def test_hp_candidate_from_mondo_scoped_search_remains_when_hpo_allowed(
+    merger: CandidateMerger,
+) -> None:
+    candidate = _c(code="HP:0002099", ontology="HPO", term="Asthma")
+
+    result = merger.merge([candidate], allowed_target_ontologies=["MONDO", "HPO"])
+
+    assert result == [candidate]
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Test 19: max_candidates limits after merge/sort/filter
 # ─────────────────────────────────────────────────────────────────────────────
@@ -411,8 +479,7 @@ def test_target_ontology_can_return_empty_list(merger: CandidateMerger) -> None:
 @pytest.mark.unit
 def test_max_candidates_limits_result(merger: CandidateMerger) -> None:
     candidates = [
-        _c(code=f"HP:{i:07d}", term=f"Term {i}", normalized_score=1.0 - (i * 0.1))
-        for i in range(6)
+        _c(code=f"HP:{i:07d}", term=f"Term {i}", normalized_score=1.0 - (i * 0.1)) for i in range(6)
     ]
 
     result = merger.merge(candidates, max_candidates=3)
@@ -442,12 +509,15 @@ def test_empty_input_returns_empty_list(merger: CandidateMerger) -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("bad_input", [
-    "not a candidate",
-    42,
-    {"code": "HP:0012735", "term": "Cough"},  # raw dict, not NormalizedCandidate
-    None,
-])
+@pytest.mark.parametrize(
+    "bad_input",
+    [
+        "not a candidate",
+        42,
+        {"code": "HP:0012735", "term": "Cough"},  # raw dict, not NormalizedCandidate
+        None,
+    ],
+)
 def test_invalid_input_raises(merger: CandidateMerger, bad_input) -> None:
     valid = _c()
     with pytest.raises(CandidateMergeError, match="NormalizedCandidate"):
@@ -559,8 +629,8 @@ def test_existing_query_planner_imports_unaffected() -> None:
 @pytest.mark.unit
 def test_existing_model_imports_unaffected() -> None:
     from llm_ontology_mapper.models import (
-        MappingResult,
         LogicType,
+        MappingResult,
         QueryPlan,
         RetrievalMode,
     )
@@ -638,7 +708,7 @@ def test_merged_candidate_is_frozen(merger: CandidateMerger) -> None:
 
     result = merger.merge([a, b])
 
-    with pytest.raises(Exception):  # Pydantic frozen ValidationError
+    with pytest.raises(ValidationError):
         result[0].code = "CHANGED"  # type: ignore[misc]
 
 
@@ -695,10 +765,19 @@ def test_normalizer_and_merger_integration(merger: CandidateMerger) -> None:
     normalizer = CandidateNormalizer()
 
     raw_candidates = [
-        {"code": "HP:0012735", "term": "Cough", "score": 0.9,
-         "definition": "A cough.", "source": "OLS"},
-        {"code": "HP:0012735", "term": "Cough",  # duplicate from second query
-         "score": 0.75, "source": "OLS"},
+        {
+            "code": "HP:0012735",
+            "term": "Cough",
+            "score": 0.9,
+            "definition": "A cough.",
+            "source": "OLS",
+        },
+        {
+            "code": "HP:0012735",
+            "term": "Cough",  # duplicate from second query
+            "score": 0.75,
+            "source": "OLS",
+        },
         {"code": "HP:0001250", "term": "Seizure", "score": 0.85, "source": "OLS"},
     ]
 

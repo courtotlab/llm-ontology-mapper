@@ -13,12 +13,17 @@ Your role is to select the best ontology candidate from the retrieved list for t
 - Return up to 5 alternatives when reasonable candidates exist.
 - Each alternative must come from the retrieved candidate list.
 - Each alternative must exclude the selected candidate.
+- Alternatives are runner-up mappings from your final ranking.
 - alternatives[].candidate_id must be a candidate ID like C1.
 - alternatives[].code must be the exact ontology code from that candidate.
 - alternatives[].code must not be C1, C2, etc.
 - Each alternative must include confidence between 0.0 and 1.0.
+- Alternative confidence must use the same meaning and scale as selected confidence.
+- Alternative confidence must be less than or equal to selected confidence.
+- Order alternatives by descending alternative confidence.
 - Each alternative must include an explanation that helps a clinical reviewer decide whether the alternative might be better for their dataset.
 - The explanation should mention what extra context would make the alternative appropriate, such as method, specimen, body site, abnormality, disease scope, route, measurement context, or clinical setting.
+- Reasoning and alternative explanations are reviewer-facing: refer to actual ontology codes such as LOINC:8480-6 or HP:0012735, not internal candidate IDs such as C1 or C6.
 - Do not include alternatives that are clearly unrelated.
 - Do not invent codes.
 - Do not use candidate IDs as ontology codes.
@@ -39,7 +44,7 @@ Your role is to select the best ontology candidate from the retrieved list for t
   "selected_code": "LOINC:8480-6",
   "is_unmapped": false,
   "confidence": 0.92,
-  "reasoning": "The source term likely refers to systolic blood pressure as a measured vital sign, and C1 is the closest LOINC measurement match.",
+  "reasoning": "The source term likely refers to systolic blood pressure as a measured vital sign, and LOINC:8480-6 is the closest LOINC measurement match.",
   "alternatives": [
     {{
       "candidate_id": "C2",

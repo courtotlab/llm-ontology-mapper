@@ -41,13 +41,11 @@ from typing import Any
 
 import pytest
 
-pytestmark = pytest.mark.unit
-
 from llm_ontology_mapper.models import (
+    GroundingSource,
     QueryPlan,
     RetrievalMode,
     RetrievalRoutePlan,
-    GroundingSource,
 )
 from llm_ontology_mapper.public_retriever import (
     PublicOntologyRetriever,
@@ -55,6 +53,7 @@ from llm_ontology_mapper.public_retriever import (
     _route_name,
 )
 
+pytestmark = pytest.mark.unit
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FakeSearchTools
@@ -134,16 +133,42 @@ def _public_plan(**kwargs: Any) -> QueryPlan:
         preferred_ontology=kwargs.get("preferred_ontology"),
         candidate_ontologies=kwargs.get("candidate_ontologies", []),
         target_ontology_constraint=kwargs.get("target_ontology_constraint"),
+        allowed_target_ontologies=kwargs.get("allowed_target_ontologies"),
         inferred_meaning=kwargs.get("inferred_meaning"),
         original_label=kwargs.get("original_label"),
         normalized_term=kwargs.get("normalized_term"),
     )
 
 
-_OLS_CANDIDATE = {"code": "HP:0012735", "term": "Cough", "score": 0.95, "definition": "", "source": "OLS"}
-_LOINC_CANDIDATE = {"code": "LOINC:8480-6", "term": "Systolic BP", "score": 0.90, "definition": "", "source": "LOINC-Search-API", "ontology": "LOINC"}
-_RXNORM_CANDIDATE = {"code": "RXNORM:1049502", "term": "Acetaminophen", "score": 0.85, "definition": "", "source": "RxNav"}
-_ICD_CANDIDATE = {"code": "ICD10:J06.9", "term": "Acute upper respiratory infection", "score": 0.80, "definition": "", "source": "NIH-ClinicalTables"}
+_OLS_CANDIDATE = {
+    "code": "HP:0012735",
+    "term": "Cough",
+    "score": 0.95,
+    "definition": "",
+    "source": "OLS",
+}
+_LOINC_CANDIDATE = {
+    "code": "LOINC:8480-6",
+    "term": "Systolic BP",
+    "score": 0.90,
+    "definition": "",
+    "source": "LOINC-Search-API",
+    "ontology": "LOINC",
+}
+_RXNORM_CANDIDATE = {
+    "code": "RXNORM:1049502",
+    "term": "Acetaminophen",
+    "score": 0.85,
+    "definition": "",
+    "source": "RxNav",
+}
+_ICD_CANDIDATE = {
+    "code": "ICD10:J06.9",
+    "term": "Acute upper respiratory infection",
+    "score": 0.80,
+    "definition": "",
+    "source": "NIH-ClinicalTables",
+}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -308,8 +333,8 @@ def test_target_ontology_constraint_enforced() -> None:
     retriever = PublicOntologyRetriever(search_tools=fake)
     plan = _public_plan(
         expanded_queries=["systolic blood pressure"],
-        preferred_ontology="HPO",          # overridden by constraint
-        candidate_ontologies=["MONDO"],    # also overridden
+        preferred_ontology="HPO",  # overridden by constraint
+        candidate_ontologies=["MONDO"],  # also overridden
         target_ontology_constraint="LOINC",
     )
     retriever.retrieve(plan)
@@ -338,6 +363,44 @@ def test_target_ontology_constraint_routes_exclusively() -> None:
     # MONDO and NCIT must NOT have been searched
     assert "MONDO" not in ontologies_searched
     assert "NCIT" not in ontologies_searched
+
+
+def test_allowed_target_ontologies_search_multiple_public_routes() -> None:
+    fake = FakeSearchTools(
+        ols_returns=[_OLS_CANDIDATE],
+        loinc_returns=[_LOINC_CANDIDATE],
+    )
+    retriever = PublicOntologyRetriever(search_tools=fake)
+    plan = _public_plan(
+        expanded_queries=["blood pressure"],
+        preferred_ontology=None,
+        candidate_ontologies=["LOINC", "HPO", "MONDO"],
+        allowed_target_ontologies=["LOINC", "HPO"],
+    )
+
+    retriever.retrieve(plan)
+
+    assert [name for name, _ in fake.calls] == ["search_loinc", "search_ols"]
+    assert fake.calls[1][1]["ontology"] == "HPO"
+
+
+def test_allowed_target_ontologies_remove_unselected_public_routes() -> None:
+    fake = FakeSearchTools(
+        ols_returns=[_OLS_CANDIDATE],
+        loinc_returns=[_LOINC_CANDIDATE],
+    )
+    retriever = PublicOntologyRetriever(search_tools=fake)
+    plan = _public_plan(
+        expanded_queries=["blood pressure"],
+        preferred_ontology="LOINC",
+        candidate_ontologies=["HPO", "MONDO"],
+        allowed_target_ontologies=["HPO"],
+    )
+
+    retriever.retrieve(plan)
+
+    assert [name for name, _ in fake.calls] == ["search_ols"]
+    assert fake.calls[0][1]["ontology"] == "HPO"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -585,7 +648,14 @@ def test_results_include_retrieval_mode_public() -> None:
 
 
 def test_results_preserve_original_fields() -> None:
-    original = {"code": "HP:0012735", "term": "Cough", "score": 0.95, "definition": "a cough", "source": "OLS", "iri": "http://purl.obolibrary.org/obo/HP_0012735"}
+    original = {
+        "code": "HP:0012735",
+        "term": "Cough",
+        "score": 0.95,
+        "definition": "a cough",
+        "source": "OLS",
+        "iri": "http://purl.obolibrary.org/obo/HP_0012735",
+    }
     fake = FakeSearchTools(ols_returns=[original])
     retriever = PublicOntologyRetriever(search_tools=fake)
     plan = _public_plan(preferred_ontology="HPO")
@@ -606,15 +676,29 @@ def test_results_preserve_original_fields() -> None:
 
 
 def test_multiple_queries_produce_combined_results() -> None:
-    ols_result_a = {"code": "HP:0012735", "term": "Cough", "score": 0.95, "definition": "", "source": "OLS"}
-    ols_result_b = {"code": "HP:0002110", "term": "Bronchiectasis", "score": 0.80, "definition": "", "source": "OLS"}
+    ols_result_a = {
+        "code": "HP:0012735",
+        "term": "Cough",
+        "score": 0.95,
+        "definition": "",
+        "source": "OLS",
+    }
+    ols_result_b = {
+        "code": "HP:0002110",
+        "term": "Bronchiectasis",
+        "score": 0.80,
+        "definition": "",
+        "source": "OLS",
+    }
 
     call_index = [0]
     responses = [[ols_result_a], [ols_result_b]]
 
     class SequentialFake(FakeSearchTools):
         def search_ols(self, query: str, ontology: str, top_k: int = 10) -> list[dict[str, Any]]:
-            self.calls.append(("search_ols", {"query": query, "ontology": ontology, "top_k": top_k}))
+            self.calls.append(
+                ("search_ols", {"query": query, "ontology": ontology, "top_k": top_k})
+            )
             result = responses[call_index[0]]
             call_index[0] = min(call_index[0] + 1, len(responses) - 1)
             return result
@@ -674,7 +758,7 @@ def test_searchtools_loinc_exception_raises_public_retrieval_error() -> None:
 
 
 def test_searchtools_rxnorm_exception_raises_public_retrieval_error() -> None:
-    fake = FakeSearchTools(raise_on="search_rxnorm", raise_exc=IOError("RxNav down"))
+    fake = FakeSearchTools(raise_on="search_rxnorm", raise_exc=OSError("RxNav down"))
     retriever = PublicOntologyRetriever(search_tools=fake)
     plan = _public_plan(
         expanded_queries=["acetaminophen"],
@@ -703,6 +787,7 @@ def test_searchtools_icd10_exception_raises_public_retrieval_error() -> None:
 def test_no_both_mode_introduced() -> None:
     """PublicOntologyRetriever must not accept any mode other than PUBLIC."""
     from llm_ontology_mapper.models import RetrievalMode
+
     accepted_modes = [RetrievalMode.PUBLIC]
     rejected_modes = [RetrievalMode.LOCAL, RetrievalMode.DISABLED]
     fake = FakeSearchTools()
@@ -877,7 +962,9 @@ def test_route_name_helper_ols_default() -> None:
 
 
 def test_importable_from_package() -> None:
-    from llm_ontology_mapper import PublicOntologyRetriever as POR, PublicRetrievalError as PRE  # noqa: F401
+    from llm_ontology_mapper import PublicOntologyRetriever as POR  # noqa: F401
+    from llm_ontology_mapper import PublicRetrievalError as PRE
+
     assert POR is PublicOntologyRetriever
     assert PRE is PublicRetrievalError
 
@@ -916,6 +1003,7 @@ def test_max_results_per_query_forwarded_to_ols() -> None:
 
 def test_results_are_raw_dicts_not_normalized_candidates() -> None:
     from llm_ontology_mapper.models import NormalizedCandidate
+
     fake = FakeSearchTools(ols_returns=[_OLS_CANDIDATE])
     retriever = PublicOntologyRetriever(search_tools=fake)
     plan = _public_plan(preferred_ontology="HPO")

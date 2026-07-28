@@ -46,12 +46,10 @@ from typing import Any
 
 import pytest
 
-pytestmark = pytest.mark.unit
-
 from llm_ontology_mapper.local_retriever import (
+    _SAPBERT_INDEX_MAP,
     LocalRetrievalError,
     LocalSemanticRetriever,
-    _SAPBERT_INDEX_MAP,
 )
 from llm_ontology_mapper.models import (
     GroundingSource,
@@ -60,6 +58,7 @@ from llm_ontology_mapper.models import (
     RetrievalRoutePlan,
 )
 
+pytestmark = pytest.mark.unit
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FakeClient
@@ -125,6 +124,7 @@ def _local_plan(**kwargs: Any) -> QueryPlan:
         preferred_ontology=kwargs.get("preferred_ontology"),
         candidate_ontologies=kwargs.get("candidate_ontologies", []),
         target_ontology_constraint=kwargs.get("target_ontology_constraint"),
+        allowed_target_ontologies=kwargs.get("allowed_target_ontologies"),
         inferred_meaning=kwargs.get("inferred_meaning"),
         original_label=kwargs.get("original_label"),
         normalized_term=kwargs.get("normalized_term"),
@@ -325,7 +325,7 @@ def test_target_ontology_constraint_overrides_preferred_and_candidates() -> None
     retriever = LocalSemanticRetriever(client=fake)
     plan = _local_plan(
         expanded_queries=["cough"],
-        preferred_ontology="MONDO",   # overridden
+        preferred_ontology="MONDO",  # overridden
         candidate_ontologies=["NCIT"],  # overridden
         target_ontology_constraint="HPO",
     )
@@ -353,6 +353,36 @@ def test_target_ontology_constraint_sent_in_payload() -> None:
     _, ontology_sent, _ = fake.calls[0]
     # LOINC → LOINC in _SAPBERT_INDEX_MAP
     assert ontology_sent == "LOINC"
+
+
+def test_allowed_target_ontologies_search_multiple_local_indices() -> None:
+    fake = FakeClient(returns=[_SAPBERT_CANDIDATE])
+    retriever = LocalSemanticRetriever(client=fake)
+    plan = _local_plan(
+        expanded_queries=["blood pressure"],
+        preferred_ontology=None,
+        candidate_ontologies=["LOINC", "HPO", "MONDO"],
+        allowed_target_ontologies=["LOINC", "HPO"],
+    )
+
+    retriever.retrieve(plan)
+
+    assert [ontology for _, ontology, _ in fake.calls] == ["LOINC", "HPO"]
+
+
+def test_allowed_target_ontologies_remove_unselected_local_indices() -> None:
+    fake = FakeClient(returns=[_SAPBERT_CANDIDATE])
+    retriever = LocalSemanticRetriever(client=fake)
+    plan = _local_plan(
+        expanded_queries=["blood pressure"],
+        preferred_ontology="LOINC",
+        candidate_ontologies=["HPO", "MONDO"],
+        allowed_target_ontologies=["HPO"],
+    )
+
+    retriever.retrieve(plan)
+
+    assert [ontology for _, ontology, _ in fake.calls] == ["HPO"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -442,8 +472,20 @@ def test_no_ontology_triggers_broad_search() -> None:
 
 
 def test_multiple_queries_produce_combined_results() -> None:
-    candidate_a = {"code": "HP:0012735", "term": "Cough", "score": 0.93, "definition": "", "source": "SapBERT"}
-    candidate_b = {"code": "HP:0002110", "term": "Bronchiectasis", "score": 0.80, "definition": "", "source": "SapBERT"}
+    candidate_a = {
+        "code": "HP:0012735",
+        "term": "Cough",
+        "score": 0.93,
+        "definition": "",
+        "source": "SapBERT",
+    }
+    candidate_b = {
+        "code": "HP:0002110",
+        "term": "Bronchiectasis",
+        "score": 0.80,
+        "definition": "",
+        "source": "SapBERT",
+    }
 
     responses = [candidate_a, candidate_b]
     call_idx = [0]
@@ -631,9 +673,7 @@ def test_empty_client_results_return_empty_list() -> None:
 
 def test_malformed_response_raises_local_retrieval_error() -> None:
     """Client raises LocalRetrievalError for malformed SapBERT responses."""
-    fake = FakeClient(
-        raise_exc=LocalRetrievalError("SapBERT response missing 'results' key")
-    )
+    fake = FakeClient(raise_exc=LocalRetrievalError("SapBERT response missing 'results' key"))
     retriever = LocalSemanticRetriever(client=fake)
     plan = _local_plan(preferred_ontology="HPO")
     with pytest.raises(LocalRetrievalError, match="results"):
@@ -662,15 +702,17 @@ def test_no_public_apis_called() -> None:
 def test_search_tools_not_used() -> None:
     """LocalSemanticRetriever must not import SearchTools."""
     import llm_ontology_mapper.local_retriever as lr_module
+
     # SearchTools must not be imported into the local_retriever module namespace
     assert not hasattr(lr_module, "SearchTools")
-    from llm_ontology_mapper.search_tools import SearchTools
+
     assert "SearchTools" not in lr_module.__dict__
 
 
 def test_public_ontology_retriever_not_used() -> None:
     """LocalSemanticRetriever must not import PublicOntologyRetriever."""
     import llm_ontology_mapper.local_retriever as lr_module
+
     assert not hasattr(lr_module, "PublicOntologyRetriever")
     assert "PublicOntologyRetriever" not in lr_module.__dict__
 
@@ -849,6 +891,7 @@ def test_route_plan_candidate_ontologies_override_query_plan() -> None:
 
 def test_results_are_raw_dicts_not_normalized_candidates() -> None:
     from llm_ontology_mapper.models import NormalizedCandidate
+
     fake = FakeClient(returns=[_SAPBERT_CANDIDATE])
     retriever = LocalSemanticRetriever(client=fake)
     plan = _local_plan(preferred_ontology="HPO")
@@ -865,13 +908,19 @@ def test_results_are_raw_dicts_not_normalized_candidates() -> None:
 
 def test_importable_from_package() -> None:
     from llm_ontology_mapper import (
-        LocalSemanticRetriever as LSR,
         LocalRetrievalError as LRE,
+    )
+    from llm_ontology_mapper import (
+        LocalSemanticRetriever as LSR,
+    )
+    from llm_ontology_mapper import (
         SapBERTClient as SBC,
     )
+
     assert LSR is LocalSemanticRetriever
     assert LRE is LocalRetrievalError
     from llm_ontology_mapper.local_retriever import SapBERTClient
+
     assert SBC is SapBERTClient
 
 

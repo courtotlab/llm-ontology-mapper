@@ -21,6 +21,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from llm_ontology_mapper.ontology_identity import (
+    normalize_code_for_ontology,
+    validate_candidate_identity,
+)
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Enumerations
 # ─────────────────────────────────────────────────────────────────────────────
@@ -48,16 +53,16 @@ class LogicType(str, Enum):
 class OntologyPrefix(str, Enum):
     """Supported ontology namespaces."""
 
-    HPO    = "HPO"      # Human Phenotype Ontology  → HP:XXXXXXX
-    MONDO  = "MONDO"    # Mondo Disease Ontology     → MONDO:XXXXXXX
-    NCIT   = "NCIT"     # NCI Thesaurus              → NCIT:CXXXXXX
-    LOINC  = "LOINC"    # LOINC                      → bare numeric code
-    UO     = "UO"       # Units of Measurement       → UO:XXXXXXX
-    ICD10  = "ICD10"    # ICD-10-CM                  → alpha-numeric
-    CHEBI  = "CHEBI"    # Chemical Entities          → CHEBI:XXXXXXX
-    SNOMED = "SNOMED"   # SNOMED CT                  → numeric SCTID
-    RXNORM = "RxNorm"   # RxNorm                     → numeric RxCUI
-    OTHER  = "OTHER"    # Any ontology not in the list above
+    HPO = "HPO"  # Human Phenotype Ontology  → HP:XXXXXXX
+    MONDO = "MONDO"  # Mondo Disease Ontology     → MONDO:XXXXXXX
+    NCIT = "NCIT"  # NCI Thesaurus              → NCIT:CXXXXXX
+    LOINC = "LOINC"  # LOINC                      → bare numeric code
+    UO = "UO"  # Units of Measurement       → UO:XXXXXXX
+    ICD10 = "ICD10"  # ICD-10-CM                  → alpha-numeric
+    CHEBI = "CHEBI"  # Chemical Entities          → CHEBI:XXXXXXX
+    SNOMED = "SNOMED"  # SNOMED CT                  → numeric SCTID
+    RXNORM = "RxNorm"  # RxNorm                     → numeric RxCUI
+    OTHER = "OTHER"  # Any ontology not in the list above
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -71,18 +76,21 @@ class AlternativeMapping(BaseModel):
     code: str = Field(..., description="Ontology CURIE or bare code, e.g. 'HP:0002110'")
     term: str = Field(..., description="Human-readable label for the code")
     ontology: str = Field(..., description="Ontology prefix (HPO, MONDO, …)")
-    confidence: float = Field(
-        ..., ge=0.0, le=1.0,
-        description="Confidence score in [0, 1]"
-    )
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score in [0, 1]")
     source: Literal["llm", "rag", "direct", "agentic"] = Field(
-        "llm",
-        description="How this alternative was generated"
+        "llm", description="How this alternative was generated"
     )
     explanation: str | None = Field(
         None,
         description="Plain-language explanation of when this alternative may fit",
     )
+
+    @model_validator(mode="after")
+    def validate_code_namespace(self) -> AlternativeMapping:
+        validation = validate_candidate_identity(ontology=self.ontology, code=self.code)
+        if not validation.valid:
+            raise ValueError(validation.reason or "alternative ontology/code mismatch")
+        return self
 
     model_config = {"frozen": True}
 
@@ -98,12 +106,11 @@ class RAGDebugInfo(BaseModel):
     query_sent: str = Field(..., description="Exact query string forwarded to the retriever")
     candidates_retrieved: list[dict[str, Any]] = Field(
         default_factory=list,
-        description="Raw candidate list returned by the retriever (code, term, score)"
+        description="Raw candidate list returned by the retriever (code, term, score)",
     )
     top_k: int = Field(..., description="Number of candidates requested")
     auto_accepted: bool = Field(
-        False,
-        description="True when the top candidate exceeded auto-accept threshold"
+        False, description="True when the top candidate exceeded auto-accept threshold"
     )
     auto_accept_threshold: float = Field(0.0, ge=0.0, le=1.0)
 
@@ -118,17 +125,20 @@ class MappingMetadata(BaseModel):
     """
 
     model: str = Field(..., description="LLM model identifier used (e.g. 'gpt-4o')")
-    provider: str = Field(..., description="LLM provider (openai / anthropic / ollama / github / azure)")
+    provider: str = Field(
+        ..., description="LLM provider (openai / anthropic / ollama / github / azure)"
+    )
     latency_ms: float | None = Field(None, description="Wall-clock time for the mapping call in ms")
     timestamp: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
-        description="UTC timestamp of when the mapping was produced"
+        description="UTC timestamp of when the mapping was produced",
     )
     prompt_tokens: int | None = Field(None, description="Prompt token count (when available)")
-    completion_tokens: int | None = Field(None, description="Completion token count (when available)")
+    completion_tokens: int | None = Field(
+        None, description="Completion token count (when available)"
+    )
     rag_debug: RAGDebugInfo | None = Field(
-        None,
-        description="RAG diagnostic info; None when RAG was not used"
+        None, description="RAG diagnostic info; None when RAG was not used"
     )
 
     model_config = {"frozen": True}
@@ -161,57 +171,44 @@ class MappingResult(BaseModel):
     # ── Input side ────────────────────────────────────────────────────────────
 
     source_term: str = Field(
-        ...,
-        description="Original field name or clinical label from the source data dictionary"
+        ..., description="Original field name or clinical label from the source data dictionary"
     )
     source_label: str | None = Field(
-        None,
-        description="Human-readable label / question text for the source field"
+        None, description="Human-readable label / question text for the source field"
     )
     source_type: str | None = Field(
-        None,
-        description="Data type hint from the source schema (radio, text, integer, …)"
+        None, description="Data type hint from the source schema (radio, text, integer, …)"
     )
 
     # ── Output side ───────────────────────────────────────────────────────────
 
     target_code: str = Field(
         ...,
-        description="Ontology CURIE, e.g. 'HP:0002110', 'MONDO:0005180'. Bare codes are auto-normalised to PREFIX:code."
+        description="Ontology CURIE, e.g. 'HP:0002110', 'MONDO:0005180'. Bare codes are auto-normalised to PREFIX:code.",
     )
-    target_term: str = Field(
-        ...,
-        description="Official label for the mapped ontology code"
-    )
-    ontology: str = Field(
-        ...,
-        description="Ontology namespace (HPO, MONDO, NCIT, LOINC, …)"
-    )
+    target_term: str = Field(..., description="Official label for the mapped ontology code")
+    ontology: str = Field(..., description="Ontology namespace (HPO, MONDO, NCIT, LOINC, …)")
 
     # ── Quality indicators ────────────────────────────────────────────────────
 
     confidence: float = Field(
-        ..., ge=0.0, le=1.0,
-        description="Aggregate confidence score in [0, 1]"
+        ..., ge=0.0, le=1.0, description="Aggregate confidence score in [0, 1]"
     )
     logic_type: LogicType = Field(
-        ...,
-        description="Strategy that produced this mapping (llm / rag / direct / hybrid)"
+        ..., description="Strategy that produced this mapping (llm / rag / direct / hybrid)"
     )
 
     # ── Supporting detail ─────────────────────────────────────────────────────
 
     alternatives: list[AlternativeMapping] = Field(
         default_factory=list,
-        description="Ordered list of runner-up mappings (descending confidence)"
+        description="Ordered list of runner-up mappings (descending confidence)",
     )
     notes: str | None = Field(
-        None,
-        description="Free-text notes from the LLM (caveats, ambiguity warnings, …)"
+        None, description="Free-text notes from the LLM (caveats, ambiguity warnings, …)"
     )
     metadata: MappingMetadata | None = Field(
-        None,
-        description="Provenance — model, provider, latency, RAG debug info"
+        None, description="Provenance — model, provider, latency, RAG debug info"
     )
 
     # ── Validators ────────────────────────────────────────────────────────────
@@ -232,7 +229,10 @@ class MappingResult(BaseModel):
     def normalise_and_sort(self) -> MappingResult:
         """Normalise target_code to CURIE and sort alternatives by confidence."""
         if ":" not in self.target_code:
-            self.target_code = f"{self.ontology}:{self.target_code}"
+            self.target_code = normalize_code_for_ontology(self.target_code, self.ontology)
+        validation = validate_candidate_identity(ontology=self.ontology, code=self.target_code)
+        if not validation.valid:
+            raise ValueError(validation.reason or "target ontology/code mismatch")
         self.alternatives.sort(key=lambda a: a.confidence, reverse=True)
         return self
 
@@ -251,34 +251,34 @@ class MappingResult(BaseModel):
         PCGL mapper code that unpacks these dicts continues to work unchanged.
         """
         return {
-            "source_field":        self.source_term,
-            "source_label":        self.source_label,
-            "source_type":         self.source_type,
-            "code":                self.target_code,
-            "term":                self.target_term,
-            "ontology":            self.ontology,
-            "confidence":          self.confidence,
-            "alternatives":        [a.model_dump() for a in self.alternatives],
-            "notes":               self.notes,
+            "source_field": self.source_term,
+            "source_label": self.source_label,
+            "source_type": self.source_type,
+            "code": self.target_code,
+            "term": self.target_term,
+            "ontology": self.ontology,
+            "confidence": self.confidence,
+            "alternatives": [a.model_dump() for a in self.alternatives],
+            "notes": self.notes,
         }
 
     model_config = {
-        "frozen": False,          # allow metadata to be attached after construction
-        "populate_by_name": True, # accept both alias and field name during construction
+        "frozen": False,  # allow metadata to be attached after construction
+        "populate_by_name": True,  # accept both alias and field name during construction
         "json_schema_extra": {
             "examples": [
                 {
-                    "source_term":  "cough",
+                    "source_term": "cough",
                     "source_label": "Do you have a cough?",
-                    "source_type":  "radio",
-                    "target_code":  "HP:0012735",
-                    "target_term":  "Cough",
-                    "ontology":     "HPO",
-                    "confidence":   0.92,
-                    "logic_type":   "rag",
+                    "source_type": "radio",
+                    "target_code": "HP:0012735",
+                    "target_term": "Cough",
+                    "ontology": "HPO",
+                    "confidence": 0.92,
+                    "logic_type": "rag",
                     "alternatives": [],
-                    "notes":        None,
-                    "metadata":     None,
+                    "notes": None,
+                    "metadata": None,
                 }
             ]
         },
@@ -296,9 +296,7 @@ class MappingBatch(BaseModel):
     study_id: str | None = Field(None, description="Source study identifier")
     entity_type: str | None = Field(None, description="Entity type (phenotype, diagnosis, …)")
     results: list[MappingResult] = Field(default_factory=list)
-    produced_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    produced_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property
     def high_confidence(self) -> list[MappingResult]:
@@ -325,17 +323,17 @@ class RetrievalMode(str, Enum):
     Exactly three values are supported; there is no user-facing 'both' mode.
     """
 
-    PUBLIC   = "public"    # public ontology database retrieval
-    LOCAL    = "local"     # local semantic retrieval (e.g. SapBERT / FAISS)
+    PUBLIC = "public"  # public ontology database retrieval
+    LOCAL = "local"  # local semantic retrieval (e.g. SapBERT / FAISS)
     DISABLED = "disabled"  # no retrieval; LLM-only / ungrounded
 
 
 class GroundingSource(str, Enum):
     """Where retrieval grounding candidates originated."""
 
-    PUBLIC_API    = "public_api"     # public ontology APIs (OLS, LOINC, RxNav, …)
+    PUBLIC_API = "public_api"  # public ontology APIs (OLS, LOINC, RxNav, …)
     LOCAL_SAPBERT = "local_sapbert"  # local SapBERT / FAISS index
-    NONE          = "none"           # no grounding (disabled mode or unmapped)
+    NONE = "none"  # no grounding (disabled mode or unmapped)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -366,6 +364,10 @@ class QueryPlan(BaseModel):
         None,
         description="Preferred ontology when planner confidence is high",
     )
+    allowed_target_ontologies: list[str] | None = Field(
+        None,
+        description="Caller-selected ontology allow-list; None means unrestricted",
+    )
     retrieval_mode: RetrievalMode = Field(
         RetrievalMode.PUBLIC,
         description="User-facing Layer 2 mode: public, local, or disabled",
@@ -380,7 +382,9 @@ class QueryPlan(BaseModel):
     )
     reasoning: str | None = Field(None, description="Short explanation of the plan")
     confidence: float = Field(
-        0.0, ge=0.0, le=1.0,
+        0.0,
+        ge=0.0,
+        le=1.0,
         description="Planner confidence in the interpretation, in [0, 1]",
     )
 
@@ -390,6 +394,23 @@ class QueryPlan(BaseModel):
         if not v.strip():
             raise ValueError("original_term must not be blank")
         return v.strip()
+
+    @field_validator("allowed_target_ontologies")
+    @classmethod
+    def normalise_allowed_target_ontologies(
+        cls,
+        v: list[str] | None,
+    ) -> list[str] | None:
+        if v is None:
+            return None
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for ontology in v:
+            text = str(ontology or "").upper().strip()
+            if text and text not in seen:
+                normalized.append(text)
+                seen.add(text)
+        return normalized or None
 
     # ── Derived routing helpers ───────────────────────────────────────────────
 
@@ -472,6 +493,22 @@ class NormalizedCandidate(BaseModel):
             raise ValueError("normalized_score must be between 0.0 and 1.0")
         return v
 
+    @model_validator(mode="after")
+    def validate_code_namespace(self) -> NormalizedCandidate:
+        validation = validate_candidate_identity(
+            ontology=self.ontology,
+            code=self.code,
+            iri=(
+                self.provenance.get("raw_candidate", {}).get("iri")
+                if isinstance(self.provenance, dict)
+                and isinstance(self.provenance.get("raw_candidate"), dict)
+                else None
+            ),
+        )
+        if not validation.valid:
+            raise ValueError(validation.reason or "candidate ontology/code mismatch")
+        return self
+
     model_config = {"frozen": True}
 
 
@@ -481,8 +518,13 @@ class RerankAlternative(BaseModel):
     candidate_id: str = Field(..., description="Candidate id such as C1")
     code: str = Field(..., description="Exact ontology code from the candidate")
     confidence: float = Field(
-        ..., ge=0.0, le=1.0,
-        description="Reranker confidence for this alternative in [0, 1]",
+        ...,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Final reranker confidence for this alternative in [0, 1], on the "
+            "same scale as RerankDecision.confidence"
+        ),
     )
     explanation: str = Field(
         ...,
@@ -528,11 +570,13 @@ class RetrievalTrace(BaseModel):
         description="Routes called, queries sent, and ontology constraints",
     )
     raw_candidate_count: int = Field(
-        0, ge=0,
+        0,
+        ge=0,
         description="Number of raw candidates before deduplication",
     )
     merged_candidate_count: int = Field(
-        0, ge=0,
+        0,
+        ge=0,
         description="Number of candidates after deduplication",
     )
     errors: list[dict[str, Any]] = Field(
@@ -560,9 +604,7 @@ class RetrievalTrace(BaseModel):
                     "disabled retrieval_mode cannot be grounded; is_grounded must be False"
                 )
             if self.grounding_source != GroundingSource.NONE:
-                raise ValueError(
-                    "disabled retrieval_mode requires grounding_source=none"
-                )
+                raise ValueError("disabled retrieval_mode requires grounding_source=none")
         return self
 
     model_config = {"frozen": True}
@@ -591,7 +633,9 @@ class RerankDecision(BaseModel):
     grounding_source: GroundingSource = Field(..., description="Where grounding came from")
     retrieval_mode: RetrievalMode = Field(..., description="Layer 2 mode used")
     confidence: float = Field(
-        0.0, ge=0.0, le=1.0,
+        0.0,
+        ge=0.0,
+        le=1.0,
         description="Decision confidence in [0, 1]",
     )
     reasoning: str | None = Field(
@@ -619,9 +663,7 @@ class RerankDecision(BaseModel):
                     "disabled retrieval_mode cannot be grounded; is_grounded must be False"
                 )
             if self.grounding_source != GroundingSource.NONE:
-                raise ValueError(
-                    "disabled retrieval_mode requires grounding_source=none"
-                )
+                raise ValueError("disabled retrieval_mode requires grounding_source=none")
         if (
             not self.is_grounded
             and self.retrieval_mode != RetrievalMode.DISABLED
@@ -673,6 +715,10 @@ class RetrievalRoutePlan(BaseModel):
         None,
         description="Hard target-ontology constraint passed through from caller",
     )
+    allowed_target_ontologies: list[str] | None = Field(
+        None,
+        description="Caller-selected ontology allow-list; None means unrestricted",
+    )
     candidate_ontologies: list[str] = Field(
         default_factory=list,
         description="Ontology families the retriever should search",
@@ -694,6 +740,23 @@ class RetrievalRoutePlan(BaseModel):
             data.setdefault("retrieval_skipped", True)
         return data
 
+    @field_validator("allowed_target_ontologies")
+    @classmethod
+    def normalise_allowed_target_ontologies(
+        cls,
+        v: list[str] | None,
+    ) -> list[str] | None:
+        if v is None:
+            return None
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for ontology in v:
+            text = str(ontology or "").upper().strip()
+            if text and text not in seen:
+                normalized.append(text)
+                seen.add(text)
+        return normalized or None
+
     @model_validator(mode="after")
     def validate_disabled_consistency(self) -> RetrievalRoutePlan:
         if self.retrieval_mode == RetrievalMode.DISABLED:
@@ -702,9 +765,7 @@ class RetrievalRoutePlan(BaseModel):
                     "disabled retrieval_mode cannot be grounded; is_grounded_mode must be False"
                 )
             if self.grounding_source != GroundingSource.NONE:
-                raise ValueError(
-                    "disabled retrieval_mode requires grounding_source=none"
-                )
+                raise ValueError("disabled retrieval_mode requires grounding_source=none")
         return self
 
     model_config = {"frozen": True}

@@ -11,8 +11,6 @@ from typing import Any
 
 import pytest
 
-pytestmark = pytest.mark.unit
-
 from llm_ontology_mapper.mapper import OntologyMapper
 from llm_ontology_mapper.models import (
     LogicType,
@@ -21,6 +19,8 @@ from llm_ontology_mapper.models import (
     RetrievalMode,
 )
 from llm_ontology_mapper.providers import BaseLLMProvider, ChatMessage, CompletionResponse
+
+pytestmark = pytest.mark.unit
 
 
 class _StubProvider(BaseLLMProvider):
@@ -212,21 +212,52 @@ def test_planned_mode_passes_single_explicit_target_ontology() -> None:
     mapper.map_term("sys_bp")
 
     assert fake.calls[0]["target_ontology"] == "LOINC"
+    assert fake.calls[0]["allowed_target_ontologies"] == ["LOINC"]
 
 
-def test_planned_mode_rejects_multiple_explicit_target_ontologies() -> None:
+def test_planned_mode_without_explicit_ontologies_is_unrestricted() -> None:
     fake = _FakePlannedPipeline()
     mapper = OntologyMapper(
         llm_provider=_StubProvider(),
-        ontologies=["HPO", "MONDO"],
+        ontologies=None,
         use_planned_pipeline=True,
         planned_pipeline=fake,
     )
 
-    with pytest.raises(ValueError, match="at most one explicit target ontology"):
-        mapper.map_term("sys_bp")
+    mapper.map_term("sys_bp")
 
-    assert fake.calls == []
+    assert fake.calls[0]["target_ontology"] is None
+    assert fake.calls[0]["allowed_target_ontologies"] is None
+
+
+def test_planned_mode_empty_explicit_ontologies_is_unrestricted() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        ontologies=[],
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term("sys_bp")
+
+    assert fake.calls[0]["target_ontology"] is None
+    assert fake.calls[0]["allowed_target_ontologies"] is None
+
+
+def test_planned_mode_accepts_multiple_explicit_target_ontologies() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        ontologies=[" loinc ", "HPO", "HP", "", "MONDO"],
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term("sys_bp")
+
+    assert fake.calls[0]["target_ontology"] is None
+    assert fake.calls[0]["allowed_target_ontologies"] == ["LOINC", "HPO", "MONDO"]
 
 
 def test_planned_mode_returns_mapping_result_from_planned_pipeline() -> None:

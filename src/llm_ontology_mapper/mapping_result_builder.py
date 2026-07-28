@@ -21,22 +21,24 @@ and keeps MappingResult serialization intact.
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
-from llm_ontology_mapper.llm_reranker import fallback_alternative_explanation
 from llm_ontology_mapper.models import (
     AlternativeMapping,
+    GroundingSource,
     LogicType,
     MappingMetadata,
     MappingResult,
     NormalizedCandidate,
     QueryPlan,
     RAGDebugInfo,
-    RerankDecision,
     RerankAlternative,
+    RerankDecision,
     RetrievalMode,
     RetrievalTrace,
 )
+from llm_ontology_mapper.ontology_identity import validate_candidate_identity
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Public error type
@@ -50,7 +52,8 @@ class MappingResultBuilderError(Exception):
 
     Causes include: disabled mode, selected_code absent from candidates,
     target_ontology_constraint mismatch, ungrounded selected decision,
-    and empty candidates for a non-unmapped decision.
+    allowed_target_ontologies mismatch, and empty candidates for a non-unmapped
+    decision.
     """
 
 
@@ -154,8 +157,8 @@ class MappingResultBuilder:
         # Validate grounding
         if not rerank_decision.is_grounded:
             raise MappingResultBuilderError(
-                f"rerank_decision.is_grounded=False for a non-unmapped decision; "
-                f"public/local production-grounded results must be grounded."
+                "rerank_decision.is_grounded=False for a non-unmapped decision; "
+                "public/local production-grounded results must be grounded."
             )
 
         # Validate candidates available
@@ -174,6 +177,21 @@ class MappingResultBuilder:
                 f"in the provided candidates list; "
                 f"the selected code must come from the candidate set."
             )
+        selected_validation = validate_candidate_identity(
+            ontology=selected_candidate.ontology,
+            code=selected_candidate.code,
+        )
+        if not selected_validation.valid:
+            return self._build_unmapped(
+                query_plan=query_plan,
+                rerank_decision=_unmapped_decision_from(
+                    rerank_decision,
+                    "Selected candidate ontology/code identity is inconsistent.",
+                ),
+                candidates=candidates,
+                retrieval_trace=retrieval_trace,
+                source_type=source_type,
+            )
 
         # Validate target_ontology_constraint
         if query_plan.target_ontology_constraint:
@@ -184,11 +202,27 @@ class MappingResultBuilder:
                     f"does not match target_ontology_constraint={target_upper!r}."
                 )
 
+        allowed_ontologies = _normalize_allowed_target_ontologies(
+            query_plan.allowed_target_ontologies
+        )
+        if allowed_ontologies is not None and selected_candidate.ontology not in allowed_ontologies:
+            return self._build_unmapped(
+                query_plan=query_plan,
+                rerank_decision=_unmapped_decision_from(
+                    rerank_decision,
+                    "Selected candidate ontology is outside allowed_target_ontologies.",
+                ),
+                candidates=candidates,
+                retrieval_trace=retrieval_trace,
+                source_type=source_type,
+            )
+
         alternatives = _build_alternatives(
             structured_alternatives=rerank_decision.alternatives,
-            alternative_codes=rerank_decision.alternative_codes,
             candidates=candidates,
-            exclude_code=selected_code,
+            exclude_candidate=selected_candidate,
+            selected_confidence=rerank_decision.confidence,
+            allowed_ontologies=allowed_ontologies,
             max_alternatives=max_alternatives,
         )
 
@@ -264,21 +298,31 @@ def _find_by_code(
     return None
 
 
+def _candidate_identity(candidate: NormalizedCandidate) -> tuple[str, str]:
+    """Stable identity for comparing retrieved candidates across score stages."""
+    return (candidate.ontology.upper().strip(), candidate.code.upper().strip())
+
+
 def _build_alternatives(
     *,
     structured_alternatives: Sequence[RerankAlternative],
-    alternative_codes: list[str],
     candidates: Sequence[NormalizedCandidate],
-    exclude_code: str | None,
+    exclude_candidate: NormalizedCandidate,
+    selected_confidence: float,
+    allowed_ontologies: set[str] | None,
     max_alternatives: int = 5,
 ) -> list[AlternativeMapping]:
     """
-    Build grounded AlternativeMapping objects from structured alternatives,
-    legacy alternative_codes, or retrieval-ranked fallback candidates.
+    Build grounded AlternativeMapping objects from structured reranker alternatives.
+
+    At the MappingResult boundary, AlternativeMapping.confidence has the same
+    meaning as MappingResult.confidence: final LLM reranker confidence. Retrieval
+    scores are intentionally not used here.
     """
     code_map: dict[str, NormalizedCandidate] = {c.code: c for c in candidates}
     result: list[AlternativeMapping] = []
-    seen_codes: set[str] = set()
+    seen_identities: set[tuple[str, str]] = set()
+    exclude_identity = _candidate_identity(exclude_candidate)
 
     def _append(
         *,
@@ -288,10 +332,21 @@ def _build_alternatives(
     ) -> None:
         if len(result) >= max_alternatives:
             return
-        if code == exclude_code or code in seen_codes:
-            return
+        if confidence > selected_confidence:
+            raise MappingResultBuilderError(
+                "Alternative reranker confidence cannot be greater than selected "
+                "result confidence at the MappingResult boundary."
+            )
         candidate = code_map.get(code)
         if candidate is None:
+            return
+        validation = validate_candidate_identity(ontology=candidate.ontology, code=candidate.code)
+        if not validation.valid:
+            return
+        if allowed_ontologies is not None and candidate.ontology not in allowed_ontologies:
+            return
+        identity = _candidate_identity(candidate)
+        if identity == exclude_identity or identity in seen_identities:
             return
         result.append(
             AlternativeMapping(
@@ -303,46 +358,16 @@ def _build_alternatives(
                 explanation=explanation,
             )
         )
-        seen_codes.add(code)
+        seen_identities.add(identity)
 
-    for alt in structured_alternatives:
+    for alt in sorted(structured_alternatives, key=lambda item: item.confidence, reverse=True):
         _append(
             code=alt.code,
             confidence=alt.confidence,
             explanation=alt.explanation,
         )
 
-    for code in alternative_codes:
-        candidate = code_map.get(code)
-        if candidate is None:
-            continue
-        _append(
-            code=code,
-            confidence=_candidate_confidence(candidate),
-            explanation=fallback_alternative_explanation(candidate),
-        )
-
-    for candidate in candidates:
-        _append(
-            code=candidate.code,
-            confidence=_candidate_confidence(candidate),
-            explanation=fallback_alternative_explanation(candidate),
-        )
-
-        if len(result) >= max_alternatives:
-            break
-
     return result
-
-
-def _candidate_confidence(candidate: NormalizedCandidate) -> float:
-    """Best available confidence value for a candidate, clamped to [0, 1]."""
-    if candidate.normalized_score is not None:
-        return candidate.normalized_score
-    rs = candidate.raw_score
-    if rs is not None and 0.0 <= rs <= 1.0:
-        return rs
-    return 0.5
 
 
 def _build_metadata(
@@ -372,6 +397,7 @@ def _build_metadata(
             "semantic_type": query_plan.semantic_type,
             "expanded_queries": list(query_plan.expanded_queries),
             "target_ontology_constraint": query_plan.target_ontology_constraint,
+            "allowed_target_ontologies": query_plan.allowed_target_ontologies,
             "preferred_ontology": query_plan.preferred_ontology,
             "reasoning": query_plan.reasoning,
         },
@@ -379,6 +405,8 @@ def _build_metadata(
 
     if query_plan.target_ontology_constraint:
         pipeline_info["target_ontology_constraint"] = query_plan.target_ontology_constraint
+    if query_plan.allowed_target_ontologies is not None:
+        pipeline_info["allowed_target_ontologies"] = list(query_plan.allowed_target_ontologies)
 
     if retrieval_trace is not None:
         pipeline_info["retrieval_trace"] = retrieval_trace.model_dump(mode="json")
@@ -386,14 +414,140 @@ def _build_metadata(
     if selected_candidate is not None and selected_candidate.provenance is not None:
         pipeline_info["selected_candidate_provenance"] = selected_candidate.provenance
 
+    allowed_ontologies = _normalize_allowed_target_ontologies(query_plan.allowed_target_ontologies)
+    pipeline_info["confidence_contract"] = (
+        "MappingResult.confidence and alternatives[].confidence are final "
+        "LLM reranker confidences on the same [0, 1] scale. Retrieval scores "
+        "are retained separately as retrieval provenance."
+    )
+    pipeline_info["candidate_score_provenance"] = [
+        _candidate_score_provenance(candidate) for candidate in candidates
+    ]
+    pipeline_info["final_ranking_trace"] = _final_ranking_trace(
+        rerank_decision=rerank_decision,
+        candidates=candidates,
+        selected_candidate=selected_candidate,
+        allowed_ontologies=allowed_ontologies,
+    )
+
     rag_debug = RAGDebugInfo(
         query_sent=query_plan.original_term,
         candidates_retrieved=[pipeline_info],
         top_k=len(candidates),
+        auto_accepted=False,
+        auto_accept_threshold=0.0,
     )
 
     return MappingMetadata(
         model="pipeline",
         provider="grounded_pipeline",
+        latency_ms=None,
+        prompt_tokens=None,
+        completion_tokens=None,
         rag_debug=rag_debug,
+    )
+
+
+def _candidate_score_provenance(candidate: NormalizedCandidate) -> dict[str, Any]:
+    return {
+        "code": candidate.code,
+        "ontology": candidate.ontology,
+        "term": candidate.term,
+        "raw_retrieval_score": candidate.raw_score,
+        "normalized_retrieval_score": candidate.normalized_score,
+        "retrieval_mode": candidate.retrieval_mode.value,
+        "source": candidate.source,
+        "matched_query": candidate.matched_query,
+    }
+
+
+def _final_ranking_trace(
+    *,
+    rerank_decision: RerankDecision,
+    candidates: Sequence[NormalizedCandidate],
+    selected_candidate: NormalizedCandidate | None,
+    allowed_ontologies: set[str] | None,
+) -> list[dict[str, Any]]:
+    code_map: dict[str, NormalizedCandidate] = {
+        candidate.code: candidate for candidate in candidates
+    }
+    trace: list[dict[str, Any]] = []
+
+    if selected_candidate is not None:
+        trace.append(
+            {
+                "rank": 1,
+                "candidate_id": rerank_decision.selected_candidate_id,
+                "code": selected_candidate.code,
+                "ontology": selected_candidate.ontology,
+                "reranker_score": rerank_decision.confidence,
+                "final_confidence": rerank_decision.confidence,
+                "confidence_source": "llm_reranker",
+                "raw_retrieval_score": selected_candidate.raw_score,
+                "normalized_retrieval_score": selected_candidate.normalized_score,
+                "selected": True,
+            }
+        )
+
+    for rank, alt in enumerate(
+        sorted(rerank_decision.alternatives, key=lambda item: item.confidence, reverse=True),
+        start=2,
+    ):
+        candidate = code_map.get(alt.code)
+        if allowed_ontologies is not None and (
+            candidate is None or candidate.ontology not in allowed_ontologies
+        ):
+            continue
+        trace.append(
+            {
+                "rank": rank,
+                "candidate_id": alt.candidate_id,
+                "code": alt.code,
+                "ontology": candidate.ontology if candidate is not None else None,
+                "reranker_score": alt.confidence,
+                "final_confidence": alt.confidence,
+                "confidence_source": "llm_reranker",
+                "raw_retrieval_score": candidate.raw_score if candidate is not None else None,
+                "normalized_retrieval_score": (
+                    candidate.normalized_score if candidate is not None else None
+                ),
+                "selected": False,
+            }
+        )
+
+    return trace
+
+
+def _normalize_allowed_target_ontologies(
+    ontologies: list[str] | None,
+) -> set[str] | None:
+    if ontologies is None:
+        return None
+    allowed = {
+        str(ontology or "").upper().strip()
+        for ontology in ontologies
+        if str(ontology or "").strip()
+    }
+    return allowed or None
+
+
+def _unmapped_decision_from(
+    decision: RerankDecision,
+    reason: str,
+) -> RerankDecision:
+    reasoning = reason
+    if decision.reasoning:
+        reasoning = f"{reason} {decision.reasoning}"
+    return RerankDecision(
+        selected_code=None,
+        selected_candidate_id=None,
+        is_unmapped=True,
+        is_grounded=False,
+        grounding_source=GroundingSource.NONE,
+        retrieval_mode=decision.retrieval_mode,
+        confidence=0.0,
+        reasoning=reasoning,
+        alternative_codes=[],
+        alternatives=[],
+        policy=decision.policy,
     )

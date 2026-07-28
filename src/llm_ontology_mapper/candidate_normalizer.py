@@ -8,12 +8,14 @@ Phase 4A of the planned grounded mapping pipeline.
 
 from __future__ import annotations
 
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from llm_ontology_mapper.models import (
     NormalizedCandidate,
     RetrievalMode,
 )
+from llm_ontology_mapper.ontology_identity import resolve_candidate_identity
 
 
 class CandidateNormalizationError(Exception):
@@ -43,7 +45,16 @@ class CandidateNormalizer:
         )
     """
 
-    _CODE_KEYS = ("code", "id", "curie", "iri", "concept_id", "loinc_num", "rxnorm_id", "icd10_code")
+    _CODE_KEYS = (
+        "code",
+        "id",
+        "curie",
+        "iri",
+        "concept_id",
+        "loinc_num",
+        "rxnorm_id",
+        "icd10_code",
+    )
     _TERM_KEYS = ("term", "label", "name", "display", "preferred_label")
     _ONTOLOGY_KEYS = ("ontology", "ontology_id", "ontology_prefix", "source_ontology")
     _DEFINITION_KEYS = ("definition", "description", "meaning")
@@ -81,8 +92,8 @@ class CandidateNormalizer:
         if not matched_query or not matched_query.strip():
             raise CandidateNormalizationError("matched_query must not be blank")
 
-        code = self._extract_first(raw_candidate, self._CODE_KEYS)
-        if not code:
+        raw_code = self._extract_first(raw_candidate, self._CODE_KEYS)
+        if not raw_code:
             raise CandidateNormalizationError(
                 f"raw_candidate missing a recognizable code field "
                 f"(tried: {self._CODE_KEYS}): {raw_candidate!r}"
@@ -95,12 +106,19 @@ class CandidateNormalizer:
                 f"(tried: {self._TERM_KEYS}): {raw_candidate!r}"
             )
 
-        ontology = self._extract_ontology(raw_candidate, default_ontology)
-        if not ontology:
+        identity = resolve_candidate_identity(
+            code=raw_code,
+            iri=raw_candidate.get("iri"),
+            explicit_ontology=self._extract_ontology(raw_candidate, None),
+            fallback_ontology=default_ontology,
+        )
+        if identity is None:
             raise CandidateNormalizationError(
-                f"raw_candidate missing ontology and no default_ontology provided: "
-                f"{raw_candidate!r}"
+                "raw_candidate ontology/code identity could not be resolved "
+                "consistently from code, IRI, explicit ontology, or fallback ontology"
             )
+        code = identity.code
+        ontology = identity.ontology
 
         definition = self._extract_definition(raw_candidate)
         source = self._extract_source(raw_candidate, default_source, mode)
@@ -116,6 +134,7 @@ class CandidateNormalizer:
             provenance["default_ontology"] = default_ontology
         if default_source is not None:
             provenance["default_source"] = default_source
+        provenance["identity_resolution"] = identity.reason
 
         return NormalizedCandidate(
             code=code,
@@ -169,11 +188,10 @@ class CandidateNormalizer:
         else:
             try:
                 mode = RetrievalMode(str(retrieval_mode).lower())
-            except ValueError:
+            except ValueError as exc:
                 raise CandidateNormalizationError(
-                    f"Invalid retrieval_mode: {retrieval_mode!r}. "
-                    "Must be 'public' or 'local'."
-                )
+                    f"Invalid retrieval_mode: {retrieval_mode!r}. Must be 'public' or 'local'."
+                ) from exc
         if mode == RetrievalMode.DISABLED:
             raise CandidateNormalizationError(
                 "retrieval_mode='disabled' cannot produce NormalizedCandidate records; "

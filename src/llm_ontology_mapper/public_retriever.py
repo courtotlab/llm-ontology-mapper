@@ -145,7 +145,8 @@ class PublicOntologyRetriever:
             for ontology in ontologies:
                 logger.debug(
                     "PublicOntologyRetriever: query=%r ontology=%r",
-                    query, ontology,
+                    query,
+                    ontology,
                 )
                 raw_candidates = self._call_route(query, ontology, max_results_per_query)
                 route = _route_name(ontology)
@@ -205,18 +206,26 @@ class PublicOntologyRetriever:
         everything else.  When absent, preferred_ontology comes first, then
         candidate_ontologies (deduplicated).
 
+        allowed_target_ontologies is a hard allow-list. When present, only
+        ontologies in that list are returned. If no preferred/candidate
+        ontology survives the allow-list, the full allow-list is returned so
+        all caller-selected ontologies remain searchable.
+
         If route_plan is provided, its target_ontology_constraint and
         candidate_ontologies take precedence over query_plan's equivalent fields
         (but query_plan.target_ontology_constraint is still the authoritative
         hard constraint).
         """
         # Hard constraint wins unconditionally
-        constraint = (
-            query_plan.target_ontology_constraint
-            or (route_plan.target_ontology_constraint if route_plan else None)
+        constraint = query_plan.target_ontology_constraint or (
+            route_plan.target_ontology_constraint if route_plan else None
         )
+        allowed = _resolve_allowed_target_ontologies(query_plan, route_plan)
         if constraint:
-            return [constraint.upper()]
+            constraint_upper = constraint.upper()
+            if allowed is not None and constraint_upper not in allowed:
+                return []
+            return [constraint_upper]
 
         ontologies: list[str] = []
         seen: set[str] = set()
@@ -240,7 +249,11 @@ class PublicOntologyRetriever:
         for onto in candidates_source:
             _add(onto)
 
-        return ontologies
+        if allowed is None:
+            return ontologies
+
+        filtered = [onto for onto in ontologies if onto in allowed]
+        return filtered or list(allowed)
 
     def _call_route(
         self,
@@ -298,3 +311,25 @@ def _route_name(ontology: str) -> str:
     if onto_upper in _ICD_ONTOLOGIES:
         return "NIH-ClinicalTables"
     return "OLS"
+
+
+def _resolve_allowed_target_ontologies(
+    query_plan: QueryPlan,
+    route_plan: RetrievalRoutePlan | None,
+) -> list[str] | None:
+    raw = (
+        query_plan.allowed_target_ontologies
+        if query_plan.allowed_target_ontologies is not None
+        else (route_plan.allowed_target_ontologies if route_plan is not None else None)
+    )
+    if raw is None:
+        return None
+
+    result: list[str] = []
+    seen: set[str] = set()
+    for ontology in raw:
+        key = str(ontology or "").upper().strip()
+        if key and key not in seen:
+            result.append(key)
+            seen.add(key)
+    return result or None
