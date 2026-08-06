@@ -346,6 +346,14 @@ class QueryPlan(BaseModel):
 
     original_term: str = Field(..., description="Raw input term, e.g. 'sys_bp'")
     original_label: str | None = Field(None, description="Optional human-readable label")
+    source_description: str | None = Field(
+        None,
+        description="Optional caller-supplied description of the source field",
+    )
+    source_type: str | None = Field(
+        None,
+        description="Optional source schema/data type hint such as integer, decimal, or text",
+    )
     normalized_term: str | None = Field(None, description="Basic normalized form of the term")
     expanded_queries: list[str] = Field(
         default_factory=list,

@@ -88,6 +88,9 @@ class QueryPlanner:
         target_ontology: str | None = None,
         allowed_target_ontologies: list[str] | None = None,
         retrieval_mode: RetrievalMode | str = RetrievalMode.PUBLIC,
+        *,
+        source_description: str | None = None,
+        source_type: str | None = None,
     ) -> QueryPlan:
         """
         Produce a QueryPlan by calling the LLM provider.
@@ -109,13 +112,25 @@ class QueryPlanner:
             ValueError:         retrieval_mode string is not a valid RetrievalMode.
         """
         mode = RetrievalMode(retrieval_mode) if isinstance(retrieval_mode, str) else retrieval_mode
+        source_description_norm = _normalize_optional_text(
+            source_description,
+            field_name="source_description",
+        )
+        source_type_norm = _normalize_optional_text(source_type, field_name="source_type")
         target_norm = target_ontology.upper().strip() if target_ontology else None
         allowed_norm = _normalize_ontology_list(allowed_target_ontologies)
         if target_norm:
             allowed_norm = [target_norm]
 
         messages = self._build_messages(
-            source_term, source_label, clinical_area, target_norm, allowed_norm, mode
+            source_term,
+            source_label,
+            source_description_norm,
+            source_type_norm,
+            clinical_area,
+            target_norm,
+            allowed_norm,
+            mode,
         )
 
         logger.debug(
@@ -141,6 +156,8 @@ class QueryPlanner:
             data,
             source_term,
             source_label,
+            source_description_norm,
+            source_type_norm,
             target_norm,
             allowed_norm,
             mode,
@@ -152,12 +169,18 @@ class QueryPlanner:
         self,
         source_term: str,
         source_label: str | None,
+        source_description: str | None,
+        source_type: str | None,
         clinical_area: str | None,
         target_ontology: str | None,
         allowed_target_ontologies: list[str] | None,
         mode: RetrievalMode,
     ) -> list[ChatMessage]:
         label_section = f"- Label: {source_label}\n" if source_label else ""
+        description_section = (
+            f"- Source description: {source_description}\n" if source_description else ""
+        )
+        source_type_section = f"- Source data type: {source_type}\n" if source_type else ""
         area_section = f"- Clinical area: {clinical_area}\n" if clinical_area else ""
         if target_ontology:
             ontology_section = f"- Target ontology (HARD CONSTRAINT): {target_ontology}\n"
@@ -172,6 +195,8 @@ class QueryPlanner:
         content = self._prompt_template.format(
             source_term=source_term,
             optional_label_section=label_section,
+            optional_source_description_section=description_section,
+            optional_source_type_section=source_type_section,
             optional_clinical_area_section=area_section,
             optional_target_ontology_section=ontology_section,
         )
@@ -191,6 +216,8 @@ class QueryPlanner:
         data: dict[str, Any],
         source_term: str,
         source_label: str | None,
+        source_description: str | None,
+        source_type: str | None,
         target_ontology: str | None,
         allowed_target_ontologies: list[str] | None,
         mode: RetrievalMode,
@@ -253,6 +280,8 @@ class QueryPlanner:
         return QueryPlan(
             original_term=source_term,
             original_label=source_label,
+            source_description=source_description,
+            source_type=source_type,
             normalized_term=normalized_term,
             expanded_queries=expanded_queries,
             inferred_meaning=inferred_meaning,
@@ -279,6 +308,16 @@ def _strip_fences(text: str) -> str:
     text = re.sub(r"^```(?:json)?\s*\n?", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\n?```\s*$", "", text)
     return text.strip()
+
+
+def _normalize_optional_text(value: str | None, *, field_name: str) -> str | None:
+    """Normalize optional caller-supplied source metadata for prompt context."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError(f"{field_name} must be a string or None")
+    text = value.strip()
+    return text or None
 
 
 def _normalize_ontology_list(ontologies: list[Any] | None) -> list[str] | None:

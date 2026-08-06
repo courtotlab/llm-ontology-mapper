@@ -490,6 +490,105 @@ def test_context_fields_appear_in_messages() -> None:
 
 
 @pytest.mark.unit
+def test_source_description_and_type_appear_in_messages_and_plan() -> None:
+    stub = _RecordingStubProvider(_SYS_BP_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    plan = planner.plan(
+        "creat",
+        source_label="Serum creatinine",
+        source_description="Most recent serum creatinine result collected at enrolment",
+        source_type="decimal",
+        clinical_area="measurement",
+        target_ontology="LOINC",
+    )
+
+    all_content = " ".join(m.content for m in stub.calls[0])
+    assert (
+        "Source description: Most recent serum creatinine result collected at enrolment"
+        in all_content
+    )
+    assert "Source data type: decimal" in all_content
+    assert "- Clinical area: measurement" in all_content
+    assert plan.source_description == ("Most recent serum creatinine result collected at enrolment")
+    assert plan.source_type == "decimal"
+    assert plan.retrieval_mode == RetrievalMode.PUBLIC
+    assert plan.target_ontology_constraint == "LOINC"
+    assert plan.candidate_ontologies == ["LOINC"]
+
+
+@pytest.mark.unit
+def test_source_context_is_omitted_when_absent_or_blank() -> None:
+    stub = _RecordingStubProvider(_SYS_BP_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    plan = planner.plan(
+        "sys_bp",
+        source_description="   ",
+        source_type="",
+    )
+
+    all_content = " ".join(m.content for m in stub.calls[0])
+    assert "Source description:" not in all_content
+    assert "Source data type:" not in all_content
+    assert "None" not in all_content
+    assert "null" not in all_content
+    assert "N/A" not in all_content
+    assert plan.source_description is None
+    assert plan.source_type is None
+
+
+@pytest.mark.unit
+def test_source_context_values_are_stripped_before_prompt_and_plan() -> None:
+    stub = _RecordingStubProvider(_SYS_BP_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    plan = planner.plan(
+        "creat",
+        source_description="  collected at enrolment  ",
+        source_type="  decimal  ",
+        clinical_area="measurement",
+    )
+
+    all_content = " ".join(m.content for m in stub.calls[0])
+    assert "Source description: collected at enrolment" in all_content
+    assert "Source data type: decimal" in all_content
+    assert "  collected at enrolment  " not in all_content
+    assert "  decimal  " not in all_content
+    assert plan.source_description == "collected at enrolment"
+    assert plan.source_type == "decimal"
+
+
+@pytest.mark.unit
+def test_source_type_is_not_rendered_as_clinical_area() -> None:
+    stub = _RecordingStubProvider(_SYS_BP_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    planner.plan(
+        "creat",
+        source_type="decimal",
+        clinical_area="measurement",
+    )
+
+    all_content = " ".join(m.content for m in stub.calls[0])
+    assert "Source data type: decimal" in all_content
+    assert "Clinical area: measurement" in all_content
+    assert "Clinical area: decimal" not in all_content
+
+
+@pytest.mark.unit
+def test_structured_source_context_values_are_rejected() -> None:
+    stub = _RecordingStubProvider(_SYS_BP_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    with pytest.raises(TypeError, match="source_description"):
+        planner.plan("sys_bp", source_description={"text": "bad"})  # type: ignore[arg-type]
+
+    with pytest.raises(TypeError, match="source_type"):
+        planner.plan("sys_bp", source_type=["decimal"])  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
 def test_target_ontology_absent_uses_llm_candidate_ontologies() -> None:
     # When no target_ontology is supplied, the LLM's candidate_ontologies are used as-is.
     stub = _RecordingStubProvider(_SYS_BP_RESPONSE)

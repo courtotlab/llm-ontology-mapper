@@ -7,6 +7,7 @@ public API, or SapBERT service is called.
 
 from __future__ import annotations
 
+import inspect
 from typing import Any
 
 import pytest
@@ -153,6 +154,54 @@ def test_planned_mode_passes_source_term_label_and_type() -> None:
     assert call["source_term"] == "sys_bp"
     assert call["source_label"] == "Systolic BP"
     assert call["source_type"] == "integer"
+
+
+def test_map_term_signature_adds_keyword_only_source_description() -> None:
+    signature = inspect.signature(OntologyMapper.map_term)
+
+    assert "source_description" in signature.parameters
+    assert "source_data_type" not in signature.parameters
+    assert signature.parameters["source_description"].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+def test_planned_mode_passes_source_description() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term(
+        "creat",
+        source_label="Serum creatinine",
+        source_type="decimal",
+        source_description="Most recent serum creatinine result collected at enrolment",
+    )
+
+    call = fake.calls[0]
+    assert call["source_description"] == (
+        "Most recent serum creatinine result collected at enrolment"
+    )
+    assert call["source_type"] == "decimal"
+
+
+def test_existing_positional_arguments_keep_their_meanings() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term("sys_bp", "Systolic BP", "integer", "measurement")
+
+    call = fake.calls[0]
+    assert call["source_term"] == "sys_bp"
+    assert call["source_label"] == "Systolic BP"
+    assert call["source_type"] == "integer"
+    assert call["clinical_area"] == "measurement"
+    assert call["source_description"] is None
 
 
 def test_planned_mode_passes_entity_type_as_clinical_area() -> None:
@@ -314,6 +363,40 @@ def test_planned_map_data_dictionary_uses_planned_pipeline_safely() -> None:
     assert len(batch.results) == 2
     assert len(fake.calls) == 2
     assert fake.calls[0]["clinical_area"] == "cardiology"
+
+
+def test_planned_map_data_dictionary_forwards_row_source_context() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        planned_pipeline=fake,
+    )
+
+    batch = mapper.map_data_dictionary(
+        [
+            {
+                "field_name": "creat",
+                "field_label": "Serum creatinine",
+                "field_description": ("Most recent serum creatinine result collected at enrolment"),
+                "field_type": "decimal",
+            }
+        ],
+        source_description_field="field_description",
+        entity_type="measurement",
+        use_planned_pipeline=True,
+        retrieval_mode=RetrievalMode.PUBLIC,
+    )
+
+    assert len(batch.results) == 1
+    assert len(fake.calls) == 1
+    assert fake.calls[0]["source_term"] == "creat"
+    assert fake.calls[0]["source_label"] == "Serum creatinine"
+    assert fake.calls[0]["source_description"] == (
+        "Most recent serum creatinine result collected at enrolment"
+    )
+    assert fake.calls[0]["source_type"] == "decimal"
+    assert fake.calls[0]["clinical_area"] == "measurement"
+    assert fake.calls[0]["retrieval_mode"] == RetrievalMode.PUBLIC
 
 
 def test_retrieval_mode_is_rejected_for_legacy_map_term() -> None:

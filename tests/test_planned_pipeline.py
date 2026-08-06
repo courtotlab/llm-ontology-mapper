@@ -60,6 +60,8 @@ class _Planner:
         self,
         source_term: str,
         source_label: str | None = None,
+        source_description: str | None = None,
+        source_type: str | None = None,
         clinical_area: str | None = None,
         target_ontology: str | None = None,
         allowed_target_ontologies: list[str] | None = None,
@@ -69,6 +71,8 @@ class _Planner:
         self.last_kwargs = {
             "source_term": source_term,
             "source_label": source_label,
+            "source_description": source_description,
+            "source_type": source_type,
             "clinical_area": clinical_area,
             "target_ontology": target_ontology,
             "allowed_target_ontologies": allowed_target_ontologies,
@@ -83,6 +87,8 @@ class _Planner:
         return QueryPlan(
             original_term=source_term,
             original_label=source_label,
+            source_description=source_description,
+            source_type=source_type,
             normalized_term=source_term.replace("_", " "),
             expanded_queries=["systolic blood pressure"],
             inferred_meaning="systolic blood pressure",
@@ -562,6 +568,39 @@ def test_clinical_area_and_source_label_passed_to_query_planner() -> None:
     assert parts["planner"].last_kwargs["source_label"] == "Systolic BP"
     assert parts["planner"].last_kwargs["clinical_area"] == "cardiology"
     assert result.source_label == "Systolic BP"
+
+
+def test_source_description_and_type_passed_to_query_planner() -> None:
+    pipeline, parts = _pipeline()
+
+    result = pipeline.map_term(
+        "creat",
+        source_label="Serum creatinine",
+        source_description="Most recent serum creatinine result collected at enrolment",
+        source_type="decimal",
+        clinical_area="measurement",
+    )
+
+    assert parts["planner"].last_kwargs["source_description"] == (
+        "Most recent serum creatinine result collected at enrolment"
+    )
+    assert parts["planner"].last_kwargs["source_type"] == "decimal"
+    assert parts["router"].last_plan.source_description == (
+        "Most recent serum creatinine result collected at enrolment"
+    )
+    assert parts["router"].last_plan.source_type == "decimal"
+    assert result.source_type == "decimal"
+
+
+def test_missing_source_context_remains_none_for_query_planner() -> None:
+    pipeline, parts = _pipeline()
+
+    pipeline.map_term("sys_bp")
+
+    assert parts["planner"].last_kwargs["source_description"] is None
+    assert parts["planner"].last_kwargs["source_type"] is None
+    assert parts["router"].last_plan.source_description is None
+    assert parts["router"].last_plan.source_type is None
 
 
 def test_source_type_passed_to_mapping_result_builder() -> None:

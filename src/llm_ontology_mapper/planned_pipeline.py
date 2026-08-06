@@ -93,6 +93,8 @@ class PlannedPipeline:
         max_results_per_query: int = 10,
         max_candidates: int | None = None,
         max_alternatives: int = 5,
+        *,
+        source_description: str | None = None,
     ) -> MappingResult:
         """
         Map one source term through the planned pipeline.
@@ -109,6 +111,8 @@ class PlannedPipeline:
         query_plan = self._plan(
             source_term=source_term,
             source_label=source_label,
+            source_description=source_description,
+            source_type=source_type,
             clinical_area=clinical_area,
             target_ontology=target_ontology,
             allowed_target_ontologies=allowed_target_ontologies,
@@ -163,6 +167,8 @@ class PlannedPipeline:
         *,
         source_term: str,
         source_label: str | None,
+        source_description: str | None,
+        source_type: str | None,
         clinical_area: str | None,
         target_ontology: str | None,
         allowed_target_ontologies: list[str] | None,
@@ -172,6 +178,8 @@ class PlannedPipeline:
             return self._query_planner.plan(
                 source_term=source_term,
                 source_label=source_label,
+                source_description=source_description,
+                source_type=source_type,
                 clinical_area=clinical_area,
                 target_ontology=target_ontology,
                 allowed_target_ontologies=allowed_target_ontologies,

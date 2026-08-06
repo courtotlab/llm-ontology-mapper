@@ -46,11 +46,16 @@ OLLAMA_BASE_URL = "http://localhost:11528"
 
 SOURCE_TERM = "oxygen_sat"
 SOURCE_LABEL = "ovygen saturation"
+SOURCE_DESCRIPTION = (
+    "Peripheral oxygen saturation measurement recorded as the percentage "
+    "of hemoglobin saturated with oxygen."
+)
+SOURCE_TYPE = "decimal"
 CLINICAL_AREA = "measurement"
-TARGET_ONTOLOGY = "LOINC,HPO"
+TARGET_ONTOLOGY = "LOINC"
 RETRIEVAL_MODE = "public"
 
-MAX_RESULTS_PER_QUERY = int(os.environ.get("MAX_RESULTS_PER_QUERY", "6"))
+MAX_RESULTS_PER_QUERY = int(os.environ.get("MAX_RESULTS_PER_QUERY", "10"))
 MAX_ALTERNATIVES = int(os.environ.get("MAX_ALTERNATIVES", "5"))
 SMOKE_DEBUG = env_flag("SMOKE_DEBUG")
 
@@ -192,6 +197,8 @@ def _print_context(
         "model": model,
         "source_term": SOURCE_TERM,
         "source_label": _optional(SOURCE_LABEL),
+        "source_description": _optional(SOURCE_DESCRIPTION),
+        "source_type": _optional(SOURCE_TYPE),
         "target_ontology": ",".join(target_ontologies) if target_ontologies else None,
         "target_ontologies": target_ontologies,
         "hard_filter_active": target_ontologies is not None,
@@ -224,7 +231,9 @@ def _run_case(
     result = mapper.map_term(
         source_term=SOURCE_TERM,
         source_label=_optional(SOURCE_LABEL),
+        source_type=_optional(SOURCE_TYPE),
         entity_type=_optional(CLINICAL_AREA),
+        source_description=_optional(SOURCE_DESCRIPTION),
     )
 
     info = extract_pipeline_metadata(result) or {}
@@ -236,6 +245,18 @@ def _run_case(
     )
     print_trace_summary(result)
     print_full_debug_result(result, enabled=SMOKE_DEBUG)
+    query_plan = _extract_actual_query_plan(info)
+    if SMOKE_DEBUG:
+        assert query_plan, "Expected actual QueryPlan debug metadata"
+        assert query_plan.get("source_description") == _optional(SOURCE_DESCRIPTION), (
+            "Expected source_description on the actual QueryPlan debug metadata"
+        )
+        assert query_plan.get("source_type") == _optional(SOURCE_TYPE), (
+            "Expected source_type on the actual QueryPlan debug metadata"
+        )
+        assert query_plan.get("expanded_queries"), (
+            "Expected non-empty expanded_queries on the actual QueryPlan debug metadata"
+        )
 
     assert 0.0 <= result.confidence <= 1.0, "confidence must be in [0, 1]"
     _validate_alternatives(result, target_ontologies=target_ontologies)
@@ -270,6 +291,14 @@ def _run_case(
         assert info.get("retrieval_mode") == "public", info
         if not _is_unmapped(result) and "is_grounded" in info:
             assert info["is_grounded"] is True, info
+
+
+def _extract_actual_query_plan(info: dict[str, Any]) -> dict[str, Any]:
+    retrieval_trace = info.get("retrieval_trace", {}) or {}
+    query_plan = retrieval_trace.get("query_plan", {}) or {}
+    if isinstance(query_plan, dict):
+        return query_plan
+    return {}
 
 
 def main() -> None:

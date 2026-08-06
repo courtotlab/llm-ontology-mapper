@@ -9,6 +9,7 @@ Public API: map_term(), map_data_dictionary().
 from __future__ import annotations
 
 import logging
+import math
 import time
 from functools import lru_cache
 from pathlib import Path
@@ -162,6 +163,8 @@ class OntologyMapper:
         entity_type: str | None = None,
         use_planned_pipeline: bool | None = None,
         retrieval_mode: RetrievalMode | str | None = None,
+        *,
+        source_description: str | None = None,
     ) -> MappingResult:
         """
         Map a single term to an ontology code.
@@ -175,6 +178,8 @@ class OntologyMapper:
                 opt-in flag. Defaults to the constructor setting.
             retrieval_mode: Optional per-call retrieval mode for planned mode.
                 Ignored only when omitted; rejected if provided for legacy mode.
+            source_description: Optional description of the source field for
+                planned-pipeline query planning.
 
         Returns:
             MappingResult with confidence score and logic_type.
@@ -190,6 +195,7 @@ class OntologyMapper:
             return self._map_term_with_planned_pipeline(
                 source_term=source_term,
                 source_label=source_label,
+                source_description=source_description,
                 source_type=source_type,
                 entity_type=entity_type,
                 retrieval_mode=mode,
@@ -249,6 +255,10 @@ class OntologyMapper:
         source_type_field: str = "field_type",
         entity_type: str | None = None,
         study_id: str | None = None,
+        *,
+        source_description_field: str | None = None,
+        use_planned_pipeline: bool | None = None,
+        retrieval_mode: RetrievalMode | str | None = None,
     ) -> MappingBatch:
         """
         Map every row in a data dictionary to an ontology code.
@@ -260,18 +270,29 @@ class OntologyMapper:
             source_type_field:  Key holding the data type.
             entity_type:        Domain hint applied to all records.
             study_id:           Optional study identifier for the batch.
+            source_description_field: Optional key holding a source-field description.
+            use_planned_pipeline: Optional per-row override forwarded to map_term().
+            retrieval_mode: Optional per-row planned retrieval mode forwarded to map_term().
 
         Returns:
             MappingBatch containing one MappingResult per input record.
         """
         results: list[MappingResult] = []
+        description_key = _normalize_optional_batch_text(source_description_field)
         for rec in records:
             try:
                 result = self.map_term(
                     source_term=rec.get(source_term_field, ""),
                     source_label=rec.get(source_label_field),
-                    source_type=rec.get(source_type_field),
+                    source_type=_normalize_optional_batch_text(rec.get(source_type_field)),
                     entity_type=entity_type,
+                    use_planned_pipeline=use_planned_pipeline,
+                    retrieval_mode=retrieval_mode,
+                    source_description=(
+                        _normalize_optional_batch_text(rec.get(description_key))
+                        if description_key is not None
+                        else None
+                    ),
                 )
                 results.append(result)
             except Exception:
@@ -317,6 +338,7 @@ class OntologyMapper:
         *,
         source_term: str,
         source_label: str | None,
+        source_description: str | None,
         source_type: str | None,
         entity_type: str | None,
         retrieval_mode: RetrievalMode,
@@ -326,6 +348,7 @@ class OntologyMapper:
         return pipeline.map_term(
             source_term=source_term,
             source_label=source_label,
+            source_description=source_description,
             source_type=source_type,
             clinical_area=entity_type,
             target_ontology=(
@@ -676,3 +699,41 @@ class OntologyMapper:
                 rag_debug=rag_debug,
             ),
         )
+
+
+def _normalize_optional_batch_text(value: Any) -> str | None:
+    """Normalize optional spreadsheet-like batch metadata to prompt-safe text."""
+    if _is_missing_batch_value(value):
+        return None
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    if text.lower() in {"nan", "none", "null", "n/a"}:
+        return None
+    return text
+
+
+def _is_missing_batch_value(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, float) and math.isnan(value):
+        return True
+
+    try:
+        not_equal_to_self = value != value
+    except Exception:
+        not_equal_to_self = False
+    try:
+        if bool(not_equal_to_self):
+            return True
+    except Exception:
+        pass
+
+    value_type = type(value)
+    module = value_type.__module__
+    name = value_type.__name__
+    return module.startswith("pandas.") and (
+        name in {"NAType", "NaTType"} or str(value) in {"<NA>", "NaT"}
+    )
