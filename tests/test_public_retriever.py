@@ -51,6 +51,7 @@ from llm_ontology_mapper.public_retriever import (
     PublicOntologyRetriever,
     PublicRetrievalError,
     _route_name,
+    public_route_ontology,
 )
 
 pytestmark = pytest.mark.unit
@@ -169,6 +170,26 @@ _ICD_CANDIDATE = {
     "definition": "",
     "source": "NIH-ClinicalTables",
 }
+_SNOMED_CANDIDATE = {
+    "code": "SNOMEDCT:123456",
+    "term": "SNOMED concept",
+    "score": 0.88,
+    "definition": "",
+    "source": "OLS",
+}
+
+
+@pytest.mark.parametrize(
+    "alias",
+    ["SNOMED", "SNOMEDCT", "SNOMED-CT", "snomed", "snomedct", "snomed-ct"],
+)
+def test_public_route_ontology_normalizes_snomed_aliases(alias: str) -> None:
+    assert public_route_ontology(alias) == "SNOMED"
+
+
+@pytest.mark.parametrize(("alias", "expected"), [("HPO", "HPO"), ("HP", "HPO")])
+def test_public_route_ontology_preserves_hpo_aliases(alias: str, expected: str) -> None:
+    assert public_route_ontology(alias) == expected
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -486,6 +507,35 @@ def test_hp_routes_to_ols() -> None:
     retriever.retrieve(plan)
     methods = [name for name, _ in fake.calls]
     assert "search_ols" in methods
+
+
+@pytest.mark.parametrize("alias", ["SNOMED", "SNOMEDCT", "SNOMED-CT"])
+def test_snomed_aliases_route_to_snomed_ols(alias: str) -> None:
+    fake = FakeSearchTools(ols_returns=[_SNOMED_CANDIDATE])
+    retriever = PublicOntologyRetriever(search_tools=fake)
+    plan = _public_plan(preferred_ontology=alias)
+
+    results = retriever.retrieve(plan)
+
+    assert [name for name, _ in fake.calls] == ["search_ols"]
+    assert fake.calls[0][1]["ontology"] == "SNOMED"
+    assert results[0]["requested_ontology"] == "SNOMED"
+
+
+def test_snomed_alias_constraint_and_allow_list_remain_hard_filter() -> None:
+    fake = FakeSearchTools(ols_returns=[_SNOMED_CANDIDATE])
+    retriever = PublicOntologyRetriever(search_tools=fake)
+    plan = _public_plan(
+        preferred_ontology="MONDO",
+        candidate_ontologies=["MONDO", "HPO"],
+        target_ontology_constraint="SNOMED-CT",
+        allowed_target_ontologies=["SNOMED"],
+    )
+
+    retriever.retrieve(plan)
+
+    assert [name for name, _ in fake.calls] == ["search_ols"]
+    assert fake.calls[0][1]["ontology"] == "SNOMED"
 
 
 def test_mondo_routes_to_ols() -> None:

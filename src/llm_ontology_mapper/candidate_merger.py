@@ -12,7 +12,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from llm_ontology_mapper.models import NormalizedCandidate
-from llm_ontology_mapper.ontology_identity import validate_candidate_identity
+from llm_ontology_mapper.ontology_identity import canonical_ontology, validate_candidate_identity
 
 
 class CandidateMergeError(Exception):
@@ -96,12 +96,11 @@ class CandidateMerger:
         deduped = self._deduplicate(valid_candidates)
 
         if target_ontology_constraint:
-            target_upper = target_ontology_constraint.strip().upper()
-            deduped = [c for c in deduped if c.ontology == target_upper]
+            deduped = [c for c in deduped if _same_ontology(c.ontology, target_ontology_constraint)]
         elif allowed_target_ontologies is not None:
             allowed = _normalize_ontology_set(allowed_target_ontologies)
             if allowed:
-                deduped = [c for c in deduped if c.ontology in allowed]
+                deduped = [c for c in deduped if _ontology_in_set(c.ontology, allowed)]
 
         result = sorted(deduped, key=_sort_key)
 
@@ -151,10 +150,21 @@ def _sort_key(c: NormalizedCandidate) -> tuple:
 
 def _normalize_ontology_set(ontologies: list[str]) -> set[str]:
     return {
-        str(ontology or "").upper().strip()
+        canonical_ontology(ontology) or str(ontology or "").upper().strip()
         for ontology in ontologies
         if str(ontology or "").strip()
     }
+
+
+def _same_ontology(left: str, right: str) -> bool:
+    left_key = canonical_ontology(left) or str(left or "").upper().strip()
+    right_key = canonical_ontology(right) or str(right or "").upper().strip()
+    return left_key == right_key
+
+
+def _ontology_in_set(ontology: str, allowed: set[str]) -> bool:
+    key = canonical_ontology(ontology) or str(ontology or "").upper().strip()
+    return key in allowed
 
 
 def _filter_consistent_candidates(

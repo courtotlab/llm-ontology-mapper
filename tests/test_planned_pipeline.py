@@ -30,6 +30,8 @@ from llm_ontology_mapper.models import (
 )
 from llm_ontology_mapper.planned_pipeline import PlannedPipeline, PlannedPipelineError
 from llm_ontology_mapper.providers import BaseLLMProvider, ChatMessage, CompletionResponse
+from llm_ontology_mapper.public_retriever import PublicOntologyRetriever
+from llm_ontology_mapper.retrieval_router import RetrievalRouter
 
 pytestmark = pytest.mark.unit
 
@@ -101,6 +103,53 @@ class _Planner:
             retrieval_disabled_reason=(
                 "Retrieval disabled by caller" if mode == RetrievalMode.DISABLED else None
             ),
+        )
+
+
+class _SnomedAliasPlanner:
+    def __init__(self) -> None:
+        self.last_kwargs: dict[str, Any] | None = None
+
+    def plan(
+        self,
+        source_term: str,
+        source_label: str | None = None,
+        source_description: str | None = None,
+        source_type: str | None = None,
+        clinical_area: str | None = None,
+        target_ontology: str | None = None,
+        allowed_target_ontologies: list[str] | None = None,
+        retrieval_mode: RetrievalMode | str = RetrievalMode.PUBLIC,
+    ) -> QueryPlan:
+        self.last_kwargs = {
+            "source_term": source_term,
+            "source_label": source_label,
+            "source_description": source_description,
+            "source_type": source_type,
+            "clinical_area": clinical_area,
+            "target_ontology": target_ontology,
+            "allowed_target_ontologies": allowed_target_ontologies,
+            "retrieval_mode": retrieval_mode,
+        }
+        mode = (
+            retrieval_mode
+            if isinstance(retrieval_mode, RetrievalMode)
+            else RetrievalMode(retrieval_mode)
+        )
+        return QueryPlan(
+            original_term=source_term,
+            original_label=source_label,
+            source_description=source_description,
+            source_type=source_type,
+            normalized_term="inhaled nitric oxide",
+            expanded_queries=["inhaled nitric oxide"],
+            inferred_meaning="inhaled nitric oxide therapy",
+            semantic_type="clinical_concept",
+            candidate_ontologies=["SNOMED-CT"],
+            preferred_ontology="SNOMED-CT",
+            allowed_target_ontologies=["SNOMED"],
+            retrieval_mode=mode,
+            target_ontology_constraint="SNOMED-CT",
         )
 
 
@@ -189,6 +238,32 @@ class _Retriever:
 class _ForbiddenRetriever:
     def retrieve(self, *args: Any, **kwargs: Any) -> list[dict[str, Any]]:
         raise AssertionError("forbidden retriever was called")
+
+
+class _SnomedSearchTools:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    def search_ols(self, query: str, ontology: str, top_k: int = 10) -> list[dict[str, Any]]:
+        self.calls.append({"query": query, "ontology": ontology, "top_k": top_k})
+        return [
+            {
+                "code": "SNOMEDCT:123456",
+                "term": "Inhaled nitric oxide",
+                "ontology": "SNOMED-CT",
+                "score": 0.97,
+                "source": "OLS",
+            }
+        ]
+
+    def search_loinc(self, *args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+        raise AssertionError("LOINC route should not be called")
+
+    def search_rxnorm(self, *args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+        raise AssertionError("RxNorm route should not be called")
+
+    def search_icd10(self, *args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+        raise AssertionError("ICD route should not be called")
 
 
 class _RecordingNormalizer:
@@ -524,6 +599,45 @@ def test_target_ontology_passed_to_query_planner_and_metadata() -> None:
     assert parts["planner"].last_kwargs["target_ontology"] == "loinc"
     assert parts["planner"].last_kwargs["allowed_target_ontologies"] is None
     assert _meta(result)["target_ontology_constraint"] == "LOINC"
+
+
+def test_snomed_alias_from_planner_routes_through_public_snomed() -> None:
+    planner = _SnomedAliasPlanner()
+    search_tools = _SnomedSearchTools()
+    pipeline = PlannedPipeline(
+        provider=_StubProvider(),
+        query_planner=planner,
+        retrieval_router=RetrievalRouter(),
+        public_retriever=PublicOntologyRetriever(search_tools=search_tools),
+        local_retriever=_ForbiddenRetriever(),
+        candidate_normalizer=CandidateNormalizer(),
+        candidate_merger=CandidateMerger(),
+        llm_reranker=_Reranker([]),
+        mapping_result_builder=MappingResultBuilder(),
+        disabled_mapping_runner=_DisabledRunner([]),
+    )
+
+    result = pipeline.map_term(
+        "inhaled_no",
+        source_label="Inhaled nitric oxide",
+        target_ontology="SNOMED",
+        allowed_target_ontologies=["SNOMED"],
+        retrieval_mode=RetrievalMode.PUBLIC,
+    )
+
+    assert planner.last_kwargs is not None
+    assert planner.last_kwargs["target_ontology"] == "SNOMED"
+    assert planner.last_kwargs["allowed_target_ontologies"] == ["SNOMED"]
+    assert search_tools.calls == [
+        {"query": "inhaled nitric oxide", "ontology": "SNOMED", "top_k": 10}
+    ]
+    assert result.target_code == "SNOMEDCT:123456"
+    assert result.ontology == "SNOMED-CT"
+    assert result.metadata is not None
+    assert result.metadata.rag_debug is not None
+    trace = result.metadata.rag_debug.candidates_retrieved[0]["retrieval_trace"]
+    assert trace["route_calls"][0]["target_ontology"] == "SNOMED-CT"
+    assert trace["route_calls"][0]["allowed_target_ontologies"] == ["SNOMED"]
 
 
 def test_allowed_target_ontologies_passed_to_query_planner_and_route() -> None:

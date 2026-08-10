@@ -27,6 +27,7 @@ from _planned_smoke_helpers import (
 )
 
 from llm_ontology_mapper.mapper import OntologyMapper
+from llm_ontology_mapper.ontology_identity import canonical_ontology
 from llm_ontology_mapper.planned_pipeline import PlannedPipeline
 from llm_ontology_mapper.providers import OllamaProvider, OpenAIProvider
 from llm_ontology_mapper.public_retriever import PublicOntologyRetriever
@@ -44,15 +45,12 @@ OPENAI_MODEL = "gpt-5.5"
 OLLAMA_MODEL = "gpt-oss:120b"
 OLLAMA_BASE_URL = "http://localhost:11528"
 
-SOURCE_TERM = "oxygen_sat"
-SOURCE_LABEL = "ovygen saturation"
-SOURCE_DESCRIPTION = (
-    "Peripheral oxygen saturation measurement recorded as the percentage "
-    "of hemoglobin saturated with oxygen."
-)
-SOURCE_TYPE = "decimal"
-CLINICAL_AREA = "measurement"
-TARGET_ONTOLOGY = "LOINC"
+SOURCE_TERM = "inhaled_no"
+SOURCE_LABEL = "Inhaled nitric oxide"
+SOURCE_DESCRIPTION = ""
+SOURCE_TYPE = ""
+CLINICAL_AREA = ""
+TARGET_ONTOLOGY = "SNOMED-CT"
 RETRIEVAL_MODE = "public"
 
 MAX_RESULTS_PER_QUERY = int(os.environ.get("MAX_RESULTS_PER_QUERY", "10"))
@@ -84,8 +82,17 @@ def _target_ontologies(value: str | None) -> list[str] | None:
 def _allowed_ontology_set(target_ontologies: list[str] | None) -> set[str] | None:
     if target_ontologies is None:
         return None
-    allowed = {ontology.upper().strip() for ontology in target_ontologies if ontology.strip()}
+    allowed = {
+        _canonical_ontology_name(ontology) for ontology in target_ontologies if ontology.strip()
+    }
     return allowed or None
+
+
+def _canonical_ontology_name(value: object) -> str:
+    text = str(value or "").strip()
+    if text.upper() == "UNKNOWN":
+        return "UNKNOWN"
+    return canonical_ontology(text) or text.upper()
 
 
 def _build_provider() -> OpenAIProvider | OllamaProvider | None:
@@ -153,7 +160,7 @@ def _validate_alternatives(
         if not _is_unmapped(result):
             assert alt.code != result.target_code
         if allowed is not None:
-            alt_ontology = str(alt.ontology).upper().strip()
+            alt_ontology = _canonical_ontology_name(alt.ontology)
             assert alt_ontology in allowed, (
                 f"Alternative ontology {alt_ontology!r} is outside "
                 f"TARGET_ONTOLOGY allow-list {sorted(allowed)!r}"
@@ -266,13 +273,18 @@ def _run_case(
 
     if override_case:
         allowed = _allowed_ontology_set(target_ontologies) or {"HPO"}
-        assert result.ontology.upper() in {*allowed, "UNKNOWN"}, (
+        result_ontology = (
+            "UNKNOWN" if _is_unmapped(result) else _canonical_ontology_name(result.ontology)
+        )
+        assert result_ontology in {*allowed, "UNKNOWN"}, (
             f"Expected {sorted(allowed)!r}/UNKNOWN in override case, got {result.ontology!r}"
         )
-        assert result.ontology != "LOINC", "HPO override case must not return LOINC"
+        assert result_ontology != "LOINC", "HPO override case must not return LOINC"
     elif target_ontologies:
         allowed = _allowed_ontology_set(target_ontologies) or set()
-        result_ontology = result.ontology.upper()
+        result_ontology = (
+            "UNKNOWN" if _is_unmapped(result) else _canonical_ontology_name(result.ontology)
+        )
         assert result_ontology in {*allowed, "UNKNOWN"}, (
             f"Expected one of {sorted(allowed)!r} or UNKNOWN, got {result.ontology!r}"
         )

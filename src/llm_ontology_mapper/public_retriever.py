@@ -21,6 +21,7 @@ from llm_ontology_mapper.models import (
     RetrievalMode,
     RetrievalRoutePlan,
 )
+from llm_ontology_mapper.ontology_identity import canonical_ontology
 from llm_ontology_mapper.search_tools import SearchTools
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,10 @@ _ICD_ONTOLOGIES: frozenset[str] = frozenset({"ICD10", "ICD10CM", "ICD", "ICD-10"
 # OLS-routed ontologies are whatever SearchTools.OLS_ONTOLOGY_MAP supports.
 # We reference the class attribute directly so additions to SearchTools propagate.
 _OLS_ONTOLOGIES: frozenset[str] = frozenset(SearchTools.OLS_ONTOLOGY_MAP.keys())
+
+_PUBLIC_ROUTE_ONTOLOGY_ALIASES: dict[str, str] = {
+    "SNOMED-CT": "SNOMED",
+}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -143,18 +148,19 @@ class PublicOntologyRetriever:
         results: list[dict[str, Any]] = []
         for query in queries:
             for ontology in ontologies:
+                route_ontology = public_route_ontology(ontology)
                 logger.debug(
                     "PublicOntologyRetriever: query=%r ontology=%r",
                     query,
-                    ontology,
+                    route_ontology,
                 )
-                raw_candidates = self._call_route(query, ontology, max_results_per_query)
-                route = _route_name(ontology)
+                raw_candidates = self._call_route(query, route_ontology, max_results_per_query)
+                route = _route_name(route_ontology)
                 for candidate in raw_candidates:
                     enriched: dict[str, Any] = dict(candidate)
                     enriched.setdefault("matched_query", query)
                     enriched["retrieval_mode"] = RetrievalMode.PUBLIC.value
-                    enriched["requested_ontology"] = ontology
+                    enriched["requested_ontology"] = route_ontology
                     enriched.setdefault("route_name", route)
                     results.append(enriched)
 
@@ -222,16 +228,16 @@ class PublicOntologyRetriever:
         )
         allowed = _resolve_allowed_target_ontologies(query_plan, route_plan)
         if constraint:
-            constraint_upper = constraint.upper()
-            if allowed is not None and constraint_upper not in allowed:
+            route_constraint = public_route_ontology(constraint)
+            if allowed is not None and route_constraint not in allowed:
                 return []
-            return [constraint_upper]
+            return [route_constraint]
 
         ontologies: list[str] = []
         seen: set[str] = set()
 
         def _add(onto: str) -> None:
-            key = onto.upper()
+            key = public_route_ontology(onto)
             if key and key not in seen:
                 ontologies.append(key)
                 seen.add(key)
@@ -268,7 +274,7 @@ class PublicOntologyRetriever:
             PublicRetrievalError: if the ontology is not supported, or if the
                 SearchTools call raises an unexpected exception.
         """
-        onto_upper = ontology.upper()
+        onto_upper = public_route_ontology(ontology)
 
         try:
             if onto_upper in _LOINC_ONTOLOGIES:
@@ -303,7 +309,7 @@ class PublicOntologyRetriever:
 
 def _route_name(ontology: str) -> str:
     """Return the canonical route name for an ontology identifier."""
-    onto_upper = ontology.upper()
+    onto_upper = public_route_ontology(ontology)
     if onto_upper in _LOINC_ONTOLOGIES:
         return "LOINC-Search-API"
     if onto_upper in _RXNORM_ONTOLOGIES:
@@ -311,6 +317,13 @@ def _route_name(ontology: str) -> str:
     if onto_upper in _ICD_ONTOLOGIES:
         return "NIH-ClinicalTables"
     return "OLS"
+
+
+def public_route_ontology(ontology: str) -> str:
+    """Return the public-retrieval route identifier for a user/planner ontology."""
+    raw = str(ontology or "").upper().strip()
+    canonical = canonical_ontology(raw) or raw
+    return _PUBLIC_ROUTE_ONTOLOGY_ALIASES.get(canonical, canonical)
 
 
 def _resolve_allowed_target_ontologies(
@@ -328,7 +341,7 @@ def _resolve_allowed_target_ontologies(
     result: list[str] = []
     seen: set[str] = set()
     for ontology in raw:
-        key = str(ontology or "").upper().strip()
+        key = public_route_ontology(str(ontology or ""))
         if key and key not in seen:
             result.append(key)
             seen.add(key)

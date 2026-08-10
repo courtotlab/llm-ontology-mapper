@@ -38,7 +38,10 @@ from llm_ontology_mapper.models import (
     RetrievalMode,
     RetrievalTrace,
 )
-from llm_ontology_mapper.ontology_identity import validate_candidate_identity
+from llm_ontology_mapper.ontology_identity import (
+    canonical_ontology,
+    validate_candidate_identity,
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Public error type
@@ -194,18 +197,23 @@ class MappingResultBuilder:
             )
 
         # Validate target_ontology_constraint
-        if query_plan.target_ontology_constraint:
-            target_upper = query_plan.target_ontology_constraint.upper()
-            if selected_candidate.ontology != target_upper:
-                raise MappingResultBuilderError(
-                    f"Selected candidate ontology={selected_candidate.ontology!r} "
-                    f"does not match target_ontology_constraint={target_upper!r}."
-                )
+        if query_plan.target_ontology_constraint and not _same_ontology(
+            selected_candidate.ontology,
+            query_plan.target_ontology_constraint,
+        ):
+            raise MappingResultBuilderError(
+                f"Selected candidate ontology={selected_candidate.ontology!r} "
+                f"does not match "
+                f"target_ontology_constraint={query_plan.target_ontology_constraint!r}."
+            )
 
         allowed_ontologies = _normalize_allowed_target_ontologies(
             query_plan.allowed_target_ontologies
         )
-        if allowed_ontologies is not None and selected_candidate.ontology not in allowed_ontologies:
+        if allowed_ontologies is not None and not _ontology_in_set(
+            selected_candidate.ontology,
+            allowed_ontologies,
+        ):
             return self._build_unmapped(
                 query_plan=query_plan,
                 rerank_decision=_unmapped_decision_from(
@@ -343,7 +351,10 @@ def _build_alternatives(
         validation = validate_candidate_identity(ontology=candidate.ontology, code=candidate.code)
         if not validation.valid:
             return
-        if allowed_ontologies is not None and candidate.ontology not in allowed_ontologies:
+        if allowed_ontologies is not None and not _ontology_in_set(
+            candidate.ontology,
+            allowed_ontologies,
+        ):
             return
         identity = _candidate_identity(candidate)
         if identity == exclude_identity or identity in seen_identities:
@@ -495,7 +506,7 @@ def _final_ranking_trace(
     ):
         candidate = code_map.get(alt.code)
         if allowed_ontologies is not None and (
-            candidate is None or candidate.ontology not in allowed_ontologies
+            candidate is None or not _ontology_in_set(candidate.ontology, allowed_ontologies)
         ):
             continue
         trace.append(
@@ -524,11 +535,22 @@ def _normalize_allowed_target_ontologies(
     if ontologies is None:
         return None
     allowed = {
-        str(ontology or "").upper().strip()
+        canonical_ontology(ontology) or str(ontology or "").upper().strip()
         for ontology in ontologies
         if str(ontology or "").strip()
     }
     return allowed or None
+
+
+def _same_ontology(left: str, right: str) -> bool:
+    left_key = canonical_ontology(left) or str(left or "").upper().strip()
+    right_key = canonical_ontology(right) or str(right or "").upper().strip()
+    return left_key == right_key
+
+
+def _ontology_in_set(ontology: str, allowed: set[str]) -> bool:
+    key = canonical_ontology(ontology) or str(ontology or "").upper().strip()
+    return key in allowed
 
 
 def _unmapped_decision_from(
