@@ -40,19 +40,41 @@ Given a clinical data field name and optional context, you must:
 The field expanded_queries is NOT a synonym dump.
 
 expanded_queries must be the minimal ordered list of search queries that should be sent to retrieval.
+Public ontology APIs are often lexical search systems. A correct inferred_meaning is not enough
+unless expanded_queries also contain the wording that an ontology is likely to use.
 
 Rules for expanded_queries:
 
-1. The first query must always be the best single query for ontology retrieval.
-2. If source_label is present, clear, and directly names the biomedical concept, use source_label as the first and usually only query.
-3. If source_term itself is already clear and directly searchable, use source_term or normalized_term as the first and usually only query.
-4. Add extra queries only when the source term or source label is abbreviated, ambiguous, overly broad, awkwardly encoded, or unlikely to retrieve good ontology candidates directly.
-5. Do not add abbreviation variants when a clear full label is already available.
-6. Prefer 1 query when the concept is clear.
-7. Use 2–3 queries only when expansion is needed for recall.
-8. Never include more than 3 expanded_queries.
-9. Do not include low-value generic queries such as "measurement", "value", "clinical finding", or "test" unless they are part of the actual concept.
-10. Do not include both a full form and abbreviation variant unless the abbreviation variant is likely to improve retrieval.
+1. The first query must always be the best single query for ontology retrieval. This may be
+   the source label, the normalized term, or a canonical biomedical expression inferred from
+   the meaning.
+2. If source_label is present, clear, and directly names the biomedical concept in terminology
+   likely used by the target ontology, use source_label as the first and usually only query.
+3. If source_term itself is already clear and directly searchable, use source_term or
+   normalized_term as the first and usually only query.
+4. Add extra queries when the source term or source label is abbreviated, ambiguous, overly
+   broad, awkwardly encoded, includes data-dictionary wording, or is semantically correct but
+   unlikely to match ontology terminology lexically.
+5. When source wording differs from likely ontology wording, include a concise canonical
+   biomedical synonym or ontology-friendly formulation that is semantically equivalent to the
+   inferred_meaning.
+6. Generic data-dictionary words such as "status", "indicator", "flag", "code", "field",
+   "value", "response", and "variable" often describe the source field rather than the
+   biomedical concept. When they are not intrinsic to the concept, include an additional query
+   with that wording removed.
+7. Do not add abbreviation variants when a clear full label is already available unless the
+   abbreviation is itself likely to improve retrieval.
+8. Prefer 1 query only when the concept is already ontology-search-friendly. Use 2–4 focused
+   queries when lexical expansion is needed for recall.
+9. Never include more than 4 expanded_queries.
+10. Do not include low-value generic queries such as "measurement", "value", "clinical finding",
+    "condition", or "test" unless they are part of the actual concept.
+11. Do not include ontology codes or final mapping guesses in expanded_queries.
+12. Prevent semantic drift: do not add etiologies, causes, subtypes, treatments, severity,
+    patient assumptions, or related diagnoses unless source_term, source_label,
+    source_description, or clinical_area actually supplies that information.
+13. Do not include both a full form and abbreviation variant unless the abbreviation variant is
+    likely to improve retrieval.
 
 ## Input
 
@@ -181,7 +203,7 @@ Return ONLY valid JSON. No markdown fences. No explanation outside the JSON obje
 
 {{
 "normalized_term": "<basic normalized form of the term>",
-"expanded_queries": ["<best search query>", "<optional additional query only if needed>"],
+"expanded_queries": ["<best search query>", "<optional high-value equivalent query>"],
 "inferred_meaning": "<plain-language meaning of the field>",
 "semantic_type": "<measurement | phenotype | diagnosis | drug | procedure | exposure | other>",
 "candidate_ontologies": ["<ONTOLOGY1>", "<ONTOLOGY2>"],
