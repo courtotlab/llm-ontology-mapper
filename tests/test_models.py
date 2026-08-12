@@ -87,6 +87,36 @@ def test_ontology_prefix_normalised_to_uppercase() -> None:
 
 
 @pytest.mark.unit
+def test_native_efo_candidate_identity_is_valid() -> None:
+    candidate = NormalizedCandidate(
+        code="EFO:0000408",
+        term="disease",
+        ontology="EFO",
+        source="OLS",
+        matched_query="disease",
+        retrieval_mode=RetrievalMode.PUBLIC,
+    )
+
+    assert candidate.code == "EFO:0000408"
+    assert candidate.ontology == "EFO"
+
+
+@pytest.mark.unit
+def test_retrieved_from_ontologies_are_canonical_and_deduplicated() -> None:
+    candidate = NormalizedCandidate(
+        code="HP:0002099",
+        term="Asthma",
+        ontology="HPO",
+        source="OLS",
+        matched_query="asthma",
+        retrieval_mode=RetrievalMode.PUBLIC,
+        retrieved_from_ontologies=["efo", "EFO", "HP", "HPO"],
+    )
+
+    assert candidate.retrieved_from_ontologies == ["EFO", "HPO"]
+
+
+@pytest.mark.unit
 def test_blank_target_code_raises() -> None:
     with pytest.raises(ValueError, match="must not be blank"):
         MappingResult(

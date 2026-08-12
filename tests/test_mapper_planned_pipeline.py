@@ -264,6 +264,21 @@ def test_planned_mode_passes_single_explicit_target_ontology() -> None:
     assert fake.calls[0]["allowed_target_ontologies"] == ["LOINC"]
 
 
+def test_planned_mode_passes_single_explicit_efo_target_ontology() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        ontologies=["EFO"],
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term("disease")
+
+    assert fake.calls[0]["target_ontology"] == "EFO"
+    assert fake.calls[0]["allowed_target_ontologies"] == ["EFO"]
+
+
 def test_planned_mode_without_explicit_ontologies_is_unrestricted() -> None:
     fake = _FakePlannedPipeline()
     mapper = OntologyMapper(

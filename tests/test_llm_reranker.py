@@ -100,6 +100,7 @@ def _make_candidate(
     raw_score: float | None = 0.9,
     normalized_score: float | None = 0.9,
     definition: str | None = None,
+    retrieved_from_ontologies: list[str] | None = None,
 ) -> NormalizedCandidate:
     return NormalizedCandidate(
         code=code,
@@ -111,6 +112,7 @@ def _make_candidate(
         raw_score=raw_score,
         normalized_score=normalized_score,
         definition=definition,
+        retrieved_from_ontologies=retrieved_from_ontologies or [],
     )
 
 
@@ -485,8 +487,58 @@ def test_target_ontology_constraint_rejects_wrong_ontology() -> None:
 
     plan = _make_plan(target_ontology_constraint="LOINC")
 
-    with pytest.raises(LLMRerankerError, match="LOINC"):
-        reranker.rerank(plan, [hpo_candidate])
+    result = reranker.rerank(plan, [hpo_candidate])
+
+    assert result.is_unmapped is True
+    assert result.selected_code is None
+    assert provider.calls == []
+
+
+@pytest.mark.unit
+def test_target_ontology_constraint_accepts_native_efo_candidate() -> None:
+    candidate = _make_candidate(code="EFO:0000408", term="disease", ontology="EFO")
+    provider = _StubProvider(_response(selected_cid="C1", selected_code="EFO:0000408"))
+    reranker = LLMReranker(provider)
+
+    result = reranker.rerank(_make_plan(target_ontology_constraint="EFO"), [candidate])
+
+    assert result.selected_code == "EFO:0000408"
+    assert result.is_grounded is True
+
+
+@pytest.mark.unit
+def test_target_ontology_constraint_accepts_imported_efo_retrieved_candidate() -> None:
+    candidate = _make_candidate(
+        code="MONDO:0004975",
+        term="asthma",
+        ontology="MONDO",
+        retrieved_from_ontologies=["EFO"],
+    )
+    provider = _StubProvider(_response(selected_cid="C1", selected_code="MONDO:0004975"))
+    reranker = LLMReranker(provider)
+
+    result = reranker.rerank(_make_plan(target_ontology_constraint="EFO"), [candidate])
+
+    assert result.selected_code == "MONDO:0004975"
+    assert result.is_grounded is True
+
+
+@pytest.mark.unit
+def test_target_ontology_constraint_rejects_mondo_candidate_not_retrieved_from_efo() -> None:
+    candidate = _make_candidate(
+        code="MONDO:0004975",
+        term="asthma",
+        ontology="MONDO",
+        retrieved_from_ontologies=["MONDO"],
+    )
+    provider = _StubProvider(_response(selected_cid="C1", selected_code="MONDO:0004975"))
+    reranker = LLMReranker(provider)
+
+    result = reranker.rerank(_make_plan(target_ontology_constraint="EFO"), [candidate])
+
+    assert result.is_unmapped is True
+    assert result.selected_code is None
+    assert provider.calls == []
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -652,6 +704,99 @@ def test_candidate_list_includes_matched_query_and_source() -> None:
     user_message = provider.calls[0][1].content
     assert "systolic blood pressure" in user_message
     assert "LOINC-Search-API" in user_message
+
+
+@pytest.mark.unit
+def test_imported_efo_candidate_serializes_native_and_retrieval_ontology() -> None:
+    candidate = _make_candidate(
+        code="MONDO:0004975",
+        term="Alzheimer disease",
+        ontology="MONDO",
+        retrieved_from_ontologies=["EFO"],
+        matched_query="Alzheimer disease",
+    )
+    provider = _StubProvider(_response(selected_cid="C1", selected_code="MONDO:0004975"))
+    reranker = LLMReranker(provider)
+
+    result = reranker.rerank(
+        _make_plan(
+            original_term="alzheimer_disease",
+            original_label="Alzheimer disease",
+            target_ontology_constraint="EFO",
+            allowed_target_ontologies=["EFO"],
+            inferred_meaning="Alzheimer disease",
+            semantic_type="disease",
+            expanded_queries=["Alzheimer disease"],
+        ),
+        [candidate],
+    )
+
+    user_message = provider.calls[0][1].content
+    assert result.selected_code == "MONDO:0004975"
+    assert "code=MONDO:0004975" in user_message
+    assert "term=Alzheimer disease" in user_message
+    assert "native_ontology=MONDO" in user_message
+    assert "retrieved_from_ontologies=EFO" in user_message
+    assert "already passed deterministic Python-side hard-target filtering" in user_message
+    assert "For EFO targets only" in user_message
+    assert (
+        "Do not reject an EFO-retrieved candidate solely because "
+        "native_ontology is not EFO"
+    ) in user_message
+
+
+@pytest.mark.unit
+def test_native_efo_candidate_serializes_native_and_retrieval_ontology() -> None:
+    candidate = _make_candidate(
+        code="EFO:0000408",
+        term="disease",
+        ontology="EFO",
+        retrieved_from_ontologies=["EFO"],
+    )
+    provider = _StubProvider(_response(selected_cid="C1", selected_code="EFO:0000408"))
+    reranker = LLMReranker(provider)
+
+    reranker.rerank(
+        _make_plan(target_ontology_constraint="EFO", allowed_target_ontologies=["EFO"]),
+        [candidate],
+    )
+
+    user_message = provider.calls[0][1].content
+    assert "code=EFO:0000408" in user_message
+    assert "term=disease" in user_message
+    assert "native_ontology=EFO" in user_message
+    assert "retrieved_from_ontologies=EFO" in user_message
+
+
+@pytest.mark.unit
+def test_multiple_retrieval_provenance_serializes_deterministically() -> None:
+    candidate = _make_candidate(
+        code="HP:0012735",
+        term="Cough",
+        ontology="HPO",
+        retrieved_from_ontologies=["EFO", "HPO"],
+    )
+    provider = _StubProvider(_response(selected_cid="C1", selected_code="HP:0012735"))
+    reranker = LLMReranker(provider)
+
+    reranker.rerank(_make_plan(), [candidate])
+
+    user_message = provider.calls[0][1].content
+    assert "native_ontology=HPO" in user_message
+    assert "retrieved_from_ontologies=EFO, HPO" in user_message
+
+
+@pytest.mark.unit
+def test_missing_retrieval_provenance_remains_representable() -> None:
+    candidate = _make_candidate(code="HP:0012735", ontology="HPO")
+    provider = _StubProvider(_response(selected_cid="C1", selected_code="HP:0012735"))
+    reranker = LLMReranker(provider)
+
+    reranker.rerank(_make_plan(), [candidate])
+
+    user_message = provider.calls[0][1].content
+    assert "native_ontology=HPO" in user_message
+    assert "retrieved_from_ontologies=none" in user_message
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -867,6 +1012,48 @@ def test_allowed_target_ontologies_empty_candidate_set_returns_unmapped() -> Non
 
 
 @pytest.mark.unit
+def test_efo_allowed_target_filters_mondo_candidate_not_retrieved_from_efo() -> None:
+    candidate = _make_candidate(
+        code="MONDO:0004975",
+        term="Alzheimer disease",
+        ontology="MONDO",
+        retrieved_from_ontologies=["MONDO"],
+    )
+    provider = _StubProvider(_response(selected_cid="C1", selected_code="MONDO:0004975"))
+    reranker = LLMReranker(provider)
+
+    result = reranker.rerank(
+        _make_plan(allowed_target_ontologies=["EFO"]),
+        [candidate],
+    )
+
+    assert result.is_unmapped is True
+    assert result.selected_code is None
+    assert provider.calls == []
+
+
+@pytest.mark.unit
+def test_non_efo_allowed_target_does_not_use_search_space_exception() -> None:
+    candidate = _make_candidate(
+        code="HP:0012735",
+        term="Cough",
+        ontology="HPO",
+        retrieved_from_ontologies=["MONDO"],
+    )
+    provider = _StubProvider(_response(selected_cid="C1", selected_code="HP:0012735"))
+    reranker = LLMReranker(provider)
+
+    result = reranker.rerank(
+        _make_plan(allowed_target_ontologies=["MONDO"]),
+        [candidate],
+    )
+
+    assert result.is_unmapped is True
+    assert result.selected_code is None
+    assert provider.calls == []
+
+
+@pytest.mark.unit
 def test_allowed_target_ontologies_reject_unprompted_selection() -> None:
     loinc = _make_candidate(code="LOINC:8480-6", ontology="LOINC")
     hpo = _make_candidate(code="HP:0012735", ontology="HPO")
@@ -911,6 +1098,44 @@ def test_allowed_target_ontologies_alternatives_remain_inside_list() -> None:
     )
 
     assert [alt.code for alt in result.alternatives] == ["MONDO:0000001"]
+
+
+@pytest.mark.unit
+def test_efo_allowed_target_keeps_imported_alternative() -> None:
+    efo = _make_candidate(code="EFO:0000408", term="disease", ontology="EFO")
+    mondo = _make_candidate(
+        code="MONDO:0004975",
+        term="asthma",
+        ontology="MONDO",
+        retrieved_from_ontologies=["EFO"],
+    )
+    loinc = _make_candidate(code="LOINC:8480-6", ontology="LOINC")
+    response = _structured_response(
+        selected_cid="C1",
+        selected_code="EFO:0000408",
+        alternatives=[
+            {
+                "candidate_id": "C2",
+                "code": "MONDO:0004975",
+                "confidence": 0.7,
+                "explanation": "Imported EFO-search disease candidate.",
+            },
+            {
+                "candidate_id": "C3",
+                "code": "LOINC:8480-6",
+                "confidence": 0.6,
+                "explanation": "Unselected ontology.",
+            },
+        ],
+    )
+    reranker = LLMReranker(_StubProvider(response))
+
+    result = reranker.rerank(
+        _make_plan(allowed_target_ontologies=["EFO"]),
+        [efo, mondo, loinc],
+    )
+
+    assert [alt.code for alt in result.alternatives] == ["MONDO:0004975"]
 
 
 @pytest.mark.unit

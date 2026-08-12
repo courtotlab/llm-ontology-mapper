@@ -43,6 +43,7 @@ from llm_ontology_mapper.providers import (
     CompletionResponse,
     is_reasoning_model,
 )
+from llm_ontology_mapper.target_eligibility import candidate_allowed_for_targets
 
 logger = logging.getLogger(__name__)
 
@@ -147,9 +148,7 @@ class LLMReranker:
             if mode == RetrievalMode.PUBLIC
             else GroundingSource.LOCAL_SAPBERT
         )
-        allowed_ontologies = _normalize_allowed_target_ontologies(
-            query_plan.allowed_target_ontologies
-        )
+        allowed_ontologies = _effective_allowed_target_ontologies(query_plan)
         eligible_candidates = _filter_allowed_candidates(candidates, allowed_ontologies)
 
         # Empty candidate list — return unmapped without calling the provider
@@ -345,18 +344,22 @@ class LLMReranker:
             )
 
         # Enforce target_ontology_constraint
-        if query_plan.target_ontology_constraint:
-            target_upper = query_plan.target_ontology_constraint.upper()
-            if selected_candidate.ontology != target_upper:
-                raise LLMRerankerError(
-                    f"LLM selected candidate with ontology={selected_candidate.ontology!r} "
-                    f"but target_ontology_constraint={target_upper!r}; "
-                    f"selected candidate must belong to the constrained ontology."
-                )
+        if query_plan.target_ontology_constraint and not candidate_allowed_for_targets(
+            selected_candidate,
+            [query_plan.target_ontology_constraint],
+        ):
+            raise LLMRerankerError(
+                f"LLM selected candidate with ontology={selected_candidate.ontology!r} "
+                f"but target_ontology_constraint={query_plan.target_ontology_constraint.upper()!r}; "
+                f"selected candidate must belong to the constrained ontology."
+            )
         allowed_ontologies = _normalize_allowed_target_ontologies(
             query_plan.allowed_target_ontologies
         )
-        if allowed_ontologies is not None and selected_candidate.ontology not in allowed_ontologies:
+        if allowed_ontologies is not None and not candidate_allowed_for_targets(
+            selected_candidate,
+            allowed_ontologies,
+        ):
             raise LLMRerankerError(
                 f"LLM selected candidate with ontology={selected_candidate.ontology!r} "
                 f"outside allowed_target_ontologies={sorted(allowed_ontologies)!r}; "
@@ -411,6 +414,15 @@ def _normalize_allowed_target_ontologies(
     return allowed or None
 
 
+def _effective_allowed_target_ontologies(query_plan: QueryPlan) -> set[str] | None:
+    allowed = _normalize_allowed_target_ontologies(query_plan.allowed_target_ontologies)
+    if allowed is not None:
+        return allowed
+    if query_plan.target_ontology_constraint:
+        return _normalize_allowed_target_ontologies([query_plan.target_ontology_constraint])
+    return None
+
+
 def _filter_allowed_candidates(
     candidates: Sequence[NormalizedCandidate],
     allowed_ontologies: set[str] | None,
@@ -420,7 +432,7 @@ def _filter_allowed_candidates(
     return [
         candidate
         for candidate in _filter_consistent_candidates(candidates)
-        if candidate.ontology in allowed_ontologies
+        if candidate_allowed_for_targets(candidate, allowed_ontologies)
     ]
 
 
@@ -557,7 +569,10 @@ def _parse_structured_alternative(
         return None
 
     candidate = candidate_map[candidate_id]
-    if allowed_ontologies is not None and candidate.ontology not in allowed_ontologies:
+    if allowed_ontologies is not None and not candidate_allowed_for_targets(
+        candidate,
+        allowed_ontologies,
+    ):
         return None
     code = str(item.get("code") or "").strip()
     if code != candidate.code or code == selected_code or code not in candidate_codes:
@@ -680,7 +695,17 @@ def _build_candidate_list(candidate_map: dict[str, NormalizedCandidate]) -> str:
     """Format candidates as a numbered list for the LLM prompt."""
     parts: list[str] = []
     for cid, c in candidate_map.items():
-        fields = [f"{cid}: {c.code} | {c.term} | {c.ontology}"]
+        retrieved_from = (
+            ", ".join(c.retrieved_from_ontologies)
+            if c.retrieved_from_ontologies
+            else "none"
+        )
+        fields = [
+            f"{cid}: code={c.code}",
+            f"term={c.term}",
+            f"native_ontology={c.ontology}",
+            f"retrieved_from_ontologies={retrieved_from}",
+        ]
         score_parts: list[str] = []
         if c.normalized_score is not None:
             score_parts.append(f"normalized_score={c.normalized_score:.4f}")

@@ -13,6 +13,7 @@
 # - CHEBI: Chemical Entities of Biological Interest (medications, chemicals)
 # - SNOMED: SNOMED Clinical Terms
 # - RxNorm: Normalized names for medications
+# - EFO: Experimental Factor Ontology
 
 # Ontology metadata
 ontologies:
@@ -87,6 +88,14 @@ ontologies:
       - "Medication names"
       - "Drug prescriptions"
 
+  EFO:
+    full_name: "Experimental Factor Ontology"
+    description: "Ontology for experimental variables and biomedical study factors"
+    curie_prefix: "EFO"
+    use_cases:
+      - "Experimental factors"
+      - "Biomedical study variables"
+
 # =============================================================================
 # PREFIX ALIASES
 # =============================================================================
@@ -129,6 +138,9 @@ prefix_aliases:
   # CHEBI variations
   CHEBI: CHEBI
 
+  # EFO variations
+  EFO: EFO
+
 # =============================================================================
 # EXTERNAL API MAPPINGS
 # =============================================================================
@@ -146,6 +158,7 @@ ols_api_map:
   GO: go
   DOID: doid
   MESH: mesh
+  EFO: efo
 
 # BioPortal API ontology acronyms (uppercase)
 bioportal_api_map:

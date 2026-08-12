@@ -28,6 +28,14 @@ Your role is to select the best ontology candidate from the retrieved list for t
 - Do not invent codes.
 - Do not use candidate IDs as ontology codes.
 
+## Ontology eligibility context
+- The retrieved candidates listed below have already passed deterministic Python-side hard-target filtering.
+- Your job is to choose the most semantically correct candidate from that eligible list, or return UNMAPPED if none of the eligible candidates semantically match.
+- native_ontology is the candidate's native CURIE namespace. retrieved_from_ontologies are ontology search spaces that returned the candidate; these are distinct.
+- For EFO targets only: a candidate retrieved from the EFO search space is eligible even when native_ontology is MONDO, HP, UBERON, or another namespace represented within EFO.
+- Do not reject an EFO-retrieved candidate solely because native_ontology is not EFO.
+- This EFO search-space rule does not allow invented codes and does not apply broadly to non-EFO targets.
+
 ## Source term context
 {query_context}
 

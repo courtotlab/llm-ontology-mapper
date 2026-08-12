@@ -42,6 +42,7 @@ from llm_ontology_mapper.ontology_identity import (
     canonical_ontology,
     validate_candidate_identity,
 )
+from llm_ontology_mapper.target_eligibility import candidate_allowed_for_targets
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Public error type
@@ -197,9 +198,9 @@ class MappingResultBuilder:
             )
 
         # Validate target_ontology_constraint
-        if query_plan.target_ontology_constraint and not _same_ontology(
-            selected_candidate.ontology,
-            query_plan.target_ontology_constraint,
+        if query_plan.target_ontology_constraint and not candidate_allowed_for_targets(
+            selected_candidate,
+            [query_plan.target_ontology_constraint],
         ):
             raise MappingResultBuilderError(
                 f"Selected candidate ontology={selected_candidate.ontology!r} "
@@ -210,8 +211,8 @@ class MappingResultBuilder:
         allowed_ontologies = _normalize_allowed_target_ontologies(
             query_plan.allowed_target_ontologies
         )
-        if allowed_ontologies is not None and not _ontology_in_set(
-            selected_candidate.ontology,
+        if allowed_ontologies is not None and not candidate_allowed_for_targets(
+            selected_candidate,
             allowed_ontologies,
         ):
             return self._build_unmapped(
@@ -351,8 +352,8 @@ def _build_alternatives(
         validation = validate_candidate_identity(ontology=candidate.ontology, code=candidate.code)
         if not validation.valid:
             return
-        if allowed_ontologies is not None and not _ontology_in_set(
-            candidate.ontology,
+        if allowed_ontologies is not None and not candidate_allowed_for_targets(
+            candidate,
             allowed_ontologies,
         ):
             return
@@ -463,6 +464,7 @@ def _candidate_score_provenance(candidate: NormalizedCandidate) -> dict[str, Any
     return {
         "code": candidate.code,
         "ontology": candidate.ontology,
+        "retrieved_from_ontologies": list(candidate.retrieved_from_ontologies),
         "term": candidate.term,
         "raw_retrieval_score": candidate.raw_score,
         "normalized_retrieval_score": candidate.normalized_score,
@@ -506,7 +508,7 @@ def _final_ranking_trace(
     ):
         candidate = code_map.get(alt.code)
         if allowed_ontologies is not None and (
-            candidate is None or not _ontology_in_set(candidate.ontology, allowed_ontologies)
+            candidate is None or not candidate_allowed_for_targets(candidate, allowed_ontologies)
         ):
             continue
         trace.append(

@@ -31,6 +31,7 @@ def _c(
     normalized_score: float | None = None,
     definition: str | None = None,
     provenance: dict | None = None,
+    retrieved_from_ontologies: list[str] | None = None,
 ) -> NormalizedCandidate:
     return NormalizedCandidate(
         code=code,
@@ -43,6 +44,7 @@ def _c(
         normalized_score=normalized_score,
         definition=definition,
         provenance=provenance,
+        retrieved_from_ontologies=retrieved_from_ontologies or [],
     )
 
 
@@ -469,6 +471,126 @@ def test_hp_candidate_from_mondo_scoped_search_remains_when_hpo_allowed(
     result = merger.merge([candidate], allowed_target_ontologies=["MONDO", "HPO"])
 
     assert result == [candidate]
+
+
+@pytest.mark.unit
+def test_efo_target_keeps_imported_mondo_candidate_retrieved_from_efo(
+    merger: CandidateMerger,
+) -> None:
+    candidate = _c(
+        code="MONDO:0004975",
+        ontology="MONDO",
+        term="asthma",
+        retrieved_from_ontologies=["EFO"],
+    )
+
+    result = merger.merge([candidate], target_ontology_constraint="EFO")
+
+    assert result == [candidate]
+
+
+@pytest.mark.unit
+def test_efo_target_keeps_imported_hpo_candidate_retrieved_from_efo(
+    merger: CandidateMerger,
+) -> None:
+    candidate = _c(
+        code="HP:0002099",
+        ontology="HPO",
+        term="Asthma",
+        retrieved_from_ontologies=["EFO"],
+    )
+
+    result = merger.merge([candidate], allowed_target_ontologies=["EFO"])
+
+    assert result == [candidate]
+
+
+@pytest.mark.unit
+def test_efo_target_removes_mondo_candidate_not_retrieved_from_efo(
+    merger: CandidateMerger,
+) -> None:
+    candidate = _c(
+        code="MONDO:0004975",
+        ontology="MONDO",
+        term="asthma",
+        retrieved_from_ontologies=["MONDO"],
+    )
+
+    result = merger.merge([candidate], target_ontology_constraint="EFO")
+
+    assert result == []
+
+
+@pytest.mark.unit
+def test_mondo_target_still_removes_hpo_candidate_retrieved_from_mondo(
+    merger: CandidateMerger,
+) -> None:
+    candidate = _c(
+        code="HP:0002099",
+        ontology="HPO",
+        term="Asthma",
+        retrieved_from_ontologies=["MONDO"],
+    )
+
+    result = merger.merge([candidate], target_ontology_constraint="MONDO")
+
+    assert result == []
+
+
+@pytest.mark.unit
+def test_multi_target_keeps_native_and_efo_retrieved_imported_candidates(
+    merger: CandidateMerger,
+) -> None:
+    native_loinc = _c(code="LOINC:8480-6", ontology="LOINC", term="Systolic BP")
+    native_efo = _c(code="EFO:0000408", ontology="EFO", term="disease")
+    imported_mondo = _c(
+        code="MONDO:0004975",
+        ontology="MONDO",
+        term="asthma",
+        retrieved_from_ontologies=["EFO"],
+    )
+    unrelated_mondo = _c(
+        code="MONDO:0000001",
+        ontology="MONDO",
+        term="unrelated disease",
+        retrieved_from_ontologies=["MONDO"],
+    )
+
+    result = merger.merge(
+        [native_loinc, native_efo, imported_mondo, unrelated_mondo],
+        allowed_target_ontologies=["EFO", "LOINC"],
+    )
+
+    assert {candidate.code for candidate in result} == {
+        "LOINC:8480-6",
+        "EFO:0000408",
+        "MONDO:0004975",
+    }
+
+
+@pytest.mark.unit
+def test_duplicate_merge_preserves_retrieved_from_ontologies(
+    merger: CandidateMerger,
+) -> None:
+    from_efo = _c(
+        code="HP:0002099",
+        ontology="HPO",
+        term="Asthma",
+        normalized_score=0.8,
+        retrieved_from_ontologies=["EFO"],
+    )
+    from_hpo = _c(
+        code="HP:0002099",
+        ontology="HPO",
+        term="Asthma",
+        normalized_score=0.7,
+        retrieved_from_ontologies=["HPO"],
+    )
+
+    result = merger.merge([from_efo, from_hpo])
+
+    assert len(result) == 1
+    assert result[0].retrieved_from_ontologies == ["EFO", "HPO"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

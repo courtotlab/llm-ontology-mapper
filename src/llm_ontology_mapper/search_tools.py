@@ -61,6 +61,7 @@ class SearchTools:
         "GO": "go",
         "DOID": "doid",
         "MESH": "mesh",
+        "EFO": "efo",
     }
 
     def __init__(

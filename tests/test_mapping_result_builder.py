@@ -66,6 +66,7 @@ def _make_candidate(
     raw_score: float | None = 0.95,
     normalized_score: float | None = 0.92,
     provenance: dict | None = None,
+    retrieved_from_ontologies: list[str] | None = None,
 ) -> NormalizedCandidate:
     return NormalizedCandidate(
         code=code,
@@ -77,6 +78,7 @@ def _make_candidate(
         raw_score=raw_score,
         normalized_score=normalized_score,
         provenance=provenance,
+        retrieved_from_ontologies=retrieved_from_ontologies or [],
     )
 
 
@@ -472,6 +474,45 @@ def test_allowed_target_ontologies_filter_result_alternatives() -> None:
     )
 
     assert [alt.ontology for alt in result.alternatives] == ["MONDO"]
+
+
+def test_efo_allowed_target_keeps_imported_result_alternative() -> None:
+    builder = MappingResultBuilder()
+    selected = _make_candidate("EFO:0000408", "disease", "EFO")
+    imported_alt = _make_candidate(
+        "MONDO:0004975",
+        "asthma",
+        "MONDO",
+        retrieved_from_ontologies=["EFO"],
+    )
+    unselected_alt = _make_candidate("LOINC:8480-6", "Systolic BP", "LOINC")
+    decision = _make_selected_decision(
+        selected_code="EFO:0000408",
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C2",
+                code="MONDO:0004975",
+                confidence=0.7,
+                explanation="Imported EFO-search disease candidate.",
+            ),
+            RerankAlternative(
+                candidate_id="C3",
+                code="LOINC:8480-6",
+                confidence=0.6,
+                explanation="Unselected ontology.",
+            ),
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(allowed_target_ontologies=["EFO"]),
+        rerank_decision=decision,
+        candidates=[selected, imported_alt, unselected_alt],
+    )
+
+    assert [(alt.code, alt.ontology) for alt in result.alternatives] == [
+        ("MONDO:0004975", "MONDO")
+    ]
 
 
 def test_selected_candidate_not_in_alternatives_by_stable_identity() -> None:
@@ -982,6 +1023,53 @@ def test_single_allowed_target_ontology_valid_result_still_works() -> None:
 
     assert result.target_code == "LOINC:8480-6"
     assert result.ontology == "LOINC"
+
+
+def test_efo_target_imported_mondo_selection_preserves_native_result_ontology() -> None:
+    builder = MappingResultBuilder()
+    candidate = _make_candidate(
+        "MONDO:0004975",
+        "asthma",
+        "MONDO",
+        retrieved_from_ontologies=["EFO"],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(target_ontology_constraint="EFO"),
+        rerank_decision=_make_selected_decision(
+            selected_code="MONDO:0004975",
+            selected_candidate_id="C1",
+        ),
+        candidates=[candidate],
+    )
+
+    assert result.target_code == "MONDO:0004975"
+    assert result.ontology == "MONDO"
+    info = _get_pipeline_info(result)
+    assert info["final_ranking_trace"]
+    assert info["final_ranking_trace"][0]["code"] == "MONDO:0004975"
+    assert info["final_ranking_trace"][0]["ontology"] == "MONDO"
+    assert info["final_ranking_trace"][0]["selected"] is True
+
+
+def test_efo_target_rejects_mondo_selection_not_retrieved_from_efo() -> None:
+    builder = MappingResultBuilder()
+    candidate = _make_candidate(
+        "MONDO:0004975",
+        "asthma",
+        "MONDO",
+        retrieved_from_ontologies=["MONDO"],
+    )
+
+    with pytest.raises(MappingResultBuilderError, match="EFO"):
+        builder.build(
+            query_plan=_make_plan(target_ontology_constraint="EFO"),
+            rerank_decision=_make_selected_decision(
+                selected_code="MONDO:0004975",
+                selected_candidate_id="C1",
+            ),
+            candidates=[candidate],
+        )
 
 
 def test_inconsistent_primary_candidate_becomes_unmapped() -> None:

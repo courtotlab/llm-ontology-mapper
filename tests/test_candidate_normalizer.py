@@ -370,6 +370,52 @@ def test_preserves_raw_candidate_in_provenance(normalizer: CandidateNormalizer) 
     assert candidate.provenance["matched_query"] == "cough"
 
 
+@pytest.mark.unit
+def test_requested_ontology_becomes_retrieved_from_ontology(
+    normalizer: CandidateNormalizer,
+) -> None:
+    raw = {
+        "code": "MONDO:0004975",
+        "term": "asthma",
+        "ontology": "MONDO",
+        "source": "OLS",
+        "requested_ontology": "EFO",
+    }
+
+    candidate = normalizer.normalize(
+        raw,
+        retrieval_mode="public",
+        matched_query="asthma",
+    )
+
+    assert candidate.code == "MONDO:0004975"
+    assert candidate.ontology == "MONDO"
+    assert candidate.retrieved_from_ontologies == ["EFO"]
+
+
+@pytest.mark.unit
+def test_efo_scoped_imported_hp_candidate_keeps_native_hpo_identity(
+    normalizer: CandidateNormalizer,
+) -> None:
+    raw = {
+        "code": "HP:0002099",
+        "term": "Asthma",
+        "source": "OLS",
+        "requested_ontology": "EFO",
+    }
+
+    candidate = normalizer.normalize(
+        raw,
+        retrieval_mode="public",
+        matched_query="asthma",
+        default_ontology="EFO",
+    )
+
+    assert candidate.code == "HP:0002099"
+    assert candidate.ontology == "HPO"
+    assert candidate.retrieved_from_ontologies == ["EFO"]
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Test 18: normalizes ontology casing to uppercase
 # ─────────────────────────────────────────────────────────────────────────────

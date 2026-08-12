@@ -601,6 +601,62 @@ def test_target_ontology_passed_to_query_planner_and_metadata() -> None:
     assert _meta(result)["target_ontology_constraint"] == "LOINC"
 
 
+def test_native_efo_candidate_survives_planned_public_hard_target() -> None:
+    pipeline, parts = _pipeline(
+        public_raw=[
+            _public_raw(
+                code="EFO:0000408",
+                term="disease",
+                ontology="EFO",
+                source="OLS",
+                requested_ontology="EFO",
+                route_name="OLS",
+            )
+        ]
+    )
+
+    result = pipeline.map_term(
+        "disease",
+        target_ontology="EFO",
+        retrieval_mode=RetrievalMode.PUBLIC,
+    )
+
+    assert parts["planner"].last_kwargs["target_ontology"] == "EFO"
+    assert parts["merger"].last_target_ontology_constraint == "EFO"
+    assert parts["reranker"].last_candidates is not None
+    assert parts["reranker"].last_candidates[0].ontology == "EFO"
+    assert result.target_code == "EFO:0000408"
+    assert result.ontology == "EFO"
+
+
+def test_imported_efo_candidate_survives_planned_public_hard_target() -> None:
+    pipeline, parts = _pipeline(
+        public_raw=[
+            _public_raw(
+                code="MONDO:0004975",
+                term="asthma",
+                ontology="MONDO",
+                source="OLS",
+                requested_ontology="EFO",
+                route_name="OLS",
+            )
+        ]
+    )
+
+    result = pipeline.map_term(
+        "asthma",
+        target_ontology="EFO",
+        retrieval_mode=RetrievalMode.PUBLIC,
+    )
+
+    assert parts["merger"].last_target_ontology_constraint == "EFO"
+    assert parts["reranker"].last_candidates is not None
+    assert parts["reranker"].last_candidates[0].ontology == "MONDO"
+    assert parts["reranker"].last_candidates[0].retrieved_from_ontologies == ["EFO"]
+    assert result.target_code == "MONDO:0004975"
+    assert result.ontology == "MONDO"
+
+
 def test_snomed_alias_from_planner_routes_through_public_snomed() -> None:
     planner = _SnomedAliasPlanner()
     search_tools = _SnomedSearchTools()

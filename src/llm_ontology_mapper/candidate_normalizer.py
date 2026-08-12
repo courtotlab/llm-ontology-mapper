@@ -15,7 +15,7 @@ from llm_ontology_mapper.models import (
     NormalizedCandidate,
     RetrievalMode,
 )
-from llm_ontology_mapper.ontology_identity import resolve_candidate_identity
+from llm_ontology_mapper.ontology_identity import canonical_ontology, resolve_candidate_identity
 
 
 class CandidateNormalizationError(Exception):
@@ -124,6 +124,7 @@ class CandidateNormalizer:
         source = self._extract_source(raw_candidate, default_source, mode)
         raw_score = self._extract_score(raw_candidate)
         normalized_score = self._extract_normalized_score(raw_candidate, raw_score)
+        retrieved_from_ontologies = self._extract_retrieved_from_ontologies(raw_candidate)
 
         provenance: dict[str, Any] = {
             "raw_candidate": raw_candidate,
@@ -147,6 +148,7 @@ class CandidateNormalizer:
             raw_score=raw_score,
             normalized_score=normalized_score,
             provenance=provenance,
+            retrieved_from_ontologies=retrieved_from_ontologies,
         )
 
     def normalize_many(
@@ -300,3 +302,22 @@ class CandidateNormalizer:
         if raw_score is not None and 0.0 <= raw_score <= 1.0:
             return raw_score
         return None
+
+    @staticmethod
+    def _extract_retrieved_from_ontologies(raw: dict[str, Any]) -> list[str]:
+        raw_values = raw.get("requested_ontologies")
+        if raw_values is None:
+            raw_values = raw.get("requested_ontology")
+
+        if raw_values is None:
+            return []
+        values = raw_values if isinstance(raw_values, (list, tuple, set)) else [raw_values]
+
+        result: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            key = canonical_ontology(value) or str(value or "").upper().strip()
+            if key and key not in seen:
+                result.append(key)
+                seen.add(key)
+        return result

@@ -263,6 +263,26 @@ def test_search_ols_classifies_hp_result_from_mondo_scoped_request_as_hpo() -> N
 
 
 @pytest.mark.unit
+def test_search_ols_scopes_efo_request_to_efo_ontology_id() -> None:
+    tools = SearchTools(request_delay=0)
+    doc = {
+        "obo_id": "EFO:0000408",
+        "iri": "http://www.ebi.ac.uk/efo/EFO_0000408",
+        "label": "disease",
+        "description": ["A disease experimental factor."],
+    }
+
+    with patch("requests.get", return_value=_ols_response([doc])) as mock_get:
+        results = tools.search_ols("disease", ontology="EFO", top_k=3)
+
+    assert mock_get.call_args.kwargs["params"]["ontology"] == "efo"
+    assert mock_get.call_args.kwargs["params"]["q"] == "disease"
+    assert mock_get.call_args.kwargs["params"]["rows"] == "3"
+    assert results[0]["code"] == "EFO:0000408"
+    assert results[0]["ontology"] == "EFO"
+
+
+@pytest.mark.unit
 def test_normalize_code_idempotent_all_prefix_map_ontologies() -> None:
     """For every ontology in the prefix map, normalizing twice equals normalizing once."""
     tools = SearchTools(request_delay=0)
@@ -279,6 +299,7 @@ def test_normalize_code_idempotent_all_prefix_map_ontologies() -> None:
         ("RXNORM:6809", "RXNORM"),
         ("RXCUI:6809", "RXCUI"),
         ("UO:0000001", "UO"),
+        ("EFO:0000408", "EFO"),
     ]
     for raw, ontology in cases:
         once = tools._normalize_code(raw, ontology)

@@ -22,6 +22,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from llm_ontology_mapper.ontology_identity import (
+    canonical_ontology,
     normalize_code_for_ontology,
     validate_candidate_identity,
 )
@@ -469,6 +470,13 @@ class NormalizedCandidate(BaseModel):
         None,
         description="Route, endpoint, query, and raw payload references",
     )
+    retrieved_from_ontologies: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Ontology search spaces that retrieved this candidate. This is distinct "
+            "from ontology, which is the candidate's native code namespace."
+        ),
+    )
 
     @field_validator("code", "term", "source", "matched_query")
     @classmethod
@@ -483,6 +491,18 @@ class NormalizedCandidate(BaseModel):
         if not v.strip():
             raise ValueError("ontology must not be blank")
         return v.upper().strip()
+
+    @field_validator("retrieved_from_ontologies")
+    @classmethod
+    def normalise_retrieved_from_ontologies(cls, v: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for ontology in v:
+            key = canonical_ontology(ontology) or str(ontology or "").upper().strip()
+            if key and key not in seen:
+                normalized.append(key)
+                seen.add(key)
+        return normalized
 
     @field_validator("retrieval_mode")
     @classmethod

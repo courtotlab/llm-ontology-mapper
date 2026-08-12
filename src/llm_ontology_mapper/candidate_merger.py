@@ -13,6 +13,7 @@ from typing import Any
 
 from llm_ontology_mapper.models import NormalizedCandidate
 from llm_ontology_mapper.ontology_identity import canonical_ontology, validate_candidate_identity
+from llm_ontology_mapper.target_eligibility import candidate_allowed_for_targets
 
 
 class CandidateMergeError(Exception):
@@ -96,11 +97,13 @@ class CandidateMerger:
         deduped = self._deduplicate(valid_candidates)
 
         if target_ontology_constraint:
-            deduped = [c for c in deduped if _same_ontology(c.ontology, target_ontology_constraint)]
+            deduped = [
+                c for c in deduped if candidate_allowed_for_targets(c, [target_ontology_constraint])
+            ]
         elif allowed_target_ontologies is not None:
             allowed = _normalize_ontology_set(allowed_target_ontologies)
             if allowed:
-                deduped = [c for c in deduped if _ontology_in_set(c.ontology, allowed)]
+                deduped = [c for c in deduped if candidate_allowed_for_targets(c, allowed)]
 
         result = sorted(deduped, key=_sort_key)
 
@@ -207,6 +210,13 @@ def _merge_group(group: list[NormalizedCandidate]) -> NormalizedCandidate:
     winner = min(group, key=_winner_key)
 
     all_matched_queries: list[str] = list(dict.fromkeys(c.matched_query for c in group))
+    retrieved_from_ontologies: list[str] = list(
+        dict.fromkeys(
+            ontology
+            for candidate in group
+            for ontology in candidate.retrieved_from_ontologies
+        )
+    )
     merged_provenance: dict[str, Any] = {
         "merged": True,
         "duplicate_count": len(group),
@@ -231,4 +241,5 @@ def _merge_group(group: list[NormalizedCandidate]) -> NormalizedCandidate:
         raw_score=winner.raw_score,
         normalized_score=winner.normalized_score,
         provenance=merged_provenance,
+        retrieved_from_ontologies=retrieved_from_ontologies,
     )

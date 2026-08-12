@@ -177,6 +177,14 @@ _SNOMED_CANDIDATE = {
     "definition": "",
     "source": "OLS",
 }
+_EFO_CANDIDATE = {
+    "code": "EFO:0000408",
+    "term": "disease",
+    "ontology": "EFO",
+    "score": 0.86,
+    "definition": "",
+    "source": "OLS",
+}
 
 
 @pytest.mark.parametrize(
@@ -558,6 +566,24 @@ def test_ncit_routes_to_ols() -> None:
     assert "search_ols" in methods
     ols_ontology = [c["ontology"] for name, c in fake.calls if name == "search_ols"]
     assert "NCIT" in ols_ontology
+
+
+def test_efo_routes_to_ols_with_requested_ontology_metadata() -> None:
+    fake = FakeSearchTools(ols_returns=[_EFO_CANDIDATE])
+    retriever = PublicOntologyRetriever(search_tools=fake)
+    plan = _public_plan(
+        expanded_queries=["disease"],
+        target_ontology_constraint="EFO",
+    )
+
+    results = retriever.retrieve(plan)
+
+    assert [name for name, _ in fake.calls] == ["search_ols"]
+    assert fake.calls[0][1]["ontology"] == "EFO"
+    assert results[0]["requested_ontology"] == "EFO"
+    assert results[0]["route_name"] == "OLS"
+    assert results[0]["matched_query"] == "disease"
+    assert results[0]["retrieval_mode"] == "public"
 
 
 def test_loinc_routes_to_loinc_search() -> None:
