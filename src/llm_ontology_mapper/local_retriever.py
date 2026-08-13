@@ -30,6 +30,7 @@ Phase 8 of the planned grounded mapping pipeline.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 import requests  # type: ignore[import-untyped]
@@ -240,6 +241,7 @@ class LocalSemanticRetriever:
         *,
         route_plan: RetrievalRoutePlan | None = None,
         max_results_per_query: int = 10,
+        route_calls: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Execute local semantic retrieval for the given QueryPlan.
@@ -286,7 +288,29 @@ class LocalSemanticRetriever:
             # Broad semantic search: no ontology filter
             for query in queries:
                 logger.debug("LocalSemanticRetriever: query=%r ontology=None (broad)", query)
-                raw = self._call_client(query, None, max_results_per_query)
+                raw = self._call_client_timed(
+                    query,
+                    None,
+                    max_results_per_query,
+                    route_call_sink=route_calls,
+                    route_call={
+                        "route": "local_sapbert",
+                        "query": query,
+                        "target_ontology": query_plan.target_ontology_constraint
+                        or (route_plan.target_ontology_constraint if route_plan else None),
+                        "allowed_target_ontologies": (
+                            list(query_plan.allowed_target_ontologies)
+                            if query_plan.allowed_target_ontologies is not None
+                            else (
+                                list(route_plan.allowed_target_ontologies)
+                                if route_plan is not None
+                                and route_plan.allowed_target_ontologies is not None
+                                else None
+                            )
+                        ),
+                        "candidate_ontologies": [],
+                    },
+                )
                 for candidate in raw:
                     enriched: dict[str, Any] = dict(candidate)
                     enriched.setdefault("matched_query", query)
@@ -304,7 +328,29 @@ class LocalSemanticRetriever:
                         ontology,
                         index_key,
                     )
-                    raw = self._call_client(query, index_key, max_results_per_query)
+                    raw = self._call_client_timed(
+                        query,
+                        index_key,
+                        max_results_per_query,
+                        route_call_sink=route_calls,
+                        route_call={
+                            "route": "local_sapbert",
+                            "query": query,
+                            "target_ontology": query_plan.target_ontology_constraint
+                            or (route_plan.target_ontology_constraint if route_plan else None),
+                            "allowed_target_ontologies": (
+                                list(query_plan.allowed_target_ontologies)
+                                if query_plan.allowed_target_ontologies is not None
+                                else (
+                                    list(route_plan.allowed_target_ontologies)
+                                    if route_plan is not None
+                                    and route_plan.allowed_target_ontologies is not None
+                                    else None
+                                )
+                            ),
+                            "candidate_ontologies": [ontology],
+                        },
+                    )
                     for candidate in raw:
                         enriched = dict(candidate)
                         enriched.setdefault("matched_query", query)
@@ -421,6 +467,30 @@ class LocalSemanticRetriever:
                 f"Unexpected error from local semantic client "
                 f"(query={query!r}, ontology={ontology!r}): {exc}"
             ) from exc
+
+    def _call_client_timed(
+        self,
+        query: str,
+        ontology: str | None,
+        top_k: int,
+        *,
+        route_call_sink: list[dict[str, Any]] | None,
+        route_call: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        start = time.monotonic()
+        candidate_count: int | None = None
+        try:
+            candidates = self._call_client(query, ontology, top_k)
+            candidate_count = len(candidates)
+            return candidates
+        finally:
+            if route_call_sink is not None:
+                elapsed_ms = (time.monotonic() - start) * 1000
+                timed_call = dict(route_call)
+                timed_call["latency_ms"] = elapsed_ms
+                if candidate_count is not None:
+                    timed_call["candidate_count"] = candidate_count
+                route_call_sink.append(timed_call)
 
 
 def _resolve_allowed_target_ontologies(

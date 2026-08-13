@@ -41,6 +41,7 @@ from typing import Any
 
 import pytest
 
+from llm_ontology_mapper import public_retriever as public_retriever_module
 from llm_ontology_mapper.models import (
     GroundingSource,
     QueryPlan,
@@ -211,6 +212,61 @@ def test_public_mode_is_accepted() -> None:
     plan = _public_plan(preferred_ontology="HPO")
     results = retriever.retrieve(plan)
     assert isinstance(results, list)
+
+
+def test_public_route_calls_include_latency_and_candidate_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ticks = iter([1.0, 1.25])
+    monkeypatch.setattr(public_retriever_module.time, "monotonic", lambda: next(ticks))
+    fake = FakeSearchTools(ols_returns=[_OLS_CANDIDATE])
+    retriever = PublicOntologyRetriever(search_tools=fake)
+    plan = _public_plan(preferred_ontology="HPO")
+    route_calls: list[dict[str, Any]] = []
+
+    retriever.retrieve(plan, route_calls=route_calls)
+
+    assert len(route_calls) == 1
+    assert route_calls[0]["route"] == "public_api"
+    assert route_calls[0]["query"] == "cough"
+    assert route_calls[0]["latency_ms"] == 250.0
+    assert route_calls[0]["candidate_count"] == 1
+
+
+def test_public_multiple_routes_each_include_latency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ticks = iter([1.0, 1.1, 2.0, 2.25])
+    monkeypatch.setattr(public_retriever_module.time, "monotonic", lambda: next(ticks))
+    fake = FakeSearchTools(ols_returns=[_OLS_CANDIDATE])
+    retriever = PublicOntologyRetriever(search_tools=fake)
+    plan = _public_plan(
+        expanded_queries=["sinus pain", "nasal congestion"],
+        preferred_ontology="HPO",
+    )
+    route_calls: list[dict[str, Any]] = []
+
+    retriever.retrieve(plan, route_calls=route_calls)
+
+    assert [call["query"] for call in route_calls] == ["sinus pain", "nasal congestion"]
+    assert [call["latency_ms"] for call in route_calls] == pytest.approx([100.0, 250.0])
+
+
+def test_public_route_latency_recorded_when_route_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ticks = iter([10.0, 10.05])
+    monkeypatch.setattr(public_retriever_module.time, "monotonic", lambda: next(ticks))
+    retriever = PublicOntologyRetriever(search_tools=FakeSearchTools())
+    plan = _public_plan(preferred_ontology="UNKNOWN_ONTOLOGY")
+    route_calls: list[dict[str, Any]] = []
+
+    with pytest.raises(PublicRetrievalError):
+        retriever.retrieve(plan, route_calls=route_calls)
+
+    assert len(route_calls) == 1
+    assert route_calls[0]["latency_ms"] == pytest.approx(50.0)
+    assert "candidate_count" not in route_calls[0]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

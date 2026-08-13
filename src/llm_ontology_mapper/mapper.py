@@ -184,6 +184,7 @@ class OntologyMapper:
         Returns:
             MappingResult with confidence score and logic_type.
         """
+        planned_t0 = time.monotonic()
         planned_enabled = (
             self.use_planned_pipeline if use_planned_pipeline is None else use_planned_pipeline
         )
@@ -192,7 +193,7 @@ class OntologyMapper:
             mode = self._coerce_planned_retrieval_mode(
                 retrieval_mode if retrieval_mode is not None else self._planned_retrieval_mode
             )
-            return self._map_term_with_planned_pipeline(
+            result = self._map_term_with_planned_pipeline(
                 source_term=source_term,
                 source_label=source_label,
                 source_description=source_description,
@@ -200,6 +201,8 @@ class OntologyMapper:
                 entity_type=entity_type,
                 retrieval_mode=mode,
             )
+            _attach_latency_ms(result, (time.monotonic() - planned_t0) * 1000)
+            return result
 
         if retrieval_mode is not None:
             raise ValueError("retrieval_mode is only supported when use_planned_pipeline=True")
@@ -737,3 +740,10 @@ def _is_missing_batch_value(value: Any) -> bool:
     return module.startswith("pandas.") and (
         name in {"NAType", "NaTType"} or str(value) in {"<NA>", "NaT"}
     )
+
+
+def _attach_latency_ms(result: MappingResult, latency_ms: float) -> None:
+    metadata = result.metadata
+    if metadata is None:
+        return
+    result.metadata = metadata.model_copy(update={"latency_ms": latency_ms})

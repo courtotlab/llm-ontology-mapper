@@ -114,6 +114,10 @@ class RAGDebugInfo(BaseModel):
         False, description="True when the top candidate exceeded auto-accept threshold"
     )
     auto_accept_threshold: float = Field(0.0, ge=0.0, le=1.0)
+    pipeline_timings: dict[str, float] | None = Field(
+        default=None,
+        description="Major planned-pipeline stage timings in milliseconds, when available",
+    )
 
     model_config = {"frozen": True}
 

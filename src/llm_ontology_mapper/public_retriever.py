@@ -14,6 +14,7 @@ Phase 7 of the planned grounded mapping pipeline.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from llm_ontology_mapper.models import (
@@ -100,6 +101,7 @@ class PublicOntologyRetriever:
         *,
         route_plan: RetrievalRoutePlan | None = None,
         max_results_per_query: int = 10,
+        route_calls: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Execute public retrieval for the given QueryPlan.
@@ -154,8 +156,30 @@ class PublicOntologyRetriever:
                     query,
                     route_ontology,
                 )
-                raw_candidates = self._call_route(query, route_ontology, max_results_per_query)
                 route = _route_name(route_ontology)
+                raw_candidates = self._call_route_timed(
+                    query,
+                    route_ontology,
+                    max_results_per_query,
+                    route_call_sink=route_calls,
+                    route_call={
+                        "route": "public_api",
+                        "query": query,
+                        "target_ontology": query_plan.target_ontology_constraint
+                        or (route_plan.target_ontology_constraint if route_plan else None),
+                        "allowed_target_ontologies": (
+                            list(query_plan.allowed_target_ontologies)
+                            if query_plan.allowed_target_ontologies is not None
+                            else (
+                                list(route_plan.allowed_target_ontologies)
+                                if route_plan is not None
+                                and route_plan.allowed_target_ontologies is not None
+                                else None
+                            )
+                        ),
+                        "candidate_ontologies": [route_ontology],
+                    },
+                )
                 for candidate in raw_candidates:
                     enriched: dict[str, Any] = dict(candidate)
                     enriched.setdefault("matched_query", query)
@@ -300,6 +324,30 @@ class PublicOntologyRetriever:
             f"Supported OLS ontologies: {', '.join(sorted(_OLS_ONTOLOGIES))}; "
             f"also supported: LOINC, RXNORM/RXNAV, ICD10/ICD10CM."
         )
+
+    def _call_route_timed(
+        self,
+        query: str,
+        ontology: str,
+        top_k: int,
+        *,
+        route_call_sink: list[dict[str, Any]] | None,
+        route_call: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        start = time.monotonic()
+        candidate_count: int | None = None
+        try:
+            candidates = self._call_route(query, ontology, top_k)
+            candidate_count = len(candidates)
+            return candidates
+        finally:
+            if route_call_sink is not None:
+                elapsed_ms = (time.monotonic() - start) * 1000
+                timed_call = dict(route_call)
+                timed_call["latency_ms"] = elapsed_ms
+                if candidate_count is not None:
+                    timed_call["candidate_count"] = candidate_count
+                route_call_sink.append(timed_call)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

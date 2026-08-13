@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from llm_ontology_mapper import llm_reranker as llm_reranker_module
 from llm_ontology_mapper.llm_reranker import LLMReranker, LLMRerankerError
 from llm_ontology_mapper.models import (
     GroundingSource,
@@ -228,6 +229,33 @@ def test_provider_is_called(tmp_path) -> None:
     assert "sys_bp" in user_message
     # Candidate code should appear
     assert "HP:0012735" in user_message
+
+
+@pytest.mark.unit
+def test_reranker_records_provider_timing(monkeypatch: pytest.MonkeyPatch) -> None:
+    ticks = iter([8.0, 8.5])
+    monkeypatch.setattr(llm_reranker_module.time, "monotonic", lambda: next(ticks))
+    candidate = _make_candidate()
+    provider = _StubProvider(_response())
+    reranker = LLMReranker(provider)
+    timings: dict[str, float] = {}
+
+    reranker.rerank(_make_plan(), [candidate], timing_sink=timings)
+
+    assert timings["llm_reranker_provider_ms"] == 500.0
+
+
+@pytest.mark.unit
+def test_reranker_records_zero_provider_timing_when_skipped() -> None:
+    provider = _StubProvider(_response())
+    reranker = LLMReranker(provider)
+    timings: dict[str, float] = {}
+
+    result = reranker.rerank(_make_plan(), [], timing_sink=timings)
+
+    assert result.is_unmapped is True
+    assert provider.calls == []
+    assert timings["llm_reranker_provider_ms"] == 0.0
 
 
 # ─────────────────────────────────────────────────────────────────────────────

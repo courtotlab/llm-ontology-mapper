@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -117,6 +118,8 @@ class LLMReranker:
         self,
         query_plan: QueryPlan,
         candidates: Sequence[NormalizedCandidate],
+        *,
+        timing_sink: dict[str, float] | None = None,
     ) -> RerankDecision:
         """
         Select the best candidate for the source term or return UNMAPPED.
@@ -153,6 +156,8 @@ class LLMReranker:
 
         # Empty candidate list — return unmapped without calling the provider
         if not eligible_candidates:
+            if timing_sink is not None:
+                timing_sink["llm_reranker_provider_ms"] = 0.0
             return RerankDecision(
                 selected_code=None,
                 selected_candidate_id=None,
@@ -182,7 +187,7 @@ class LLMReranker:
             len(eligible_candidates),
         )
 
-        response = self._complete_rerank(messages)
+        response = self._complete_rerank_timed(messages, timing_sink=timing_sink)
         raw = _strip_fences(response.content)
         if not raw.strip() and _provider_uses_reasoning_model(self._provider):
             logger.warning(
@@ -193,8 +198,9 @@ class LLMReranker:
                 len(eligible_candidates),
                 getattr(self._provider, "model", None),
             )
-            response = self._complete_rerank(
+            response = self._complete_rerank_timed(
                 messages,
+                timing_sink=timing_sink,
                 max_tokens=_REASONING_RERANK_RETRY_TOKENS,
                 min_completion_tokens=_REASONING_RERANK_RETRY_TOKENS,
             )
@@ -247,6 +253,28 @@ class LLMReranker:
             max_tokens=max_tokens,
             **kwargs,
         )
+
+    def _complete_rerank_timed(
+        self,
+        messages: list[ChatMessage],
+        *,
+        timing_sink: dict[str, float] | None,
+        max_tokens: int = _RERANK_MAX_TOKENS,
+        min_completion_tokens: int = _REASONING_RERANK_MIN_COMPLETION_TOKENS,
+    ) -> CompletionResponse:
+        provider_start = time.monotonic()
+        try:
+            return self._complete_rerank(
+                messages,
+                max_tokens=max_tokens,
+                min_completion_tokens=min_completion_tokens,
+            )
+        finally:
+            if timing_sink is not None:
+                timing_sink["llm_reranker_provider_ms"] = (
+                    timing_sink.get("llm_reranker_provider_ms", 0.0)
+                    + (time.monotonic() - provider_start) * 1000
+                )
 
     def _build_messages(
         self,

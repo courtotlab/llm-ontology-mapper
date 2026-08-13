@@ -46,6 +46,7 @@ from typing import Any
 
 import pytest
 
+from llm_ontology_mapper import local_retriever as local_retriever_module
 from llm_ontology_mapper.local_retriever import (
     _SAPBERT_INDEX_MAP,
     LocalRetrievalError,
@@ -151,6 +152,26 @@ def test_local_mode_is_accepted() -> None:
     plan = _local_plan(preferred_ontology="HPO")
     results = retriever.retrieve(plan)
     assert isinstance(results, list)
+
+
+def test_local_route_calls_include_latency_and_candidate_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ticks = iter([5.0, 5.4])
+    monkeypatch.setattr(local_retriever_module.time, "monotonic", lambda: next(ticks))
+    fake = FakeClient(returns=[_SAPBERT_CANDIDATE])
+    retriever = LocalSemanticRetriever(client=fake)
+    plan = _local_plan(preferred_ontology="HPO")
+    route_calls: list[dict[str, Any]] = []
+
+    retriever.retrieve(plan, route_calls=route_calls)
+
+    assert len(route_calls) == 1
+    assert route_calls[0]["route"] == "local_sapbert"
+    assert route_calls[0]["query"] == "cough"
+    assert route_calls[0]["candidate_ontologies"] == ["HPO"]
+    assert route_calls[0]["latency_ms"] == pytest.approx(400.0)
+    assert route_calls[0]["candidate_count"] == 1
 
 
 # ─────────────────────────────────────────────────────────────────────────────

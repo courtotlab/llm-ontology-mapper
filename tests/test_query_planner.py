@@ -13,6 +13,7 @@ from typing import Any
 
 import pytest
 
+from llm_ontology_mapper import query_planner as query_planner_module
 from llm_ontology_mapper.models import (
     GroundingSource,
     LogicType,
@@ -133,6 +134,21 @@ def test_query_planner_uses_planning_token_budget(
     planner.plan("sys_bp")
 
     assert sys_bp_stub.call_kwargs == [{"temperature": 0.1, "max_tokens": 2048}]
+
+
+@pytest.mark.unit
+def test_query_planner_records_provider_timing(
+    sys_bp_stub: _RecordingStubProvider,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ticks = iter([4.0, 4.25])
+    monkeypatch.setattr(query_planner_module.time, "monotonic", lambda: next(ticks))
+    planner = QueryPlanner(sys_bp_stub)
+    timings: dict[str, float] = {}
+
+    planner.plan("sys_bp", timing_sink=timings)
+
+    assert timings["query_planning_provider_ms"] == 250.0
 
 
 # ─────────────────────────────────────────────────────────────────────────────

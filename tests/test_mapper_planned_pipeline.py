@@ -12,11 +12,14 @@ from typing import Any
 
 import pytest
 
+from llm_ontology_mapper import mapper as mapper_module
 from llm_ontology_mapper.mapper import OntologyMapper
 from llm_ontology_mapper.models import (
     LogicType,
     MappingBatch,
+    MappingMetadata,
     MappingResult,
+    RAGDebugInfo,
     RetrievalMode,
 )
 from llm_ontology_mapper.providers import BaseLLMProvider, ChatMessage, CompletionResponse
@@ -87,6 +90,51 @@ def _planned_result(source_term: str = "sys_bp") -> MappingResult:
     )
 
 
+def _planned_result_with_metadata(source_term: str = "sys_bp") -> MappingResult:
+    result = _planned_result(source_term)
+    result.metadata = MappingMetadata(
+        model="pipeline",
+        provider="grounded_pipeline",
+        rag_debug=RAGDebugInfo(
+            query_sent=source_term,
+            candidates_retrieved=[
+                {
+                    "retrieval_mode": "public",
+                    "is_grounded": True,
+                }
+            ],
+            top_k=1,
+        ),
+    )
+    return result
+
+
+def _planned_disabled_result_with_metadata(source_term: str = "sys_bp") -> MappingResult:
+    result = MappingResult(
+        source_term=source_term,
+        target_code="UNKNOWN:UNMAPPED",
+        target_term="UNMAPPED",
+        ontology="UNKNOWN",
+        confidence=0.0,
+        logic_type=LogicType.LLM,
+        metadata=MappingMetadata(
+            model="stub",
+            provider="stub",
+            rag_debug=RAGDebugInfo(
+                query_sent=source_term,
+                candidates_retrieved=[
+                    {
+                        "retrieval_mode": "disabled",
+                        "is_grounded": False,
+                    }
+                ],
+                top_k=0,
+            ),
+        ),
+    )
+    return result
+
+
 def test_default_constructor_uses_legacy_path() -> None:
     provider = _StubProvider()
     forbidden = _ForbiddenPlannedPipeline()
@@ -95,6 +143,10 @@ def test_default_constructor_uses_legacy_path() -> None:
     result = mapper.map_term("cough", source_label="Do you have a cough?")
 
     assert result.target_code == "HP:0012735"
+    assert result.metadata is not None
+    assert result.metadata.latency_ms is not None
+    assert result.metadata.latency_ms >= 0
+    assert result.metadata.rag_debug is None
     assert provider.calls
     assert forbidden.calls == []
 
@@ -125,6 +177,48 @@ def test_planned_flag_enables_planned_pipeline_delegation() -> None:
     assert result is fake.result
     assert len(fake.calls) == 1
     assert provider.calls == []
+
+
+def test_planned_mode_populates_total_latency_at_mapper_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ticks = iter([10.0, 10.25])
+    monkeypatch.setattr(mapper_module.time, "monotonic", lambda: next(ticks))
+    fake = _FakePlannedPipeline(result=_planned_result_with_metadata())
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    result = mapper.map_term("sys_bp")
+
+    assert result is fake.result
+    assert result.metadata is not None
+    assert result.metadata.latency_ms == 250.0
+    assert result.metadata.rag_debug is not None
+    assert result.metadata.rag_debug.pipeline_timings is None
+
+
+def test_planned_disabled_mode_populates_total_latency_without_stage_timings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ticks = iter([3.0, 3.125])
+    monkeypatch.setattr(mapper_module.time, "monotonic", lambda: next(ticks))
+    fake = _FakePlannedPipeline(result=_planned_disabled_result_with_metadata())
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        retrieval_mode=RetrievalMode.DISABLED,
+        planned_pipeline=fake,
+    )
+
+    result = mapper.map_term("sys_bp")
+
+    assert result.metadata is not None
+    assert result.metadata.latency_ms == 125.0
+    assert result.metadata.rag_debug is not None
+    assert result.metadata.rag_debug.pipeline_timings is None
 
 
 def test_map_term_override_enables_planned_pipeline_delegation() -> None:

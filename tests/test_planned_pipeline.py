@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 
+from llm_ontology_mapper import planned_pipeline as planned_pipeline_module
 from llm_ontology_mapper.candidate_merger import CandidateMerger
 from llm_ontology_mapper.candidate_normalizer import CandidateNormalizer
 from llm_ontology_mapper.llm_reranker import LLMReranker
@@ -35,6 +36,19 @@ from llm_ontology_mapper.retrieval_router import RetrievalRouter
 
 pytestmark = pytest.mark.unit
 
+_EXPECTED_PIPELINE_TIMING_KEYS = {
+    "query_planning_ms",
+    "query_planning_provider_ms",
+    "routing_ms",
+    "retrieval_ms",
+    "candidate_normalization_ms",
+    "candidate_merging_ms",
+    "llm_reranking_ms",
+    "llm_reranker_provider_ms",
+    "trace_building_ms",
+    "result_building_ms",
+}
+
 
 class _StubProvider(BaseLLMProvider):
     def __init__(self, response_content: str = "{}", model: str = "stub") -> None:
@@ -51,6 +65,22 @@ class _StubProvider(BaseLLMProvider):
     ) -> CompletionResponse:
         self.calls.append(list(messages))
         return CompletionResponse(content=self._response_content, model=self.model)
+
+
+class _SequenceProvider(BaseLLMProvider):
+    def __init__(self, responses: list[str], model: str = "stub") -> None:
+        super().__init__(model=model)
+        self._responses = list(responses)
+
+    def complete(
+        self,
+        messages: list[ChatMessage],
+        temperature: float = 0.1,
+        max_tokens: int = 1024,
+        **kwargs: Any,
+    ) -> CompletionResponse:
+        content = self._responses.pop(0)
+        return CompletionResponse(content=content, model=self.model)
 
 
 class _Planner:
@@ -258,6 +288,28 @@ class _SnomedSearchTools:
 
     def search_loinc(self, *args: Any, **kwargs: Any) -> list[dict[str, Any]]:
         raise AssertionError("LOINC route should not be called")
+
+    def search_rxnorm(self, *args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+        raise AssertionError("RxNorm route should not be called")
+
+    def search_icd10(self, *args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+        raise AssertionError("ICD route should not be called")
+
+
+class _PipelineSearchTools:
+    def search_loinc(self, query: str, top_k: int = 10) -> list[dict[str, Any]]:
+        return [
+            {
+                "code": "LOINC:8480-6",
+                "term": f"Systolic blood pressure {query}",
+                "ontology": "LOINC",
+                "score": 0.95,
+                "source": "LOINC-Search-API",
+            }
+        ]
+
+    def search_ols(self, *args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+        raise AssertionError("OLS route should not be called")
 
     def search_rxnorm(self, *args: Any, **kwargs: Any) -> list[dict[str, Any]]:
         raise AssertionError("RxNorm route should not be called")
@@ -529,6 +581,14 @@ def _meta(result: MappingResult) -> dict[str, Any]:
     return result.metadata.rag_debug.candidates_retrieved[0]
 
 
+def _pipeline_timings(result: MappingResult) -> dict[str, float]:
+    assert result.metadata is not None
+    assert result.metadata.rag_debug is not None
+    timings = result.metadata.rag_debug.pipeline_timings
+    assert timings is not None
+    return timings
+
+
 def test_public_mode_runs_full_grounded_pipeline_in_order() -> None:
     pipeline, parts = _pipeline()
 
@@ -544,6 +604,78 @@ def test_public_mode_runs_full_grounded_pipeline_in_order() -> None:
         "builder",
     ]
     assert result.target_code == "LOINC:8480-6"
+
+
+def test_public_mode_includes_major_stage_timings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ticks = iter(float(i) for i in range(100))
+    monkeypatch.setattr(planned_pipeline_module.time, "monotonic", lambda: next(ticks))
+    pipeline, _ = _pipeline()
+
+    result = pipeline.map_term("sys_bp", retrieval_mode=RetrievalMode.PUBLIC)
+
+    timings = _pipeline_timings(result)
+    assert set(timings) == _EXPECTED_PIPELINE_TIMING_KEYS
+    assert all(isinstance(value, float) for value in timings.values())
+    assert all(value >= 0 for value in timings.values())
+    assert timings["query_planning_ms"] == 1000.0
+    assert timings["result_building_ms"] == 1000.0
+    assert timings["query_planning_provider_ms"] == 0.0
+    assert timings["llm_reranker_provider_ms"] == 0.0
+
+
+def test_pipeline_timings_include_real_provider_and_route_diagnostics() -> None:
+    provider = _SequenceProvider(
+        [
+            """
+            {
+              "normalized_term": "systolic blood pressure",
+              "expanded_queries": ["systolic blood pressure", "systolic BP"],
+              "inferred_meaning": "systolic blood pressure",
+              "semantic_type": "measurement",
+              "candidate_ontologies": ["LOINC"],
+              "preferred_ontology": "LOINC",
+              "reasoning": "measurement",
+              "confidence": 0.95
+            }
+            """,
+            """
+            {
+              "selected_candidate_id": "C1",
+              "selected_code": "LOINC:8480-6",
+              "is_unmapped": false,
+              "confidence": 0.91,
+              "reasoning": "Selected best candidate.",
+              "alternatives": []
+            }
+            """,
+        ]
+    )
+    pipeline = PlannedPipeline(
+        provider=provider,
+        public_retriever=PublicOntologyRetriever(search_tools=_PipelineSearchTools()),
+        local_retriever=_ForbiddenRetriever(),
+    )
+
+    result = pipeline.map_term("sys_bp", retrieval_mode=RetrievalMode.PUBLIC)
+
+    timings = _pipeline_timings(result)
+    assert set(timings) == _EXPECTED_PIPELINE_TIMING_KEYS
+    assert timings["query_planning_provider_ms"] >= 0
+    assert timings["llm_reranker_provider_ms"] >= 0
+    trace = _meta(result)["retrieval_trace"]
+    route_calls = trace["route_calls"]
+    assert len(route_calls) == 2
+    assert [call["query"] for call in route_calls] == [
+        "systolic blood pressure",
+        "systolic BP",
+    ]
+    for call in route_calls:
+        assert call["route"] == "public_api"
+        assert isinstance(call["latency_ms"], float)
+        assert call["latency_ms"] >= 0
+        assert call["candidate_count"] == 1
 
 
 def test_local_mode_runs_full_grounded_pipeline_in_order() -> None:
@@ -563,6 +695,17 @@ def test_local_mode_runs_full_grounded_pipeline_in_order() -> None:
     assert result.target_code == "LOINC:8480-6"
 
 
+def test_local_mode_includes_major_stage_timings() -> None:
+    pipeline, _ = _pipeline()
+
+    result = pipeline.map_term("sys_bp", retrieval_mode=RetrievalMode.LOCAL)
+
+    timings = _pipeline_timings(result)
+    assert set(timings) == _EXPECTED_PIPELINE_TIMING_KEYS
+    assert all(isinstance(value, float) for value in timings.values())
+    assert all(value >= 0 for value in timings.values())
+
+
 def test_disabled_mode_runs_planner_router_disabled_runner_only() -> None:
     pipeline, parts = _pipeline(
         public_retriever=_ForbiddenRetriever(),
@@ -577,6 +720,9 @@ def test_disabled_mode_runs_planner_router_disabled_runner_only() -> None:
 
     assert parts["calls"] == ["planner", "router", "disabled"]
     assert result.logic_type == LogicType.LLM
+    assert result.metadata is not None
+    assert result.metadata.rag_debug is not None
+    assert result.metadata.rag_debug.pipeline_timings is None
 
 
 def test_public_mode_does_not_call_local_retriever() -> None:
@@ -859,6 +1005,10 @@ def test_empty_public_retrieval_produces_unmapped_result() -> None:
     assert result.target_code == "UNKNOWN:UNMAPPED"
     assert result.target_term == "UNMAPPED"
     assert result.ontology == "UNKNOWN"
+    timings = _pipeline_timings(result)
+    assert set(timings) == _EXPECTED_PIPELINE_TIMING_KEYS
+    assert all(value >= 0 for value in timings.values())
+    assert timings["llm_reranker_provider_ms"] == 0.0
 
 
 def test_normalize_raw_candidates_skip_one_bad_record(

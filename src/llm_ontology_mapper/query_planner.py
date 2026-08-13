@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from pathlib import Path
 from typing import Any
 
@@ -91,6 +92,7 @@ class QueryPlanner:
         *,
         source_description: str | None = None,
         source_type: str | None = None,
+        timing_sink: dict[str, float] | None = None,
     ) -> QueryPlan:
         """
         Produce a QueryPlan by calling the LLM provider.
@@ -141,7 +143,14 @@ class QueryPlanner:
             target_norm,
             allowed_norm,
         )
-        response = self._provider.complete(messages, temperature=0.1, max_tokens=2048)
+        provider_start = time.monotonic()
+        try:
+            response = self._provider.complete(messages, temperature=0.1, max_tokens=2048)
+        finally:
+            if timing_sink is not None:
+                timing_sink["query_planning_provider_ms"] = (
+                    time.monotonic() - provider_start
+                ) * 1000
 
         raw = _strip_fences(response.content)
         try:

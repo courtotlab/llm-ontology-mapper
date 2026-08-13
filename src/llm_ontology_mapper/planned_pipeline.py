@@ -9,7 +9,10 @@ individual retriever contracts.
 from __future__ import annotations
 
 import logging
-from typing import Any
+import time
+from collections.abc import Callable
+from inspect import Parameter, signature
+from typing import Any, TypeVar
 
 from llm_ontology_mapper.candidate_merger import CandidateMerger
 from llm_ontology_mapper.candidate_normalizer import (
@@ -35,6 +38,8 @@ from llm_ontology_mapper.query_planner import QueryPlanner
 from llm_ontology_mapper.retrieval_router import RetrievalRouter
 
 logger = logging.getLogger(__name__)
+
+_T = TypeVar("_T")
 
 
 class PlannedPipelineError(Exception):
@@ -107,54 +112,94 @@ class PlannedPipeline:
             PlannedPipelineError: component failure during orchestration.
         """
         mode = self._resolve_mode(retrieval_mode)
+        timings: dict[str, float] = {}
 
-        query_plan = self._plan(
-            source_term=source_term,
-            source_label=source_label,
-            source_description=source_description,
-            source_type=source_type,
-            clinical_area=clinical_area,
-            target_ontology=target_ontology,
-            allowed_target_ontologies=allowed_target_ontologies,
-            retrieval_mode=mode,
+        query_plan = _time_stage(
+            timings,
+            "query_planning_ms",
+            lambda: self._plan(
+                source_term=source_term,
+                source_label=source_label,
+                source_description=source_description,
+                source_type=source_type,
+                clinical_area=clinical_area,
+                target_ontology=target_ontology,
+                allowed_target_ontologies=allowed_target_ontologies,
+                retrieval_mode=mode,
+                timings=timings,
+            ),
         )
-        route_plan = self._route(query_plan)
+        timings.setdefault("query_planning_provider_ms", 0.0)
+        route_plan = _time_stage(
+            timings,
+            "routing_ms",
+            lambda: self._route(query_plan),
+        )
 
         if mode == RetrievalMode.DISABLED:
             return self._map_disabled(query_plan, source_type=source_type)
 
-        raw_candidates = self._retrieve(
-            query_plan=query_plan,
-            route_plan=route_plan,
-            max_results_per_query=max_results_per_query,
+        timed_route_calls: list[dict[str, Any]] = []
+        raw_candidates = _time_stage(
+            timings,
+            "retrieval_ms",
+            lambda: self._retrieve(
+                query_plan=query_plan,
+                route_plan=route_plan,
+                max_results_per_query=max_results_per_query,
+                route_calls=timed_route_calls,
+            ),
         )
-        normalized_candidates, normalization_errors = self._normalize_raw_candidates(
-            raw_candidates,
-            query_plan=query_plan,
+        normalized_candidates, normalization_errors = _time_stage(
+            timings,
+            "candidate_normalization_ms",
+            lambda: self._normalize_raw_candidates(
+                raw_candidates,
+                query_plan=query_plan,
+            ),
         )
-        merged_candidates = self._merge_candidates(
-            normalized_candidates,
-            target_ontology_constraint=query_plan.target_ontology_constraint,
-            allowed_target_ontologies=query_plan.allowed_target_ontologies,
-            max_candidates=max_candidates,
+        merged_candidates = _time_stage(
+            timings,
+            "candidate_merging_ms",
+            lambda: self._merge_candidates(
+                normalized_candidates,
+                target_ontology_constraint=query_plan.target_ontology_constraint,
+                allowed_target_ontologies=query_plan.allowed_target_ontologies,
+                max_candidates=max_candidates,
+            ),
         )
-        rerank_decision = self._rerank(query_plan, merged_candidates)
-        retrieval_trace = self._build_trace(
-            query_plan=query_plan,
-            route_plan=route_plan,
-            raw_candidate_count=len(raw_candidates),
-            merged_candidates=merged_candidates,
-            rerank_decision=rerank_decision,
-            normalization_errors=normalization_errors,
+        rerank_decision = _time_stage(
+            timings,
+            "llm_reranking_ms",
+            lambda: self._rerank(query_plan, merged_candidates, timings=timings),
         )
-        return self._build_result(
-            query_plan=query_plan,
-            rerank_decision=rerank_decision,
-            candidates=merged_candidates,
-            retrieval_trace=retrieval_trace,
-            source_type=source_type,
-            max_alternatives=max_alternatives,
+        retrieval_trace = _time_stage(
+            timings,
+            "trace_building_ms",
+            lambda: self._build_trace(
+                query_plan=query_plan,
+                route_plan=route_plan,
+                raw_candidate_count=len(raw_candidates),
+                merged_candidates=merged_candidates,
+                rerank_decision=rerank_decision,
+                normalization_errors=normalization_errors,
+                route_calls=timed_route_calls or None,
+            ),
         )
+        result = _time_stage(
+            timings,
+            "result_building_ms",
+            lambda: self._build_result(
+                query_plan=query_plan,
+                rerank_decision=rerank_decision,
+                candidates=merged_candidates,
+                retrieval_trace=retrieval_trace,
+                source_type=source_type,
+                max_alternatives=max_alternatives,
+            ),
+        )
+        _attach_pipeline_timings(result, timings)
+        return result
 
     @staticmethod
     def _resolve_mode(retrieval_mode: RetrievalMode | str) -> RetrievalMode:
@@ -173,18 +218,22 @@ class PlannedPipeline:
         target_ontology: str | None,
         allowed_target_ontologies: list[str] | None,
         retrieval_mode: RetrievalMode,
+        timings: dict[str, float],
     ) -> QueryPlan:
         try:
-            return self._query_planner.plan(
-                source_term=source_term,
-                source_label=source_label,
-                source_description=source_description,
-                source_type=source_type,
-                clinical_area=clinical_area,
-                target_ontology=target_ontology,
-                allowed_target_ontologies=allowed_target_ontologies,
-                retrieval_mode=retrieval_mode,
-            )
+            kwargs: dict[str, Any] = {
+                "source_term": source_term,
+                "source_label": source_label,
+                "source_description": source_description,
+                "source_type": source_type,
+                "clinical_area": clinical_area,
+                "target_ontology": target_ontology,
+                "allowed_target_ontologies": allowed_target_ontologies,
+                "retrieval_mode": retrieval_mode,
+            }
+            if _accepts_keyword(self._query_planner.plan, "timing_sink"):
+                kwargs["timing_sink"] = timings
+            return self._query_planner.plan(**kwargs)
         except Exception as exc:
             raise PlannedPipelineError("QueryPlanner failed during planned mapping.") from exc
 
@@ -216,19 +265,26 @@ class PlannedPipeline:
         query_plan: QueryPlan,
         route_plan: RetrievalRoutePlan,
         max_results_per_query: int,
+        route_calls: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
         try:
+            kwargs: dict[str, Any] = {
+                "route_plan": route_plan,
+                "max_results_per_query": max_results_per_query,
+            }
             if query_plan.retrieval_mode == RetrievalMode.PUBLIC:
+                if _accepts_keyword(self._public_retriever.retrieve, "route_calls"):
+                    kwargs["route_calls"] = route_calls
                 return self._public_retriever.retrieve(
                     query_plan,
-                    route_plan=route_plan,
-                    max_results_per_query=max_results_per_query,
+                    **kwargs,
                 )
             if query_plan.retrieval_mode == RetrievalMode.LOCAL:
+                if _accepts_keyword(self._local_retriever.retrieve, "route_calls"):
+                    kwargs["route_calls"] = route_calls
                 return self._local_retriever.retrieve(
                     query_plan,
-                    route_plan=route_plan,
-                    max_results_per_query=max_results_per_query,
+                    **kwargs,
                 )
         except Exception as exc:
             raise PlannedPipelineError(
@@ -314,9 +370,16 @@ class PlannedPipeline:
         self,
         query_plan: QueryPlan,
         candidates: list[NormalizedCandidate],
+        *,
+        timings: dict[str, float],
     ) -> RerankDecision:
         try:
-            return self._llm_reranker.rerank(query_plan, candidates)
+            kwargs: dict[str, Any] = {}
+            if _accepts_keyword(self._llm_reranker.rerank, "timing_sink"):
+                kwargs["timing_sink"] = timings
+            decision = self._llm_reranker.rerank(query_plan, candidates, **kwargs)
+            timings.setdefault("llm_reranker_provider_ms", 0.0)
+            return decision
         except Exception as exc:
             raise PlannedPipelineError("LLMReranker failed during planned mapping.") from exc
 
@@ -353,6 +416,7 @@ class PlannedPipeline:
         merged_candidates: list[NormalizedCandidate],
         rerank_decision: RerankDecision,
         normalization_errors: list[dict[str, Any]] | None = None,
+        route_calls: list[dict[str, Any]] | None = None,
     ) -> RetrievalTrace:
         selected_code = (
             rerank_decision.selected_code
@@ -366,7 +430,7 @@ class PlannedPipeline:
             is_grounded=bool(merged_candidates),
             grounding_source=route_plan.grounding_source,
             retrieval_skipped=False,
-            route_calls=list(route_plan.route_calls),
+            route_calls=list(route_calls) if route_calls is not None else list(route_plan.route_calls),
             raw_candidate_count=raw_candidate_count,
             merged_candidate_count=len(merged_candidates),
             errors=errors,
@@ -415,3 +479,31 @@ def _ontology_from_code(code: Any) -> str | None:
         return None
     prefix = text.split(":", 1)[0].strip().upper()
     return prefix or None
+
+
+def _time_stage(
+    timings: dict[str, float],
+    key: str,
+    func: Callable[[], _T],
+) -> _T:
+    start = time.monotonic()
+    try:
+        return func()
+    finally:
+        timings[key] = (time.monotonic() - start) * 1000
+
+
+def _accepts_keyword(func: Callable[..., Any], keyword: str) -> bool:
+    parameters = signature(func).parameters.values()
+    return any(
+        parameter.kind == Parameter.VAR_KEYWORD or parameter.name == keyword
+        for parameter in parameters
+    )
+
+
+def _attach_pipeline_timings(result: MappingResult, timings: dict[str, float]) -> None:
+    metadata = result.metadata
+    if metadata is None or metadata.rag_debug is None:
+        return
+    rag_debug = metadata.rag_debug.model_copy(update={"pipeline_timings": dict(timings)})
+    result.metadata = metadata.model_copy(update={"rag_debug": rag_debug})

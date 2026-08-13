@@ -17,6 +17,7 @@ from llm_ontology_mapper.models import (
     MappingResult,
     NormalizedCandidate,
     QueryPlan,
+    RAGDebugInfo,
     RerankAlternative,
     RerankDecision,
     RetrievalMode,
@@ -656,3 +657,17 @@ def test_existing_mapping_result_unaffected() -> None:
     )
     assert r.target_code == "HP:0012735"
     assert r.model_dump(mode="json")["ontology"] == "HPO"
+
+
+@pytest.mark.unit
+def test_rag_debug_pipeline_timings_serialize_as_milliseconds() -> None:
+    debug = RAGDebugInfo(
+        query_sent="sys_bp",
+        candidates_retrieved=[],
+        top_k=0,
+        pipeline_timings={"query_planning_ms": 12.34},
+    )
+
+    dumped = debug.model_dump(mode="json")
+
+    assert dumped["pipeline_timings"] == {"query_planning_ms": 12.34}
