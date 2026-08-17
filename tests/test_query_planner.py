@@ -56,6 +56,16 @@ class _RecordingStubProvider(BaseLLMProvider):
         return CompletionResponse(content=self._response_content, model=self.model)
 
 
+class _NamedRecordingStubProvider(_RecordingStubProvider):
+    def __init__(self, response_content: str, *, model: str, provider_name: str) -> None:
+        super().__init__(response_content, model=model)
+        self._provider_name = provider_name
+
+    @property
+    def provider_name(self) -> str:
+        return self._provider_name
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Shared fake LLM responses
 # ─────────────────────────────────────────────────────────────────────────────
@@ -134,6 +144,44 @@ def test_query_planner_uses_planning_token_budget(
     planner.plan("sys_bp")
 
     assert sys_bp_stub.call_kwargs == [{"temperature": 0.1, "max_tokens": 2048}]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("model", ["gpt-5.1", "gpt-5.6-luna"])
+def test_query_planner_uses_low_reasoning_for_selected_openai_models(model: str) -> None:
+    provider = _NamedRecordingStubProvider(
+        _SYS_BP_RESPONSE,
+        model=model,
+        provider_name="openai",
+    )
+    planner = QueryPlanner(provider)
+
+    planner.plan("sys_bp")
+
+    assert provider.call_kwargs == [
+        {
+            "temperature": 0.1,
+            "max_tokens": 2048,
+            "reasoning_effort": "low",
+        }
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("provider_name", ["ollama", "anthropic"])
+def test_query_planner_does_not_send_openai_reasoning_to_non_openai(
+    provider_name: str,
+) -> None:
+    provider = _NamedRecordingStubProvider(
+        _SYS_BP_RESPONSE,
+        model="gpt-5.1",
+        provider_name=provider_name,
+    )
+    planner = QueryPlanner(provider)
+
+    planner.plan("sys_bp")
+
+    assert provider.call_kwargs == [{"temperature": 0.1, "max_tokens": 2048}]
 
 
 @pytest.mark.unit

@@ -43,6 +43,7 @@ from llm_ontology_mapper.providers import (
     ChatMessage,
     CompletionResponse,
     is_reasoning_model,
+    openai_reasoning_effort_for_model,
 )
 from llm_ontology_mapper.target_eligibility import candidate_allowed_for_targets
 
@@ -246,7 +247,9 @@ class LLMReranker:
         kwargs: dict[str, Any] = {}
         if _provider_uses_reasoning_model(self._provider):
             kwargs["min_completion_tokens"] = min_completion_tokens
-            kwargs["reasoning_effort"] = "minimal"
+            kwargs["reasoning_effort"] = (
+                _openai_stage_reasoning_effort(self._provider) or "minimal"
+            )
         return self._provider.complete(
             messages,
             temperature=0.1,
@@ -690,7 +693,16 @@ def _concise_candidate_term(term: str, max_words: int = 8) -> str:
 
 
 def _provider_uses_reasoning_model(provider: BaseLLMProvider) -> bool:
-    return is_reasoning_model(str(getattr(provider, "model", "")))
+    return (
+        getattr(provider, "provider_name", "") == "openai"
+        and is_reasoning_model(str(getattr(provider, "model", "")))
+    )
+
+
+def _openai_stage_reasoning_effort(provider: BaseLLMProvider) -> str | None:
+    if getattr(provider, "provider_name", "") != "openai":
+        return None
+    return openai_reasoning_effort_for_model(str(getattr(provider, "model", "")))
 
 
 def _build_query_context(plan: QueryPlan) -> str:

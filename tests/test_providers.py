@@ -8,8 +8,7 @@ Run with:  pytest tests/test_providers.py -v -m unit
 
 from __future__ import annotations
 
-from typing import Any, List
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -23,7 +22,6 @@ from llm_ontology_mapper.providers import (
     _RetryableError,
     is_reasoning_model,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # LLMProviderFactory
@@ -199,6 +197,27 @@ def test_openai_complete_gpt_5_honors_min_completion_token_floor(
     assert call_kwargs["max_completion_tokens"] == 4096
     assert "max_tokens" not in call_kwargs
     assert call_kwargs["reasoning_effort"] == "minimal"
+
+
+@pytest.mark.unit
+def test_openai_complete_preserves_explicit_reasoning_effort(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = OpenAIProvider(model="gpt-5")
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = (
+        _make_openai_completion_response(model="gpt-5")
+    )
+    monkeypatch.setattr(provider, "_get_client", lambda: mock_client)
+
+    provider.complete(
+        [ChatMessage(role="user", content="hello")],
+        max_tokens=512,
+        reasoning_effort="low",
+    )
+
+    _, call_kwargs = mock_client.chat.completions.create.call_args
+    assert call_kwargs["reasoning_effort"] == "low"
 
 
 @pytest.mark.unit

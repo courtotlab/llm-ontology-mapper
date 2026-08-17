@@ -40,7 +40,7 @@ __test__ = False
 # =============================================================================
 
 PROVIDER = "openai"  # "openai" or "ollama"
-OPENAI_MODEL = "gpt-5.5"
+OPENAI_MODEL = "gpt-5.6-luna"
 OLLAMA_MODEL = "gpt-oss:120b"
 OLLAMA_BASE_URL = "http://localhost:11528"
 

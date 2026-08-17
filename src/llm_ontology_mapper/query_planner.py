@@ -22,7 +22,11 @@ from pathlib import Path
 from typing import Any
 
 from llm_ontology_mapper.models import QueryPlan, RetrievalMode
-from llm_ontology_mapper.providers import BaseLLMProvider, ChatMessage
+from llm_ontology_mapper.providers import (
+    BaseLLMProvider,
+    ChatMessage,
+    openai_reasoning_effort_for_model,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +149,12 @@ class QueryPlanner:
         )
         provider_start = time.monotonic()
         try:
-            response = self._provider.complete(messages, temperature=0.1, max_tokens=2048)
+            response = self._provider.complete(
+                messages,
+                temperature=0.1,
+                max_tokens=2048,
+                **_openai_reasoning_kwargs(self._provider),
+            )
         finally:
             if timing_sink is not None:
                 timing_sink["query_planning_provider_ms"] = (
@@ -317,6 +326,13 @@ def _strip_fences(text: str) -> str:
     text = re.sub(r"^```(?:json)?\s*\n?", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\n?```\s*$", "", text)
     return text.strip()
+
+
+def _openai_reasoning_kwargs(provider: BaseLLMProvider) -> dict[str, str]:
+    if getattr(provider, "provider_name", "") != "openai":
+        return {}
+    effort = openai_reasoning_effort_for_model(str(getattr(provider, "model", "")))
+    return {"reasoning_effort": effort} if effort else {}
 
 
 def _normalize_optional_text(value: str | None, *, field_name: str) -> str | None:

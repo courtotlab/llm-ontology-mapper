@@ -279,10 +279,22 @@ class _RetryableError(Exception):
     """Raised inside _do_complete to signal a transient error worth retrying."""
 
 
+OPENAI_REASONING_EFFORT_BY_MODEL = {
+    "gpt-5.1": "low",
+    "gpt-5.6-luna": "medium",
+}
+
+
 def is_reasoning_model(model: str) -> bool:
     """Return True for OpenAI reasoning-style model families."""
     normalized = model.lower().rsplit("/", 1)[-1]
     return normalized.startswith(("o1", "o3", "o4", "gpt-5"))
+
+
+def openai_reasoning_effort_for_model(model: str) -> str | None:
+    """Return the application-selected OpenAI reasoning effort for exact models."""
+    normalized = model.lower().rsplit("/", 1)[-1]
+    return OPENAI_REASONING_EFFORT_BY_MODEL.get(normalized)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -496,6 +508,7 @@ class OpenAIProvider(BaseLLMProvider):
         **kwargs: Any,
     ) -> tuple[str | None, list[ToolCall]]:
         import json as _json
+
         import openai  # noqa: PLC0415  # type: ignore[import-untyped]
 
         client = self._get_client()

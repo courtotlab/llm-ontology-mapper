@@ -58,6 +58,16 @@ class _StubProvider(BaseLLMProvider):
         return CompletionResponse(content=self._response_content, model=self.model)
 
 
+class _NamedStubProvider(_StubProvider):
+    def __init__(self, response_content: str, *, model: str, provider_name: str) -> None:
+        super().__init__(response_content, model=model)
+        self._provider_name = provider_name
+
+    @property
+    def provider_name(self) -> str:
+        return self._provider_name
+
+
 class _SequenceProvider(BaseLLMProvider):
     """Returns response strings in order and records every call."""
 
@@ -84,6 +94,16 @@ class _SequenceProvider(BaseLLMProvider):
         )
         content = self._responses.pop(0) if self._responses else ""
         return CompletionResponse(content=content, model=self.model)
+
+
+class _NamedSequenceProvider(_SequenceProvider):
+    def __init__(self, responses: list[str], *, model: str, provider_name: str) -> None:
+        super().__init__(responses, model=model)
+        self._provider_name = provider_name
+
+    @property
+    def provider_name(self) -> str:
+        return self._provider_name
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -604,9 +624,10 @@ def test_empty_response_raises_clear_error() -> None:
 @pytest.mark.unit
 def test_reasoning_model_reranker_uses_larger_completion_budget() -> None:
     candidate = _make_candidate()
-    provider = _StubProvider(
+    provider = _NamedStubProvider(
         _response(selected_cid="C1", selected_code="HP:0012735"),
         model="gpt-5",
+        provider_name="openai",
     )
     reranker = LLMReranker(provider)
 
@@ -619,11 +640,31 @@ def test_reasoning_model_reranker_uses_larger_completion_budget() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("model", ["gpt-5.1", "gpt-5.6-luna"])
+def test_selected_openai_models_reranker_use_low_reasoning(model: str) -> None:
+    candidate = _make_candidate()
+    provider = _NamedStubProvider(
+        _response(selected_cid="C1", selected_code="HP:0012735"),
+        model=model,
+        provider_name="openai",
+    )
+    reranker = LLMReranker(provider)
+
+    result = reranker.rerank(_make_plan(), [candidate])
+
+    assert result.selected_code == "HP:0012735"
+    assert provider.call_kwargs[0]["max_tokens"] == 512
+    assert provider.call_kwargs[0]["min_completion_tokens"] == 4096
+    assert provider.call_kwargs[0]["reasoning_effort"] == "low"
+
+
+@pytest.mark.unit
 def test_reasoning_model_empty_response_retries_once_with_larger_budget() -> None:
     candidate = _make_candidate()
-    provider = _SequenceProvider(
+    provider = _NamedSequenceProvider(
         ["", _response(selected_cid="C1", selected_code="HP:0012735")],
         model="gpt-5",
+        provider_name="openai",
     )
     reranker = LLMReranker(provider)
 
@@ -634,6 +675,27 @@ def test_reasoning_model_empty_response_retries_once_with_larger_budget() -> Non
     assert provider.call_kwargs[0]["min_completion_tokens"] == 4096
     assert provider.call_kwargs[1]["max_tokens"] == 8192
     assert provider.call_kwargs[1]["min_completion_tokens"] == 8192
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("provider_name", ["ollama", "anthropic"])
+def test_reranker_does_not_send_openai_reasoning_to_non_openai(
+    provider_name: str,
+) -> None:
+    candidate = _make_candidate()
+    provider = _NamedStubProvider(
+        _response(selected_cid="C1", selected_code="HP:0012735"),
+        model="gpt-5.1",
+        provider_name=provider_name,
+    )
+    reranker = LLMReranker(provider)
+
+    result = reranker.rerank(_make_plan(), [candidate])
+
+    assert result.selected_code == "HP:0012735"
+    assert provider.call_kwargs[0]["max_tokens"] == 512
+    assert "min_completion_tokens" not in provider.call_kwargs[0]
+    assert "reasoning_effort" not in provider.call_kwargs[0]
 
 
 @pytest.mark.unit
