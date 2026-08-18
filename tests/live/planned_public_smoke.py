@@ -44,12 +44,12 @@ OPENAI_MODEL = "gpt-5.6-luna"
 OLLAMA_MODEL = "gpt-oss:120b"
 OLLAMA_BASE_URL = "http://localhost:11528"
 
-SOURCE_TERM = "sinus_pain"
-SOURCE_LABEL = "sinus pain/congestion"
+SOURCE_TERM = "sys_bp"
+SOURCE_LABEL = "systolic blood pressure"
 SOURCE_DESCRIPTION = ""
 SOURCE_TYPE = ""
 CLINICAL_AREA = ""
-TARGET_ONTOLOGY = "HPO"
+TARGET_ONTOLOGY = "LOINC"
 RETRIEVAL_MODE = "public"
 
 MAX_RESULTS_PER_QUERY = int(os.environ.get("MAX_RESULTS_PER_QUERY", "10"))
