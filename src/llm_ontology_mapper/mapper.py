@@ -165,6 +165,7 @@ class OntologyMapper:
         retrieval_mode: RetrievalMode | str | None = None,
         *,
         source_description: str | None = None,
+        strict_target_ontology: bool = False,
     ) -> MappingResult:
         """
         Map a single term to an ontology code.
@@ -180,6 +181,17 @@ class OntologyMapper:
                 Ignored only when omitted; rejected if provided for legacy mode.
             source_description: Optional description of the source field for
                 planned-pipeline query planning.
+            strict_target_ontology: When True, a returned mapping's candidate
+                must belong natively to one of the requested target
+                ontologies — e.g. for target_ontology="EFO", a candidate
+                merely retrieved through the EFO route (native ontology HPO,
+                MONDO, …) is rejected rather than accepted. Defaults to False,
+                which preserves the existing ontology-specific eligibility
+                rules (including EFO imported-term support) exactly. Only
+                supported when the planned pipeline is in effect (see
+                use_planned_pipeline); the legacy path cannot deterministically
+                enforce this guarantee and raises ValueError instead of
+                silently ignoring the flag.
 
         Returns:
             MappingResult with confidence score and logic_type.
@@ -187,6 +199,10 @@ class OntologyMapper:
         planned_t0 = time.monotonic()
         planned_enabled = (
             self.use_planned_pipeline if use_planned_pipeline is None else use_planned_pipeline
+        )
+        self._require_planned_for_strict_target_ontology(
+            planned_enabled=planned_enabled,
+            strict_target_ontology=strict_target_ontology,
         )
 
         if planned_enabled:
@@ -200,6 +216,7 @@ class OntologyMapper:
                 source_type=source_type,
                 entity_type=entity_type,
                 retrieval_mode=mode,
+                strict_target_ontology=strict_target_ontology,
             )
             _attach_latency_ms(result, (time.monotonic() - planned_t0) * 1000)
             return result
@@ -262,6 +279,7 @@ class OntologyMapper:
         source_description_field: str | None = None,
         use_planned_pipeline: bool | None = None,
         retrieval_mode: RetrievalMode | str | None = None,
+        strict_target_ontology: bool = False,
     ) -> MappingBatch:
         """
         Map every row in a data dictionary to an ontology code.
@@ -276,10 +294,23 @@ class OntologyMapper:
             source_description_field: Optional key holding a source-field description.
             use_planned_pipeline: Optional per-row override forwarded to map_term().
             retrieval_mode: Optional per-row planned retrieval mode forwarded to map_term().
+            strict_target_ontology: Forwarded unchanged to every map_term() call in
+                the batch (see OntologyMapper.map_term). Validated once up front —
+                requesting strict_target_ontology=True with the planned pipeline
+                disabled for this batch raises ValueError immediately rather than
+                being discovered (and silently swallowed) row by row.
 
         Returns:
             MappingBatch containing one MappingResult per input record.
         """
+        planned_enabled = (
+            self.use_planned_pipeline if use_planned_pipeline is None else use_planned_pipeline
+        )
+        self._require_planned_for_strict_target_ontology(
+            planned_enabled=planned_enabled,
+            strict_target_ontology=strict_target_ontology,
+        )
+
         results: list[MappingResult] = []
         description_key = _normalize_optional_batch_text(source_description_field)
         for rec in records:
@@ -296,6 +327,7 @@ class OntologyMapper:
                         if description_key is not None
                         else None
                     ),
+                    strict_target_ontology=strict_target_ontology,
                 )
                 results.append(result)
             except Exception:
@@ -321,6 +353,20 @@ class OntologyMapper:
             return retrieval_mode == RetrievalMode.PUBLIC
         return str(retrieval_mode).lower() == RetrievalMode.PUBLIC.value
 
+    @staticmethod
+    def _require_planned_for_strict_target_ontology(
+        *,
+        planned_enabled: bool,
+        strict_target_ontology: bool,
+    ) -> None:
+        if strict_target_ontology and not planned_enabled:
+            raise ValueError(
+                "strict_target_ontology=True is only supported when the planned "
+                "pipeline is in effect (use_planned_pipeline=True); the legacy "
+                "mapping path cannot deterministically enforce target ontology "
+                "eligibility, so the flag must not be silently ignored."
+            )
+
     def _get_planned_pipeline(self) -> Any:
         if self._planned_pipeline is None:
             self._planned_pipeline = PlannedPipeline(provider=self._llm)
@@ -345,6 +391,7 @@ class OntologyMapper:
         source_type: str | None,
         entity_type: str | None,
         retrieval_mode: RetrievalMode,
+        strict_target_ontology: bool = False,
     ) -> MappingResult:
         allowed_target_ontologies = self._planned_allowed_target_ontologies()
         pipeline = self._get_planned_pipeline()
@@ -364,6 +411,7 @@ class OntologyMapper:
             max_results_per_query=self.rag_top_k,
             max_candidates=self.max_candidates,
             max_alternatives=self.max_alternatives,
+            strict_target_ontology=strict_target_ontology,
         )
 
     def _effective_ontologies(self, entity_type: str | None) -> list[str]:

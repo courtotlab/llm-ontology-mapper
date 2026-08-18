@@ -1582,3 +1582,178 @@ def test_scores_appear_in_candidate_list() -> None:
     user_message = provider.calls[0][1].content
     assert "0.8700" in user_message
     assert "0.9100" in user_message
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# strict_target_ontology
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_strict_filters_imported_candidate_before_provider_call() -> None:
+    candidate = _make_candidate(
+        code="HP:0002099",
+        term="Asthma",
+        ontology="HPO",
+        retrieved_from_ontologies=["EFO"],
+    )
+    provider = _StubProvider(_response())
+    reranker = LLMReranker(provider)
+
+    result = reranker.rerank(
+        _make_plan(target_ontology_constraint="EFO"),
+        [candidate],
+        strict_target_ontology=True,
+    )
+
+    assert result.is_unmapped is True
+    assert result.selected_code is None
+    assert provider.calls == []
+
+
+@pytest.mark.unit
+def test_strict_provider_receives_only_native_efo_candidate() -> None:
+    native_efo = _make_candidate(code="EFO:0000408", term="disease", ontology="EFO")
+    imported_hpo = _make_candidate(
+        code="HP:0002099",
+        term="Asthma",
+        ontology="HPO",
+        retrieved_from_ontologies=["EFO"],
+    )
+    provider = _StubProvider(_response(selected_cid="C1", selected_code="EFO:0000408"))
+    reranker = LLMReranker(provider)
+
+    result = reranker.rerank(
+        _make_plan(target_ontology_constraint="EFO"),
+        [native_efo, imported_hpo],
+        strict_target_ontology=True,
+    )
+
+    assert result.selected_code == "EFO:0000408"
+    user_message = provider.calls[0][1].content
+    assert "EFO:0000408" in user_message
+    assert "HP:0002099" not in user_message
+
+
+@pytest.mark.unit
+def test_strict_end_to_end_selects_native_efo_and_drops_imported_alternative() -> None:
+    native_efo = _make_candidate(code="EFO:0000408", term="disease", ontology="EFO")
+    imported_mondo = _make_candidate(
+        code="MONDO:0004975",
+        term="asthma",
+        ontology="MONDO",
+        retrieved_from_ontologies=["EFO"],
+    )
+    response = _structured_response(
+        selected_cid="C1",
+        selected_code="EFO:0000408",
+        alternatives=[
+            {
+                "candidate_id": "C2",
+                "code": "MONDO:0004975",
+                "confidence": 0.7,
+                "explanation": "Imported EFO-search disease candidate.",
+            },
+        ],
+    )
+    reranker = LLMReranker(_StubProvider(response))
+
+    result = reranker.rerank(
+        _make_plan(allowed_target_ontologies=["EFO"]),
+        [native_efo, imported_mondo],
+        strict_target_ontology=True,
+    )
+
+    # imported_mondo never reached the candidate map (pre-filtered), so it
+    # cannot appear as a selected code or a structured alternative.
+    assert result.selected_code == "EFO:0000408"
+    assert result.alternatives == []
+
+
+@pytest.mark.unit
+def test_strict_lenient_regression_accepts_imported_candidate() -> None:
+    """strict_target_ontology omitted (defaults False) preserves the existing
+    EFO imported-term behaviour exactly."""
+    candidate = _make_candidate(
+        code="MONDO:0004975",
+        term="asthma",
+        ontology="MONDO",
+        retrieved_from_ontologies=["EFO"],
+    )
+    provider = _StubProvider(_response(selected_cid="C1", selected_code="MONDO:0004975"))
+    reranker = LLMReranker(provider)
+
+    result = reranker.rerank(_make_plan(target_ontology_constraint="EFO"), [candidate])
+
+    assert result.selected_code == "MONDO:0004975"
+    assert result.is_grounded is True
+
+
+@pytest.mark.unit
+def test_strict_build_decision_rejects_selection_that_bypasses_prefilter() -> None:
+    """Defense-in-depth: even if a candidate map somehow contained an
+    ineligible-under-strict candidate, _build_decision's own re-validation
+    must still reject it rather than trusting the LLM's selection."""
+    imported_hpo = _make_candidate(
+        code="HP:0002099",
+        term="Asthma",
+        ontology="HPO",
+        retrieved_from_ontologies=["EFO"],
+    )
+    candidate_map = {"C1": imported_hpo}
+
+    with pytest.raises(LLMRerankerError, match="ontology"):
+        LLMReranker._build_decision(
+            {
+                "selected_candidate_id": "C1",
+                "selected_code": "HP:0002099",
+                "is_unmapped": False,
+                "confidence": 0.9,
+            },
+            candidate_map=candidate_map,
+            candidate_codes={"HP:0002099"},
+            retrieval_mode=RetrievalMode.PUBLIC,
+            grounding_source=GroundingSource.PUBLIC_API,
+            query_plan=_make_plan(target_ontology_constraint="EFO"),
+            strict_target_ontology=True,
+        )
+
+
+@pytest.mark.unit
+def test_strict_build_decision_drops_ineligible_alternative_that_bypasses_prefilter() -> None:
+    """Defense-in-depth: an alternative referencing an ineligible-under-strict
+    candidate must be dropped even if it somehow reached the candidate map."""
+    native_efo = _make_candidate(code="EFO:0000408", term="disease", ontology="EFO")
+    imported_hpo = _make_candidate(
+        code="HP:0002099",
+        term="Asthma",
+        ontology="HPO",
+        retrieved_from_ontologies=["EFO"],
+    )
+    candidate_map = {"C1": native_efo, "C2": imported_hpo}
+
+    decision = LLMReranker._build_decision(
+        {
+            "selected_candidate_id": "C1",
+            "selected_code": "EFO:0000408",
+            "is_unmapped": False,
+            "confidence": 0.9,
+            "alternatives": [
+                {
+                    "candidate_id": "C2",
+                    "code": "HP:0002099",
+                    "confidence": 0.6,
+                    "explanation": "Imported candidate that should be dropped under strict mode.",
+                }
+            ],
+        },
+        candidate_map=candidate_map,
+        candidate_codes={"EFO:0000408", "HP:0002099"},
+        retrieval_mode=RetrievalMode.PUBLIC,
+        grounding_source=GroundingSource.PUBLIC_API,
+        query_plan=_make_plan(allowed_target_ontologies=["EFO"]),
+        strict_target_ontology=True,
+    )
+
+    assert decision.selected_code == "EFO:0000408"
+    assert decision.alternatives == []

@@ -62,6 +62,7 @@ class CandidateMerger:
         target_ontology_constraint: str | None = None,
         allowed_target_ontologies: list[str] | None = None,
         max_candidates: int | None = None,
+        strict_target_ontology: bool = False,
     ) -> list[NormalizedCandidate]:
         """
         Deduplicate, filter, sort, and optionally limit a candidate list.
@@ -78,6 +79,9 @@ class CandidateMerger:
             target_ontology_constraint:  Hard ontology filter; case-insensitive.
             allowed_target_ontologies:   Hard ontology allow-list; None means unrestricted.
             max_candidates:              Maximum number to return (applied last).
+            strict_target_ontology:      When True, require canonical native-ontology
+                                          membership only; disables the EFO
+                                          imported-term provenance exception.
 
         Returns:
             A sorted, deduplicated, optionally filtered list of NormalizedCandidate.
@@ -98,12 +102,24 @@ class CandidateMerger:
 
         if target_ontology_constraint:
             deduped = [
-                c for c in deduped if candidate_allowed_for_targets(c, [target_ontology_constraint])
+                c
+                for c in deduped
+                if candidate_allowed_for_targets(
+                    c,
+                    [target_ontology_constraint],
+                    strict_target_ontology=strict_target_ontology,
+                )
             ]
         elif allowed_target_ontologies is not None:
             allowed = _normalize_ontology_set(allowed_target_ontologies)
             if allowed:
-                deduped = [c for c in deduped if candidate_allowed_for_targets(c, allowed)]
+                deduped = [
+                    c
+                    for c in deduped
+                    if candidate_allowed_for_targets(
+                        c, allowed, strict_target_ontology=strict_target_ontology
+                    )
+                ]
 
         result = sorted(deduped, key=_sort_key)
 

@@ -101,6 +101,7 @@ class MappingResultBuilder:
         retrieval_trace: RetrievalTrace | None = None,
         source_type: str | None = None,
         max_alternatives: int = 5,
+        strict_target_ontology: bool = False,
     ) -> MappingResult:
         """
         Build a MappingResult from a grounded pipeline decision.
@@ -112,6 +113,10 @@ class MappingResultBuilder:
                               passed to the reranker.
             retrieval_trace:  Optional retrieval trace for debugging/audit.
             source_type:      Optional source data type hint (radio, text, …).
+            strict_target_ontology: When True, require canonical native-ontology
+                              membership only for the selected mapping and every
+                              alternative; disables the EFO imported-term
+                              provenance exception.
 
         Returns:
             A MappingResult.
@@ -135,6 +140,7 @@ class MappingResultBuilder:
                 candidates=candidates,
                 retrieval_trace=retrieval_trace,
                 source_type=source_type,
+                strict_target_ontology=strict_target_ontology,
             )
 
         return self._build_selected(
@@ -144,6 +150,7 @@ class MappingResultBuilder:
             retrieval_trace=retrieval_trace,
             source_type=source_type,
             max_alternatives=max_alternatives,
+            strict_target_ontology=strict_target_ontology,
         )
 
     # ── Private helpers ───────────────────────────────────────────────────────
@@ -157,6 +164,7 @@ class MappingResultBuilder:
         retrieval_trace: RetrievalTrace | None,
         source_type: str | None,
         max_alternatives: int,
+        strict_target_ontology: bool = False,
     ) -> MappingResult:
         # Validate grounding
         if not rerank_decision.is_grounded:
@@ -195,12 +203,14 @@ class MappingResultBuilder:
                 candidates=candidates,
                 retrieval_trace=retrieval_trace,
                 source_type=source_type,
+                strict_target_ontology=strict_target_ontology,
             )
 
         # Validate target_ontology_constraint
         if query_plan.target_ontology_constraint and not candidate_allowed_for_targets(
             selected_candidate,
             [query_plan.target_ontology_constraint],
+            strict_target_ontology=strict_target_ontology,
         ):
             raise MappingResultBuilderError(
                 f"Selected candidate ontology={selected_candidate.ontology!r} "
@@ -214,6 +224,7 @@ class MappingResultBuilder:
         if allowed_ontologies is not None and not candidate_allowed_for_targets(
             selected_candidate,
             allowed_ontologies,
+            strict_target_ontology=strict_target_ontology,
         ):
             return self._build_unmapped(
                 query_plan=query_plan,
@@ -224,6 +235,7 @@ class MappingResultBuilder:
                 candidates=candidates,
                 retrieval_trace=retrieval_trace,
                 source_type=source_type,
+                strict_target_ontology=strict_target_ontology,
             )
 
         alternatives = _build_alternatives(
@@ -233,6 +245,7 @@ class MappingResultBuilder:
             selected_confidence=rerank_decision.confidence,
             allowed_ontologies=allowed_ontologies,
             max_alternatives=max_alternatives,
+            strict_target_ontology=strict_target_ontology,
         )
 
         metadata = _build_metadata(
@@ -241,6 +254,7 @@ class MappingResultBuilder:
             candidates=candidates,
             selected_candidate=selected_candidate,
             retrieval_trace=retrieval_trace,
+            strict_target_ontology=strict_target_ontology,
         )
 
         return MappingResult(
@@ -265,6 +279,7 @@ class MappingResultBuilder:
         candidates: Sequence[NormalizedCandidate],
         retrieval_trace: RetrievalTrace | None,
         source_type: str | None,
+        strict_target_ontology: bool = False,
     ) -> MappingResult:
         metadata = _build_metadata(
             rerank_decision=rerank_decision,
@@ -272,6 +287,7 @@ class MappingResultBuilder:
             candidates=candidates,
             selected_candidate=None,
             retrieval_trace=retrieval_trace,
+            strict_target_ontology=strict_target_ontology,
         )
 
         return MappingResult(
@@ -320,6 +336,7 @@ def _build_alternatives(
     selected_confidence: float,
     allowed_ontologies: set[str] | None,
     max_alternatives: int = 5,
+    strict_target_ontology: bool = False,
 ) -> list[AlternativeMapping]:
     """
     Build grounded AlternativeMapping objects from structured reranker alternatives.
@@ -355,6 +372,7 @@ def _build_alternatives(
         if allowed_ontologies is not None and not candidate_allowed_for_targets(
             candidate,
             allowed_ontologies,
+            strict_target_ontology=strict_target_ontology,
         ):
             return
         identity = _candidate_identity(candidate)
@@ -389,6 +407,7 @@ def _build_metadata(
     candidates: Sequence[NormalizedCandidate],
     selected_candidate: NormalizedCandidate | None,
     retrieval_trace: RetrievalTrace | None,
+    strict_target_ontology: bool = False,
 ) -> MappingMetadata:
     """
     Pack pipeline metadata into a MappingMetadata object.
@@ -403,6 +422,7 @@ def _build_metadata(
         "grounding_source": rerank_decision.grounding_source.value,
         "policy": rerank_decision.policy,
         "candidate_count": len(candidates),
+        "strict_target_ontology": strict_target_ontology,
         "query_plan": {
             "original_term": query_plan.original_term,
             "inferred_meaning": query_plan.inferred_meaning,
@@ -440,6 +460,7 @@ def _build_metadata(
         candidates=candidates,
         selected_candidate=selected_candidate,
         allowed_ontologies=allowed_ontologies,
+        strict_target_ontology=strict_target_ontology,
     )
 
     rag_debug = RAGDebugInfo(
@@ -480,6 +501,7 @@ def _final_ranking_trace(
     candidates: Sequence[NormalizedCandidate],
     selected_candidate: NormalizedCandidate | None,
     allowed_ontologies: set[str] | None,
+    strict_target_ontology: bool = False,
 ) -> list[dict[str, Any]]:
     code_map: dict[str, NormalizedCandidate] = {
         candidate.code: candidate for candidate in candidates
@@ -508,7 +530,10 @@ def _final_ranking_trace(
     ):
         candidate = code_map.get(alt.code)
         if allowed_ontologies is not None and (
-            candidate is None or not candidate_allowed_for_targets(candidate, allowed_ontologies)
+            candidate is None
+            or not candidate_allowed_for_targets(
+                candidate, allowed_ontologies, strict_target_ontology=strict_target_ontology
+            )
         ):
             continue
         trace.append(

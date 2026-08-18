@@ -11,6 +11,8 @@ from llm_ontology_mapper.ontology_identity import canonical_ontology
 def candidate_allowed_for_targets(
     candidate: NormalizedCandidate,
     target_ontologies: Iterable[str] | None,
+    *,
+    strict_target_ontology: bool = False,
 ) -> bool:
     """Return whether a candidate satisfies the active target ontology constraint.
 
@@ -18,6 +20,10 @@ def candidate_allowed_for_targets(
     one additional search-space rule: candidates retrieved from an EFO-scoped
     route are eligible when EFO is among the requested targets, without
     relabeling the candidate's native ontology.
+
+    strict_target_ontology=True disables that EFO provenance exception: only a
+    candidate whose canonical native ontology is itself a member of the target
+    set is eligible, regardless of retrieval provenance.
     """
     targets = _canonical_ontology_set(target_ontologies)
     if targets is None:
@@ -26,6 +32,9 @@ def candidate_allowed_for_targets(
     native = canonical_ontology(candidate.ontology) or candidate.ontology.upper().strip()
     if native in targets:
         return True
+
+    if strict_target_ontology:
+        return False
 
     return "EFO" in targets and "EFO" in _canonical_ontology_set(
         candidate.retrieved_from_ontologies

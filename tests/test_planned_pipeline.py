@@ -338,6 +338,7 @@ class _RecordingMerger:
         self.last_target_ontology_constraint: str | None = None
         self.last_allowed_target_ontologies: list[str] | None = None
         self.last_max_candidates: int | None = None
+        self.last_strict_target_ontology: bool = False
 
     def merge(
         self,
@@ -346,17 +347,20 @@ class _RecordingMerger:
         target_ontology_constraint: str | None = None,
         allowed_target_ontologies: list[str] | None = None,
         max_candidates: int | None = None,
+        strict_target_ontology: bool = False,
     ) -> list[NormalizedCandidate]:
         self.calls.append("merger")
         self.last_candidates = list(candidates)
         self.last_target_ontology_constraint = target_ontology_constraint
         self.last_allowed_target_ontologies = allowed_target_ontologies
         self.last_max_candidates = max_candidates
+        self.last_strict_target_ontology = strict_target_ontology
         return self.inner.merge(
             self.last_candidates,
             target_ontology_constraint=target_ontology_constraint,
             allowed_target_ontologies=allowed_target_ontologies,
             max_candidates=max_candidates,
+            strict_target_ontology=strict_target_ontology,
         )
 
 
@@ -365,15 +369,19 @@ class _Reranker:
         self.calls = calls
         self.last_plan: QueryPlan | None = None
         self.last_candidates: list[NormalizedCandidate] | None = None
+        self.last_strict_target_ontology: bool = False
 
     def rerank(
         self,
         query_plan: QueryPlan,
         candidates: list[NormalizedCandidate],
+        *,
+        strict_target_ontology: bool = False,
     ) -> RerankDecision:
         self.calls.append("reranker")
         self.last_plan = query_plan
         self.last_candidates = list(candidates)
+        self.last_strict_target_ontology = strict_target_ontology
         if not candidates:
             return _unmapped_decision(query_plan.retrieval_mode)
         grounding_source = (
@@ -1179,3 +1187,161 @@ def test_disabled_mapping_result_has_ungrounded_metadata() -> None:
     assert meta["is_grounded"] is False
     assert meta["grounding_source"] == "none"
     assert meta["retrieval_skipped"] is True
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# strict_target_ontology — end to end
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_strict_mixed_candidates_only_native_efo_reaches_reranking_public() -> None:
+    pipeline, parts = _pipeline(
+        public_raw=[
+            _public_raw(
+                code="HP:0001250",
+                term="Seizure",
+                ontology="HPO",
+                source="OLS",
+                requested_ontology="EFO",
+                route_name="OLS",
+            ),
+            _public_raw(
+                code="MONDO:0004975",
+                term="asthma",
+                ontology="MONDO",
+                source="OLS",
+                requested_ontology="EFO",
+                route_name="OLS",
+            ),
+            _public_raw(
+                code="EFO:0000408",
+                term="disease",
+                ontology="EFO",
+                source="OLS",
+                requested_ontology="EFO",
+                route_name="OLS",
+            ),
+        ]
+    )
+
+    result = pipeline.map_term(
+        "disease",
+        target_ontology="EFO",
+        retrieval_mode=RetrievalMode.PUBLIC,
+        strict_target_ontology=True,
+    )
+
+    assert parts["merger"].last_strict_target_ontology is True
+    assert {c.code for c in parts["reranker"].last_candidates} == {"EFO:0000408"}
+    assert result.target_code == "EFO:0000408"
+    assert result.ontology == "EFO"
+
+
+def test_strict_no_native_candidate_produces_unmapped_public() -> None:
+    pipeline, parts = _pipeline(
+        public_raw=[
+            _public_raw(
+                code="HP:0001250",
+                term="Seizure",
+                ontology="HPO",
+                source="OLS",
+                requested_ontology="EFO",
+                route_name="OLS",
+            ),
+            _public_raw(
+                code="MONDO:0004975",
+                term="asthma",
+                ontology="MONDO",
+                source="OLS",
+                requested_ontology="EFO",
+                route_name="OLS",
+            ),
+        ]
+    )
+
+    result = pipeline.map_term(
+        "disease",
+        target_ontology="EFO",
+        retrieval_mode=RetrievalMode.PUBLIC,
+        strict_target_ontology=True,
+    )
+
+    assert parts["reranker"].last_candidates == []
+    assert result.target_code == "UNKNOWN:UNMAPPED"
+    assert result.ontology == "UNKNOWN"
+
+
+def test_strict_local_route_rejects_imported_candidate() -> None:
+    pipeline, parts = _pipeline(
+        local_raw=[
+            _local_raw(
+                code="HP:0001250",
+                term="Seizure",
+                ontology="HPO",
+                source="SapBERT",
+                requested_ontology="EFO",
+                route_name="local_sapbert",
+            ),
+        ]
+    )
+
+    result = pipeline.map_term(
+        "disease",
+        target_ontology="EFO",
+        retrieval_mode=RetrievalMode.LOCAL,
+        strict_target_ontology=True,
+    )
+
+    assert parts["reranker"].last_candidates == []
+    assert result.target_code == "UNKNOWN:UNMAPPED"
+
+
+def test_strict_lenient_regression_public_route_keeps_imported_candidate() -> None:
+    """strict_target_ontology omitted (defaults False) preserves the existing
+    EFO imported-term behaviour exactly, end to end."""
+    pipeline, parts = _pipeline(
+        public_raw=[
+            _public_raw(
+                code="MONDO:0004975",
+                term="asthma",
+                ontology="MONDO",
+                source="OLS",
+                requested_ontology="EFO",
+                route_name="OLS",
+            )
+        ]
+    )
+
+    result = pipeline.map_term(
+        "asthma",
+        target_ontology="EFO",
+        retrieval_mode=RetrievalMode.PUBLIC,
+    )
+
+    assert parts["merger"].last_strict_target_ontology is False
+    assert result.target_code == "MONDO:0004975"
+    assert result.ontology == "MONDO"
+
+
+def test_strict_target_ontology_recorded_in_result_metadata() -> None:
+    pipeline, _ = _pipeline(
+        public_raw=[
+            _public_raw(
+                code="EFO:0000408",
+                term="disease",
+                ontology="EFO",
+                source="OLS",
+                requested_ontology="EFO",
+                route_name="OLS",
+            )
+        ]
+    )
+
+    result = pipeline.map_term(
+        "disease",
+        target_ontology="EFO",
+        retrieval_mode=RetrievalMode.PUBLIC,
+        strict_target_ontology=True,
+    )
+
+    assert _meta(result)["strict_target_ontology"] is True

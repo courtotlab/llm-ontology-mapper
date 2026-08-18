@@ -921,3 +921,189 @@ def test_normalizer_and_merger_integration(merger: CandidateMerger) -> None:
     assert merged[0].code == "HP:0012735"
     assert merged[0].normalized_score == pytest.approx(0.9)
     assert merged[1].code == "HP:0001250"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test 22: strict_target_ontology — EFO carve-out disabled
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_strict_rejects_imported_hpo_candidate_retrieved_from_efo(
+    merger: CandidateMerger,
+) -> None:
+    candidate = _c(
+        code="HP:0002099",
+        ontology="HPO",
+        term="Asthma",
+        retrieved_from_ontologies=["EFO"],
+    )
+
+    result = merger.merge(
+        [candidate],
+        target_ontology_constraint="EFO",
+        strict_target_ontology=True,
+    )
+
+    assert result == []
+
+
+@pytest.mark.unit
+def test_strict_rejects_imported_mondo_candidate_retrieved_from_efo(
+    merger: CandidateMerger,
+) -> None:
+    candidate = _c(
+        code="MONDO:0004975",
+        ontology="MONDO",
+        term="asthma",
+        retrieved_from_ontologies=["EFO"],
+    )
+
+    result = merger.merge(
+        [candidate],
+        allowed_target_ontologies=["EFO"],
+        strict_target_ontology=True,
+    )
+
+    assert result == []
+
+
+@pytest.mark.unit
+def test_strict_keeps_native_efo_candidate(merger: CandidateMerger) -> None:
+    candidate = _c(code="EFO:0000408", ontology="EFO", term="disease")
+
+    result = merger.merge(
+        [candidate],
+        target_ontology_constraint="EFO",
+        strict_target_ontology=True,
+    )
+
+    assert result == [candidate]
+
+
+@pytest.mark.unit
+def test_strict_mixed_candidate_set_keeps_only_native_efo(merger: CandidateMerger) -> None:
+    native_efo = _c(code="EFO:0000408", ontology="EFO", term="disease")
+    imported_hpo = _c(
+        code="HP:0002099",
+        ontology="HPO",
+        term="Asthma",
+        retrieved_from_ontologies=["EFO"],
+    )
+    imported_mondo = _c(
+        code="MONDO:0004975",
+        ontology="MONDO",
+        term="asthma",
+        retrieved_from_ontologies=["EFO"],
+    )
+
+    result = merger.merge(
+        [native_efo, imported_hpo, imported_mondo],
+        target_ontology_constraint="EFO",
+        strict_target_ontology=True,
+    )
+
+    assert [c.code for c in result] == ["EFO:0000408"]
+
+
+@pytest.mark.unit
+def test_strict_all_imported_candidates_yields_empty_result(merger: CandidateMerger) -> None:
+    imported_hpo = _c(
+        code="HP:0002099",
+        ontology="HPO",
+        term="Asthma",
+        retrieved_from_ontologies=["EFO"],
+    )
+    imported_mondo = _c(
+        code="MONDO:0004975",
+        ontology="MONDO",
+        term="asthma",
+        retrieved_from_ontologies=["EFO"],
+    )
+
+    result = merger.merge(
+        [imported_hpo, imported_mondo],
+        target_ontology_constraint="EFO",
+        strict_target_ontology=True,
+    )
+
+    assert result == []
+
+
+@pytest.mark.unit
+def test_strict_lenient_regression_keeps_imported_efo_candidate(
+    merger: CandidateMerger,
+) -> None:
+    """strict_target_ontology omitted (defaults False) preserves the existing
+    EFO imported-term behaviour exactly."""
+    candidate = _c(
+        code="HP:0002099",
+        ontology="HPO",
+        term="Asthma",
+        retrieved_from_ontologies=["EFO"],
+    )
+
+    result = merger.merge([candidate], target_ontology_constraint="EFO")
+
+    assert result == [candidate]
+
+
+@pytest.mark.unit
+def test_strict_ignores_multi_route_provenance_and_uses_native_ontology_only(
+    merger: CandidateMerger,
+) -> None:
+    """A candidate retrieved through multiple routes (including EFO) is still
+    judged on native ontology alone under strict mode."""
+    candidate = _c(
+        code="HP:0002099",
+        ontology="HPO",
+        term="Asthma",
+        retrieved_from_ontologies=["EFO", "HPO"],
+    )
+
+    strict_result = merger.merge(
+        [candidate],
+        target_ontology_constraint="EFO",
+        strict_target_ontology=True,
+    )
+    assert strict_result == []
+
+    lenient_result = merger.merge([candidate], target_ontology_constraint="EFO")
+    assert lenient_result == [candidate]
+
+
+@pytest.mark.unit
+def test_strict_non_efo_native_target_match_is_unaffected(merger: CandidateMerger) -> None:
+    """Strict mode is a generic native-only rule: it does not change eligibility
+    for ontologies that never had a provenance carve-out."""
+    candidate = _c(code="LOINC:8480-6", ontology="LOINC", term="Systolic BP")
+
+    result = merger.merge(
+        [candidate],
+        target_ontology_constraint="LOINC",
+        strict_target_ontology=True,
+    )
+
+    assert result == [candidate]
+
+
+@pytest.mark.unit
+def test_strict_multi_target_keeps_native_members_rejects_imported(
+    merger: CandidateMerger,
+) -> None:
+    native_efo = _c(code="EFO:0000408", ontology="EFO", term="disease")
+    native_hpo = _c(code="HP:0012735", ontology="HPO", term="Cough")
+    imported_mondo = _c(
+        code="MONDO:0004975",
+        ontology="MONDO",
+        term="asthma",
+        retrieved_from_ontologies=["EFO"],
+    )
+
+    result = merger.merge(
+        [native_efo, native_hpo, imported_mondo],
+        allowed_target_ontologies=["EFO", "HPO"],
+        strict_target_ontology=True,
+    )
+
+    assert {c.code for c in result} == {"EFO:0000408", "HP:0012735"}

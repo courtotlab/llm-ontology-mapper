@@ -100,12 +100,18 @@ class PlannedPipeline:
         max_alternatives: int = 5,
         *,
         source_description: str | None = None,
+        strict_target_ontology: bool = False,
     ) -> MappingResult:
         """
         Map one source term through the planned pipeline.
 
         Args mirror the planned API.  retrieval_mode accepts the three
         user-facing values only: public, local, disabled.
+
+        strict_target_ontology: When True, require canonical native-ontology
+            membership only for candidate eligibility (merge, rerank, and
+            result building); disables the EFO imported-term provenance
+            exception. Has no effect on retrieval routing or query planning.
 
         Raises:
             ValueError: invalid retrieval_mode string.
@@ -166,12 +172,18 @@ class PlannedPipeline:
                 target_ontology_constraint=query_plan.target_ontology_constraint,
                 allowed_target_ontologies=query_plan.allowed_target_ontologies,
                 max_candidates=max_candidates,
+                strict_target_ontology=strict_target_ontology,
             ),
         )
         rerank_decision = _time_stage(
             timings,
             "llm_reranking_ms",
-            lambda: self._rerank(query_plan, merged_candidates, timings=timings),
+            lambda: self._rerank(
+                query_plan,
+                merged_candidates,
+                timings=timings,
+                strict_target_ontology=strict_target_ontology,
+            ),
         )
         retrieval_trace = _time_stage(
             timings,
@@ -196,6 +208,7 @@ class PlannedPipeline:
                 retrieval_trace=retrieval_trace,
                 source_type=source_type,
                 max_alternatives=max_alternatives,
+                strict_target_ontology=strict_target_ontology,
             ),
         )
         _attach_pipeline_timings(result, timings)
@@ -355,6 +368,7 @@ class PlannedPipeline:
         target_ontology_constraint: str | None,
         allowed_target_ontologies: list[str] | None,
         max_candidates: int | None,
+        strict_target_ontology: bool = False,
     ) -> list[NormalizedCandidate]:
         try:
             return self._candidate_merger.merge(
@@ -362,6 +376,7 @@ class PlannedPipeline:
                 target_ontology_constraint=target_ontology_constraint,
                 allowed_target_ontologies=allowed_target_ontologies,
                 max_candidates=max_candidates,
+                strict_target_ontology=strict_target_ontology,
             )
         except Exception as exc:
             raise PlannedPipelineError("CandidateMerger failed during planned mapping.") from exc
@@ -372,12 +387,18 @@ class PlannedPipeline:
         candidates: list[NormalizedCandidate],
         *,
         timings: dict[str, float],
+        strict_target_ontology: bool = False,
     ) -> RerankDecision:
         try:
             kwargs: dict[str, Any] = {}
             if _accepts_keyword(self._llm_reranker.rerank, "timing_sink"):
                 kwargs["timing_sink"] = timings
-            decision = self._llm_reranker.rerank(query_plan, candidates, **kwargs)
+            decision = self._llm_reranker.rerank(
+                query_plan,
+                candidates,
+                strict_target_ontology=strict_target_ontology,
+                **kwargs,
+            )
             timings.setdefault("llm_reranker_provider_ms", 0.0)
             return decision
         except Exception as exc:
@@ -392,6 +413,7 @@ class PlannedPipeline:
         retrieval_trace: RetrievalTrace,
         source_type: str | None,
         max_alternatives: int,
+        strict_target_ontology: bool = False,
     ) -> MappingResult:
         try:
             return self._mapping_result_builder.build(
@@ -401,6 +423,7 @@ class PlannedPipeline:
                 retrieval_trace=retrieval_trace,
                 source_type=source_type,
                 max_alternatives=max_alternatives,
+                strict_target_ontology=strict_target_ontology,
             )
         except Exception as exc:
             raise PlannedPipelineError(

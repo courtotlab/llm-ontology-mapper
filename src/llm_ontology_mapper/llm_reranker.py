@@ -121,6 +121,7 @@ class LLMReranker:
         candidates: Sequence[NormalizedCandidate],
         *,
         timing_sink: dict[str, float] | None = None,
+        strict_target_ontology: bool = False,
     ) -> RerankDecision:
         """
         Select the best candidate for the source term or return UNMAPPED.
@@ -128,6 +129,9 @@ class LLMReranker:
         Args:
             query_plan:  The planned interpretation of the source term.
             candidates:  Already-normalized and merged candidate objects.
+            strict_target_ontology: When True, require canonical native-ontology
+                membership only; disables the EFO imported-term provenance
+                exception for candidate filtering, selection, and alternatives.
 
         Returns:
             RerankDecision with is_grounded=True and a selected code, or
@@ -153,7 +157,9 @@ class LLMReranker:
             else GroundingSource.LOCAL_SAPBERT
         )
         allowed_ontologies = _effective_allowed_target_ontologies(query_plan)
-        eligible_candidates = _filter_allowed_candidates(candidates, allowed_ontologies)
+        eligible_candidates = _filter_allowed_candidates(
+            candidates, allowed_ontologies, strict_target_ontology=strict_target_ontology
+        )
 
         # Empty candidate list — return unmapped without calling the provider
         if not eligible_candidates:
@@ -233,6 +239,7 @@ class LLMReranker:
             retrieval_mode=mode,
             grounding_source=grounding_source,
             query_plan=query_plan,
+            strict_target_ontology=strict_target_ontology,
         )
 
     # ── Private helpers ───────────────────────────────────────────────────────
@@ -313,6 +320,7 @@ class LLMReranker:
         retrieval_mode: RetrievalMode,
         grounding_source: GroundingSource,
         query_plan: QueryPlan,
+        strict_target_ontology: bool = False,
     ) -> RerankDecision:
         is_unmapped = bool(data.get("is_unmapped", False))
         selected_cid: str | None = data.get("selected_candidate_id")
@@ -378,6 +386,7 @@ class LLMReranker:
         if query_plan.target_ontology_constraint and not candidate_allowed_for_targets(
             selected_candidate,
             [query_plan.target_ontology_constraint],
+            strict_target_ontology=strict_target_ontology,
         ):
             raise LLMRerankerError(
                 f"LLM selected candidate with ontology={selected_candidate.ontology!r} "
@@ -390,6 +399,7 @@ class LLMReranker:
         if allowed_ontologies is not None and not candidate_allowed_for_targets(
             selected_candidate,
             allowed_ontologies,
+            strict_target_ontology=strict_target_ontology,
         ):
             raise LLMRerankerError(
                 f"LLM selected candidate with ontology={selected_candidate.ontology!r} "
@@ -403,6 +413,7 @@ class LLMReranker:
             candidate_codes=candidate_codes,
             selected_code=selected_code,
             allowed_ontologies=allowed_ontologies,
+            strict_target_ontology=strict_target_ontology,
         )
         higher_alternatives = [alt for alt in alternatives if alt.confidence > confidence]
         if higher_alternatives:
@@ -457,13 +468,17 @@ def _effective_allowed_target_ontologies(query_plan: QueryPlan) -> set[str] | No
 def _filter_allowed_candidates(
     candidates: Sequence[NormalizedCandidate],
     allowed_ontologies: set[str] | None,
+    *,
+    strict_target_ontology: bool = False,
 ) -> list[NormalizedCandidate]:
     if allowed_ontologies is None:
         return _filter_consistent_candidates(candidates)
     return [
         candidate
         for candidate in _filter_consistent_candidates(candidates)
-        if candidate_allowed_for_targets(candidate, allowed_ontologies)
+        if candidate_allowed_for_targets(
+            candidate, allowed_ontologies, strict_target_ontology=strict_target_ontology
+        )
     ]
 
 
@@ -530,6 +545,7 @@ def _parse_alternatives(
     selected_code: str | None,
     allowed_ontologies: set[str] | None,
     max_alternatives: int = 5,
+    strict_target_ontology: bool = False,
 ) -> tuple[list[str], list[RerankAlternative]]:
     """Parse alternatives from LLM output.
 
@@ -553,6 +569,7 @@ def _parse_alternatives(
                 candidate_codes=candidate_codes,
                 selected_code=selected_code,
                 allowed_ontologies=allowed_ontologies,
+                strict_target_ontology=strict_target_ontology,
             )
             if alt is None or alt.code in seen_codes:
                 continue
@@ -594,6 +611,7 @@ def _parse_structured_alternative(
     candidate_codes: set[str],
     selected_code: str | None,
     allowed_ontologies: set[str] | None,
+    strict_target_ontology: bool = False,
 ) -> RerankAlternative | None:
     candidate_id = str(item.get("candidate_id") or "").strip()
     if candidate_id not in candidate_map:
@@ -603,6 +621,7 @@ def _parse_structured_alternative(
     if allowed_ontologies is not None and not candidate_allowed_for_targets(
         candidate,
         allowed_ontologies,
+        strict_target_ontology=strict_target_ontology,
     ):
         return None
     code = str(item.get("code") or "").strip()

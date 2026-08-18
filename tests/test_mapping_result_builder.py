@@ -1273,3 +1273,152 @@ def test_imports_available_from_package() -> None:
 
     assert MappingResultBuilder is not None
     assert MappingResultBuilderError is not None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 11. strict_target_ontology
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_strict_rejects_imported_selection_via_target_ontology_constraint() -> None:
+    """Defense-in-depth: even if an (inconsistent/malformed) rerank decision
+    selects an imported-but-not-native candidate under a hard target_ontology_
+    constraint, the result builder must not surface it as a valid mapping."""
+    builder = MappingResultBuilder()
+    imported_hpo = _make_candidate(
+        "HP:0002099",
+        "Asthma",
+        "HPO",
+        retrieved_from_ontologies=["EFO"],
+    )
+    decision = _make_selected_decision(selected_code="HP:0002099")
+
+    with pytest.raises(MappingResultBuilderError, match="EFO"):
+        builder.build(
+            query_plan=_make_plan(target_ontology_constraint="EFO"),
+            rerank_decision=decision,
+            candidates=[imported_hpo],
+            strict_target_ontology=True,
+        )
+
+
+def test_strict_rejects_imported_selection_via_allowed_target_ontologies() -> None:
+    """Same invariant through the allow-list path: an ungrounded/inconsistent
+    selection is downgraded to UNMAPPED rather than surfaced."""
+    builder = MappingResultBuilder()
+    imported_mondo = _make_candidate(
+        "MONDO:0004975",
+        "asthma",
+        "MONDO",
+        retrieved_from_ontologies=["EFO"],
+    )
+    decision = _make_selected_decision(selected_code="MONDO:0004975")
+
+    result = builder.build(
+        query_plan=_make_plan(allowed_target_ontologies=["EFO"]),
+        rerank_decision=decision,
+        candidates=[imported_mondo],
+        strict_target_ontology=True,
+    )
+
+    assert result.target_code == "UNKNOWN:UNMAPPED"
+    assert result.ontology == "UNKNOWN"
+
+
+def test_strict_allows_native_efo_selection() -> None:
+    builder = MappingResultBuilder()
+    native_efo = _make_candidate("EFO:0000408", "disease", "EFO")
+    decision = _make_selected_decision(selected_code="EFO:0000408")
+
+    result = builder.build(
+        query_plan=_make_plan(target_ontology_constraint="EFO"),
+        rerank_decision=decision,
+        candidates=[native_efo],
+        strict_target_ontology=True,
+    )
+
+    assert result.target_code == "EFO:0000408"
+    assert result.ontology == "EFO"
+
+
+def test_strict_excludes_imported_alternative() -> None:
+    """Under strict mode, an imported-but-not-native alternative must never
+    reach MappingResult.alternatives, even if the reranker proposed it."""
+    builder = MappingResultBuilder()
+    selected = _make_candidate("EFO:0000408", "disease", "EFO")
+    imported_alt = _make_candidate(
+        "MONDO:0004975",
+        "asthma",
+        "MONDO",
+        retrieved_from_ontologies=["EFO"],
+    )
+    decision = _make_selected_decision(
+        selected_code="EFO:0000408",
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C2",
+                code="MONDO:0004975",
+                confidence=0.7,
+                explanation="Imported EFO-search disease candidate.",
+            ),
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(allowed_target_ontologies=["EFO"]),
+        rerank_decision=decision,
+        candidates=[selected, imported_alt],
+        strict_target_ontology=True,
+    )
+
+    assert result.alternatives == []
+
+
+def test_strict_lenient_regression_keeps_imported_result_alternative() -> None:
+    """strict_target_ontology omitted (defaults False) preserves the existing
+    EFO imported-term alternative behaviour exactly."""
+    builder = MappingResultBuilder()
+    selected = _make_candidate("EFO:0000408", "disease", "EFO")
+    imported_alt = _make_candidate(
+        "MONDO:0004975",
+        "asthma",
+        "MONDO",
+        retrieved_from_ontologies=["EFO"],
+    )
+    decision = _make_selected_decision(
+        selected_code="EFO:0000408",
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C2",
+                code="MONDO:0004975",
+                confidence=0.7,
+                explanation="Imported EFO-search disease candidate.",
+            ),
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(allowed_target_ontologies=["EFO"]),
+        rerank_decision=decision,
+        candidates=[selected, imported_alt],
+    )
+
+    assert [(alt.code, alt.ontology) for alt in result.alternatives] == [
+        ("MONDO:0004975", "MONDO")
+    ]
+
+
+def test_strict_metadata_records_flag_value() -> None:
+    builder = MappingResultBuilder()
+    native_efo = _make_candidate("EFO:0000408", "disease", "EFO")
+    decision = _make_selected_decision(selected_code="EFO:0000408")
+
+    result = builder.build(
+        query_plan=_make_plan(target_ontology_constraint="EFO"),
+        rerank_decision=decision,
+        candidates=[native_efo],
+        strict_target_ontology=True,
+    )
+
+    pipeline_info = result.metadata.rag_debug.candidates_retrieved[0]
+    assert pipeline_info["strict_target_ontology"] is True

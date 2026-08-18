@@ -587,3 +587,109 @@ def test_planned_mode_passes_max_candidates_and_max_alternatives() -> None:
 
     assert fake.calls[0]["max_candidates"] == 7
     assert fake.calls[0]["max_alternatives"] == 3
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# strict_target_ontology
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_planned_mode_passes_strict_target_ontology_true() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term("disease", strict_target_ontology=True)
+
+    assert fake.calls[0]["strict_target_ontology"] is True
+
+
+def test_planned_mode_defaults_strict_target_ontology_to_false() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term("sys_bp")
+
+    assert fake.calls[0]["strict_target_ontology"] is False
+
+
+def test_map_data_dictionary_forwards_strict_target_ontology_to_every_row() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    batch = mapper.map_data_dictionary(
+        [
+            {"field_name": "row1", "field_label": "Row 1", "field_type": "text"},
+            {"field_name": "row2", "field_label": "Row 2", "field_type": "text"},
+            {"field_name": "row3", "field_label": "Row 3", "field_type": "text"},
+        ],
+        strict_target_ontology=True,
+    )
+
+    assert len(batch.results) == 3
+    assert len(fake.calls) == 3
+    assert all(call["strict_target_ontology"] is True for call in fake.calls)
+
+
+def test_strict_target_ontology_true_raises_on_legacy_path() -> None:
+    provider = _StubProvider()
+    mapper = OntologyMapper(llm_provider=provider)
+
+    with pytest.raises(ValueError, match="use_planned_pipeline=True"):
+        mapper.map_term("sys_bp", strict_target_ontology=True)
+
+    assert provider.calls == []
+
+
+def test_strict_target_ontology_true_raises_when_planned_disabled_per_call() -> None:
+    provider = _StubProvider()
+    mapper = OntologyMapper(
+        llm_provider=provider,
+        use_planned_pipeline=True,
+        planned_pipeline=_FakePlannedPipeline(),
+    )
+
+    with pytest.raises(ValueError, match="use_planned_pipeline=True"):
+        mapper.map_term("sys_bp", use_planned_pipeline=False, strict_target_ontology=True)
+
+    assert provider.calls == []
+
+
+def test_strict_target_ontology_explicit_false_does_not_raise_on_legacy_path() -> None:
+    provider = _StubProvider()
+    mapper = OntologyMapper(llm_provider=provider)
+
+    result = mapper.map_term("cough", strict_target_ontology=False)
+
+    assert result.target_code == "HP:0012735"
+
+
+def test_map_data_dictionary_validates_strict_target_ontology_once_upfront() -> None:
+    """Requesting strict_target_ontology=True for a batch that will use the
+    legacy path must raise immediately, not be discovered (and silently
+    swallowed by the per-row try/except) on the first row."""
+    provider = _StubProvider()
+    mapper = OntologyMapper(llm_provider=provider)
+
+    with pytest.raises(ValueError, match="use_planned_pipeline=True"):
+        mapper.map_data_dictionary(
+            [
+                {"field_name": "row1", "field_label": "Row 1", "field_type": "text"},
+                {"field_name": "row2", "field_label": "Row 2", "field_type": "text"},
+            ],
+            strict_target_ontology=True,
+        )
+
+    # Validated before the per-row loop ran — no row was ever attempted.
+    assert provider.calls == []
