@@ -83,6 +83,7 @@ eval = [
     "pandas>=2.0",
     "matplotlib>=3.8",
     "seaborn>=0.13",
+    "openpyxl>=3.1",          # .xlsx read/write engine for pandas (benchmark input)
 ]
 
 # Pull in every optional group at once (useful for full dev installs)

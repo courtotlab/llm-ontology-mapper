@@ -716,6 +716,159 @@ def test_non_reasoning_model_reranker_keeps_default_budget() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Malformed non-empty JSON retry (mirrors QueryPlanner's equivalent recovery
+# -- see tests/test_query_planner.py's "Malformed non-empty JSON retry"
+# section). Model-agnostic, distinct from and mutually exclusive with the
+# existing empty-response-from-reasoning-model recovery above: at most one
+# recovery attempt total per rerank() call.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_MALFORMED_RERANK_JSON = "this is not json at all {broken"
+_MALFORMED_RERANK_JSON_2 = '{"selected_candidate_id": "C1", '  # different truncation
+
+
+class _UsageSequenceProvider(BaseLLMProvider):
+    """Returns (content, prompt_tokens, completion_tokens) tuples in order."""
+
+    def __init__(self, responses: list[tuple[str, int, int]], model: str = "gpt-5") -> None:
+        super().__init__(model=model)
+        self._responses = list(responses)
+        self.calls: list[list[ChatMessage]] = []
+        self.call_kwargs: list[dict[str, Any]] = []
+
+    @property
+    def provider_name(self) -> str:
+        return "openai"
+
+    def complete(
+        self,
+        messages: list[ChatMessage],
+        temperature: float = 0.1,
+        max_tokens: int = 1024,
+        **kwargs: Any,
+    ) -> CompletionResponse:
+        self.calls.append(list(messages))
+        self.call_kwargs.append(
+            {
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                **kwargs,
+            }
+        )
+        content, prompt_tokens, completion_tokens = (
+            self._responses.pop(0) if self._responses else ("", 0, 0)
+        )
+        return CompletionResponse(
+            content=content,
+            model=self.model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+        )
+
+
+@pytest.mark.unit
+def test_rerank_malformed_valid_first_response_makes_one_call() -> None:
+    candidate = _make_candidate()
+    provider = _StubProvider(_response(selected_cid="C1", selected_code="HP:0012735"))
+    reranker = LLMReranker(provider)
+
+    result = reranker.rerank(_make_plan(), [candidate])
+
+    assert result.selected_code == "HP:0012735"
+    assert len(provider.calls) == 1
+
+
+@pytest.mark.unit
+def test_rerank_malformed_then_valid_retries_once_and_succeeds() -> None:
+    candidate = _make_candidate()
+    provider = _SequenceProvider(
+        [_MALFORMED_RERANK_JSON, _response(selected_cid="C1", selected_code="HP:0012735")]
+    )
+    reranker = LLMReranker(provider)
+
+    result = reranker.rerank(_make_plan(), [candidate])
+
+    assert result.selected_code == "HP:0012735"
+    assert len(provider.calls) == 2
+
+
+@pytest.mark.unit
+def test_rerank_malformed_then_malformed_fails_after_exactly_two_calls() -> None:
+    candidate = _make_candidate()
+    provider = _SequenceProvider([_MALFORMED_RERANK_JSON, _MALFORMED_RERANK_JSON_2])
+    reranker = LLMReranker(provider)
+
+    with pytest.raises(LLMRerankerError, match="malformed JSON"):
+        reranker.rerank(_make_plan(), [candidate])
+
+    assert len(provider.calls) == 2
+
+
+@pytest.mark.unit
+def test_rerank_existing_empty_response_recovery_still_works() -> None:
+    candidate = _make_candidate()
+    provider = _NamedSequenceProvider(
+        ["", _response(selected_cid="C1", selected_code="HP:0012735")],
+        model="gpt-5",
+        provider_name="openai",
+    )
+    reranker = LLMReranker(provider)
+
+    result = reranker.rerank(_make_plan(), [candidate])
+
+    assert result.selected_code == "HP:0012735"
+    assert len(provider.calls) == 2
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "responses",
+    [
+        pytest.param(["", _MALFORMED_RERANK_JSON], id="empty-then-malformed"),
+        pytest.param([_MALFORMED_RERANK_JSON, ""], id="malformed-then-empty"),
+    ],
+)
+def test_rerank_malformed_and_empty_conditions_cannot_combine_past_two_calls(
+    responses: list[str],
+) -> None:
+    """Neither recovery attempt's outcome is re-triaged: whichever condition
+    triggered the one retry, the second attempt's result (empty or
+    malformed) is final -- never a trigger for the other retry."""
+    candidate = _make_candidate()
+    provider = _NamedSequenceProvider(responses, model="gpt-5", provider_name="openai")
+    reranker = LLMReranker(provider)
+
+    with pytest.raises(LLMRerankerError):
+        reranker.rerank(_make_plan(), [candidate])
+
+    assert len(provider.calls) == 2
+
+
+@pytest.mark.unit
+def test_rerank_malformed_retry_usage_and_timing_accumulate_across_both_calls() -> None:
+    candidate = _make_candidate()
+    provider = _UsageSequenceProvider(
+        [
+            (_MALFORMED_RERANK_JSON, 60, 15),
+            (_response(selected_cid="C1", selected_code="HP:0012735"), 70, 45),
+        ],
+        model="gpt-5",
+    )
+    reranker = LLMReranker(provider)
+    usage: dict[str, Any] = {}
+    timings: dict[str, float] = {}
+
+    reranker.rerank(_make_plan(), [candidate], usage_sink=usage, timing_sink=timings)
+
+    reranker_usage = usage["llm_reranker"]
+    assert reranker_usage["input_tokens"] == 130
+    assert reranker_usage["output_tokens"] == 60
+    assert reranker_usage["call_count"] == 2
+    assert timings["llm_reranker_provider_ms"] > 0
+    assert set(usage.keys()) == {"llm_reranker"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Test 17: JSON wrapped in markdown code fences is accepted
 # ─────────────────────────────────────────────────────────────────────────────
 

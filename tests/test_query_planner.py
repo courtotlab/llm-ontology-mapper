@@ -21,7 +21,12 @@ from llm_ontology_mapper.models import (
     QueryPlan,
     RetrievalMode,
 )
-from llm_ontology_mapper.providers import BaseLLMProvider, ChatMessage, CompletionResponse
+from llm_ontology_mapper.providers import (
+    BaseLLMProvider,
+    ChatMessage,
+    CompletionResponse,
+    LLMCallConfig,
+)
 from llm_ontology_mapper.query_planner import QueryPlanner, QueryPlanningError
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -743,3 +748,490 @@ def test_elevated_sbp_phenotype_from_fake_output() -> None:
     assert plan.semantic_type == "phenotype"
     assert plan.preferred_ontology == "HPO"
     assert "HPO" in plan.candidate_ontologies
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Reasoning-model empty-response retry
+#
+# Mirrors LLMReranker's equivalent empty-response-from-reasoning-model retry
+# (see tests/test_llm_reranker.py::test_reasoning_model_empty_response_retries_once_with_larger_budget).
+# Root cause: a GPT-5-family reasoning model can spend its whole completion
+# budget on reasoning tokens and return content="" with finish_reason="length"
+# without the provider raising -- QueryPlanner previously had no recovery for
+# this and failed with a bare QueryPlanningError (see the GPT-5 mini "nausea"
+# benchmark failure this fixes).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class _SequenceProvider(BaseLLMProvider):
+    """Returns response strings in order and records every call."""
+
+    def __init__(self, responses: list[str], model: str = "stub") -> None:
+        super().__init__(model=model)
+        self._responses = list(responses)
+        self.calls: list[list[ChatMessage]] = []
+        self.call_kwargs: list[dict[str, Any]] = []
+
+    def complete(
+        self,
+        messages: list[ChatMessage],
+        temperature: float = 0.1,
+        max_tokens: int = 1024,
+        **kwargs: Any,
+    ) -> CompletionResponse:
+        self.calls.append(list(messages))
+        self.call_kwargs.append(
+            {
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                **kwargs,
+            }
+        )
+        content = self._responses.pop(0) if self._responses else ""
+        return CompletionResponse(content=content, model=self.model)
+
+
+class _NamedSequenceProvider(_SequenceProvider):
+    def __init__(self, responses: list[str], *, model: str, provider_name: str) -> None:
+        super().__init__(responses, model=model)
+        self._provider_name = provider_name
+
+    @property
+    def provider_name(self) -> str:
+        return self._provider_name
+
+
+class _UsageSequenceProvider(BaseLLMProvider):
+    """Returns (content, prompt_tokens, completion_tokens) tuples in order."""
+
+    def __init__(self, responses: list[tuple[str, int, int]], model: str = "gpt-5") -> None:
+        super().__init__(model=model)
+        self._responses = list(responses)
+        self.calls: list[list[ChatMessage]] = []
+        self.call_kwargs: list[dict[str, Any]] = []
+
+    @property
+    def provider_name(self) -> str:
+        return "openai"
+
+    def complete(
+        self,
+        messages: list[ChatMessage],
+        temperature: float = 0.1,
+        max_tokens: int = 1024,
+        **kwargs: Any,
+    ) -> CompletionResponse:
+        self.calls.append(list(messages))
+        self.call_kwargs.append(
+            {
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                **kwargs,
+            }
+        )
+        content, prompt_tokens, completion_tokens = (
+            self._responses.pop(0) if self._responses else ("", 0, 0)
+        )
+        return CompletionResponse(
+            content=content,
+            model=self.model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+        )
+
+
+@pytest.mark.unit
+def test_non_reasoning_model_valid_content_makes_one_call() -> None:
+    stub = _RecordingStubProvider(_SYS_BP_RESPONSE, model="gpt-4.1-mini")
+    planner = QueryPlanner(stub)
+
+    plan = planner.plan("sys_bp")
+
+    assert plan.normalized_term == "systolic blood pressure"
+    assert len(stub.calls) == 1
+
+
+@pytest.mark.unit
+def test_reasoning_model_valid_content_makes_one_call() -> None:
+    provider = _NamedRecordingStubProvider(_SYS_BP_RESPONSE, model="gpt-5", provider_name="openai")
+    planner = QueryPlanner(provider)
+
+    plan = planner.plan("sys_bp")
+
+    assert plan.normalized_term == "systolic blood pressure"
+    assert len(provider.calls) == 1
+
+
+@pytest.mark.unit
+def test_reasoning_model_empty_then_valid_retries_once_with_larger_budget() -> None:
+    provider = _NamedSequenceProvider(
+        ["", _SYS_BP_RESPONSE],
+        model="gpt-5",
+        provider_name="openai",
+    )
+    planner = QueryPlanner(provider)
+
+    plan = planner.plan("sys_bp")
+
+    assert plan.normalized_term == "systolic blood pressure"
+    assert len(provider.calls) == 2
+    assert provider.call_kwargs[0]["max_tokens"] == 2048
+    assert "min_completion_tokens" not in provider.call_kwargs[0]
+    assert provider.call_kwargs[1]["max_tokens"] == 8192
+    assert provider.call_kwargs[1]["min_completion_tokens"] == 8192
+
+
+@pytest.mark.unit
+def test_reasoning_model_whitespace_only_then_valid_retries_once() -> None:
+    provider = _NamedSequenceProvider(
+        ["   \n\t  ", _SYS_BP_RESPONSE],
+        model="gpt-5",
+        provider_name="openai",
+    )
+    planner = QueryPlanner(provider)
+
+    plan = planner.plan("sys_bp")
+
+    assert plan.normalized_term == "systolic blood pressure"
+    assert len(provider.calls) == 2
+
+
+@pytest.mark.unit
+def test_reasoning_model_empty_twice_fails_after_exactly_two_calls() -> None:
+    provider = _NamedSequenceProvider(
+        ["", ""],
+        model="gpt-5",
+        provider_name="openai",
+    )
+    planner = QueryPlanner(provider)
+
+    with pytest.raises(QueryPlanningError):
+        planner.plan("sys_bp")
+
+    assert len(provider.calls) == 2
+
+
+@pytest.mark.unit
+def test_non_reasoning_model_empty_content_does_not_retry() -> None:
+    provider = _SequenceProvider(["", _SYS_BP_RESPONSE], model="gpt-4.1-mini")
+    planner = QueryPlanner(provider)
+
+    with pytest.raises(QueryPlanningError):
+        planner.plan("sys_bp")
+
+    # No reasoning-model retry -- the second (valid) response is never consumed.
+    assert len(provider.calls) == 1
+
+
+@pytest.mark.unit
+def test_reasoning_model_nonempty_malformed_json_retries_once() -> None:
+    """Malformed-JSON recovery (added alongside the empty-response recovery)
+    applies to any model, including reasoning models -- see the dedicated
+    malformed-JSON retry test section below."""
+    provider = _NamedSequenceProvider(
+        ["this is not JSON {{ broken }", _SYS_BP_RESPONSE],
+        model="gpt-5",
+        provider_name="openai",
+    )
+    planner = QueryPlanner(provider)
+
+    plan = planner.plan("sys_bp")
+
+    assert plan.normalized_term == "systolic blood pressure"
+    assert len(provider.calls) == 2
+
+
+@pytest.mark.unit
+def test_retry_preserves_llm_call_config() -> None:
+    provider = _NamedSequenceProvider(
+        ["", _SYS_BP_RESPONSE],
+        model="gpt-5",
+        provider_name="openai",
+    )
+    llm_call_config = LLMCallConfig(
+        temperature=0.3,
+        seed=42,
+        reasoning_effort="low",
+        force_temperature=True,
+    )
+    planner = QueryPlanner(provider, llm_call_config=llm_call_config)
+
+    planner.plan("sys_bp")
+
+    assert len(provider.call_kwargs) == 2
+    for call_kwargs in provider.call_kwargs:
+        assert call_kwargs["temperature"] == 0.3
+        assert call_kwargs["seed"] == 42
+        assert call_kwargs["reasoning_effort"] == "low"
+
+
+@pytest.mark.unit
+def test_first_call_ceiling_remains_2048_regardless_of_retry() -> None:
+    provider = _NamedSequenceProvider(
+        ["", _SYS_BP_RESPONSE],
+        model="gpt-5",
+        provider_name="openai",
+    )
+    planner = QueryPlanner(provider)
+
+    planner.plan("sys_bp")
+
+    assert provider.call_kwargs[0]["max_tokens"] == 2048
+
+
+@pytest.mark.unit
+def test_larger_budget_used_only_on_retry_not_first_call() -> None:
+    provider = _NamedRecordingStubProvider(_SYS_BP_RESPONSE, model="gpt-5", provider_name="openai")
+    planner = QueryPlanner(provider)
+
+    planner.plan("sys_bp")
+
+    assert len(provider.calls) == 1
+    assert provider.call_kwargs[0]["max_tokens"] == 2048
+    assert "min_completion_tokens" not in provider.call_kwargs[0]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Usage-sink accumulation across the empty-response retry
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_usage_sink_accumulates_across_empty_response_retry() -> None:
+    provider = _UsageSequenceProvider(
+        [("", 100, 10), (_SYS_BP_RESPONSE, 100, 50)],
+        model="gpt-5",
+    )
+    planner = QueryPlanner(provider)
+    usage: dict[str, Any] = {}
+
+    planner.plan("sys_bp", usage_sink=usage)
+
+    planner_usage = usage["query_planner"]
+    assert planner_usage["input_tokens"] == 200
+    assert planner_usage["output_tokens"] == 60
+    assert planner_usage["call_count"] == 2
+
+
+@pytest.mark.unit
+def test_usage_sink_no_retry_matches_single_call_usage() -> None:
+    provider = _UsageSequenceProvider(
+        [(_SYS_BP_RESPONSE, 120, 45)],
+        model="gpt-5",
+    )
+    planner = QueryPlanner(provider)
+    usage: dict[str, Any] = {}
+
+    planner.plan("sys_bp", usage_sink=usage)
+
+    planner_usage = usage["query_planner"]
+    assert planner_usage["input_tokens"] == 120
+    assert planner_usage["output_tokens"] == 45
+    assert planner_usage["call_count"] == 1
+    assert len(provider.calls) == 1
+
+
+@pytest.mark.unit
+def test_retry_usage_recorded_under_query_planner_key_only() -> None:
+    provider = _UsageSequenceProvider(
+        [("", 100, 10), (_SYS_BP_RESPONSE, 100, 50)],
+        model="gpt-5",
+    )
+    planner = QueryPlanner(provider)
+    usage: dict[str, Any] = {}
+
+    planner.plan("sys_bp", usage_sink=usage)
+
+    assert set(usage.keys()) == {"query_planner"}
+
+
+@pytest.mark.unit
+def test_timing_sink_accumulates_across_empty_response_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ticks = iter([0.0, 0.1, 0.1, 0.35])  # call 1: 100ms, call 2: 250ms
+    monkeypatch.setattr(query_planner_module.time, "monotonic", lambda: next(ticks))
+    provider = _NamedSequenceProvider(
+        ["", _SYS_BP_RESPONSE],
+        model="gpt-5",
+        provider_name="openai",
+    )
+    planner = QueryPlanner(provider)
+    timings: dict[str, float] = {}
+
+    planner.plan("sys_bp", timing_sink=timings)
+
+    assert timings["query_planning_provider_ms"] == pytest.approx(350.0)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Malformed non-empty JSON retry
+#
+# A second, distinct structured-output failure mode from the empty-response
+# case above: a non-empty response that looks like JSON but fails
+# json.loads() (truncated, missing comma, unterminated string, ...).
+# Model-agnostic (unlike the empty-response retry, which is reasoning-model
+# only) -- observed on both GPT-5 mini (QueryPlanner) and GPT-4.1 mini
+# (LLMReranker) in real benchmark runs, with the same input succeeding on the
+# other repetition, i.e. stochastic formatting failure rather than a
+# deterministic input problem. Hard cap: at most one recovery attempt total,
+# whether the first failure was empty content or malformed JSON -- see
+# _MAX_PLAN_ATTEMPTS.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_MALFORMED_JSON = "this is not JSON {{ broken }"
+_MALFORMED_JSON_2 = '{"normalized_term": "nope", '  # different truncation
+
+
+@pytest.mark.unit
+def test_malformed_json_valid_first_response_makes_one_call() -> None:
+    stub = _RecordingStubProvider(_SYS_BP_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    plan = planner.plan("sys_bp")
+
+    assert plan.normalized_term == "systolic blood pressure"
+    assert len(stub.calls) == 1
+
+
+@pytest.mark.unit
+def test_malformed_then_valid_retries_once_and_succeeds() -> None:
+    provider = _SequenceProvider([_MALFORMED_JSON, _SYS_BP_RESPONSE])
+    planner = QueryPlanner(provider)
+
+    plan = planner.plan("sys_bp")
+
+    assert plan.normalized_term == "systolic blood pressure"
+    assert len(provider.calls) == 2
+
+
+@pytest.mark.unit
+def test_malformed_then_malformed_fails_after_exactly_two_calls() -> None:
+    provider = _SequenceProvider([_MALFORMED_JSON, _MALFORMED_JSON_2])
+    planner = QueryPlanner(provider)
+
+    with pytest.raises(QueryPlanningError, match="malformed JSON"):
+        planner.plan("sys_bp")
+
+    assert len(provider.calls) == 2
+
+
+@pytest.mark.unit
+def test_empty_reasoning_response_then_valid_still_works() -> None:
+    """Existing empty-response recovery is unaffected by adding the
+    malformed-JSON recovery."""
+    provider = _NamedSequenceProvider(
+        ["", _SYS_BP_RESPONSE],
+        model="gpt-5",
+        provider_name="openai",
+    )
+    planner = QueryPlanner(provider)
+
+    plan = planner.plan("sys_bp")
+
+    assert plan.normalized_term == "systolic blood pressure"
+    assert len(provider.calls) == 2
+
+
+@pytest.mark.unit
+def test_empty_first_then_malformed_second_fails_after_exactly_two_calls() -> None:
+    """The empty-response retry's outcome is never re-triaged: if the one
+    recovery attempt comes back malformed instead of empty, that is still
+    the final attempt -- no third (malformed-JSON) retry is layered on."""
+    provider = _NamedSequenceProvider(
+        ["", _MALFORMED_JSON],
+        model="gpt-5",
+        provider_name="openai",
+    )
+    planner = QueryPlanner(provider)
+
+    with pytest.raises(QueryPlanningError, match="malformed JSON"):
+        planner.plan("sys_bp")
+
+    assert len(provider.calls) == 2
+
+
+@pytest.mark.unit
+def test_malformed_first_then_empty_second_fails_after_exactly_two_calls() -> None:
+    """Symmetric to the above: the malformed-JSON retry's outcome is never
+    re-triaged either -- if it comes back empty, that is still the final
+    attempt, not a trigger for the empty-response retry."""
+    provider = _NamedSequenceProvider(
+        [_MALFORMED_JSON, ""],
+        model="gpt-5",
+        provider_name="openai",
+    )
+    planner = QueryPlanner(provider)
+
+    with pytest.raises(QueryPlanningError):
+        planner.plan("sys_bp")
+
+    assert len(provider.calls) == 2
+
+
+@pytest.mark.unit
+def test_non_reasoning_model_malformed_then_valid_still_retries() -> None:
+    """Malformed-JSON recovery is NOT reasoning-model-specific, unlike the
+    empty-response recovery."""
+    provider = _SequenceProvider([_MALFORMED_JSON, _SYS_BP_RESPONSE], model="gpt-4.1-mini")
+    planner = QueryPlanner(provider)
+
+    plan = planner.plan("sys_bp")
+
+    assert plan.normalized_term == "systolic blood pressure"
+    assert len(provider.calls) == 2
+
+
+@pytest.mark.unit
+def test_malformed_retry_preserves_llm_call_config() -> None:
+    provider = _SequenceProvider([_MALFORMED_JSON, _SYS_BP_RESPONSE], model="gpt-5")
+    llm_call_config = LLMCallConfig(
+        temperature=0.3,
+        seed=42,
+        reasoning_effort="low",
+        force_temperature=True,
+    )
+    planner = QueryPlanner(provider, llm_call_config=llm_call_config)
+
+    planner.plan("sys_bp")
+
+    assert len(provider.call_kwargs) == 2
+    for call_kwargs in provider.call_kwargs:
+        assert call_kwargs["temperature"] == 0.3
+        assert call_kwargs["seed"] == 42
+        assert call_kwargs["reasoning_effort"] == "low"
+
+
+@pytest.mark.unit
+def test_malformed_retry_uses_normal_2048_token_limit_not_larger_budget() -> None:
+    provider = _SequenceProvider([_MALFORMED_JSON, _SYS_BP_RESPONSE], model="gpt-5")
+    planner = QueryPlanner(provider)
+
+    planner.plan("sys_bp")
+
+    assert provider.call_kwargs[0]["max_tokens"] == 2048
+    assert provider.call_kwargs[1]["max_tokens"] == 2048
+    assert "min_completion_tokens" not in provider.call_kwargs[1]
+
+
+@pytest.mark.unit
+def test_malformed_retry_usage_and_timing_accumulate_across_both_calls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ticks = iter([0.0, 0.1, 0.1, 0.3])  # call 1: 100ms, call 2: 200ms
+    monkeypatch.setattr(query_planner_module.time, "monotonic", lambda: next(ticks))
+    provider = _UsageSequenceProvider(
+        [(_MALFORMED_JSON, 80, 12), (_SYS_BP_RESPONSE, 90, 40)],
+        model="gpt-5",
+    )
+    planner = QueryPlanner(provider)
+    usage: dict[str, Any] = {}
+    timings: dict[str, float] = {}
+
+    planner.plan("sys_bp", usage_sink=usage, timing_sink=timings)
+
+    planner_usage = usage["query_planner"]
+    assert planner_usage["input_tokens"] == 170
+    assert planner_usage["output_tokens"] == 52
+    assert planner_usage["call_count"] == 2
+    assert timings["query_planning_provider_ms"] == pytest.approx(300.0)

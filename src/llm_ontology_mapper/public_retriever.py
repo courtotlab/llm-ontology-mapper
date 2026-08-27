@@ -164,6 +164,7 @@ class PublicOntologyRetriever:
                     route_call_sink=route_calls,
                     route_call={
                         "route": "public_api",
+                        "route_name": route,
                         "query": query,
                         "target_ontology": query_plan.target_ontology_constraint
                         or (route_plan.target_ontology_constraint if route_plan else None),
@@ -290,9 +291,15 @@ class PublicOntologyRetriever:
         query: str,
         ontology: str,
         top_k: int,
+        *,
+        route_diagnostics: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Dispatch a single (query, ontology) pair to the correct SearchTools method.
+
+        route_diagnostics, when provided, is forwarded to the SearchTools call
+        and populated in place with retry/error telemetry -- see
+        SearchTools._get_with_retry / _record_http_error_diagnostics.
 
         Raises:
             PublicRetrievalError: if the ontology is not supported, or if the
@@ -302,16 +309,27 @@ class PublicOntologyRetriever:
 
         try:
             if onto_upper in _LOINC_ONTOLOGIES:
-                return self._tools.search_loinc(query, top_k=top_k)
+                return self._tools.search_loinc(
+                    query, top_k=top_k, route_diagnostics=route_diagnostics
+                )
 
             if onto_upper in _RXNORM_ONTOLOGIES:
-                return self._tools.search_rxnorm(query, top_k=top_k)
+                return self._tools.search_rxnorm(
+                    query, top_k=top_k, route_diagnostics=route_diagnostics
+                )
 
             if onto_upper in _ICD_ONTOLOGIES:
-                return self._tools.search_icd10(query, top_k=top_k)
+                return self._tools.search_icd10(
+                    query, top_k=top_k, route_diagnostics=route_diagnostics
+                )
 
             if onto_upper in _OLS_ONTOLOGIES:
-                return self._tools.search_ols(query, ontology=onto_upper, top_k=top_k)
+                return self._tools.search_ols(
+                    query,
+                    ontology=onto_upper,
+                    top_k=top_k,
+                    route_diagnostics=route_diagnostics,
+                )
 
         except Exception as exc:
             raise PublicRetrievalError(
@@ -336,8 +354,9 @@ class PublicOntologyRetriever:
     ) -> list[dict[str, Any]]:
         start = time.monotonic()
         candidate_count: int | None = None
+        diagnostics: dict[str, Any] = {}
         try:
-            candidates = self._call_route(query, ontology, top_k)
+            candidates = self._call_route(query, ontology, top_k, route_diagnostics=diagnostics)
             candidate_count = len(candidates)
             return candidates
         finally:
@@ -347,6 +366,13 @@ class PublicOntologyRetriever:
                 timed_call["latency_ms"] = elapsed_ms
                 if candidate_count is not None:
                     timed_call["candidate_count"] = candidate_count
+                # attempts defaults to 1 when SearchTools never populated
+                # diagnostics (e.g. an unsupported-ontology PublicRetrievalError
+                # raised before any HTTP call was attempted).
+                timed_call["retrieval_attempts"] = diagnostics.get("attempts", 1)
+                final_error_type = diagnostics.get("final_error_type")
+                if final_error_type:
+                    timed_call["retrieval_final_error_type"] = final_error_type
                 route_call_sink.append(timed_call)
 
 

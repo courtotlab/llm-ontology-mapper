@@ -274,7 +274,14 @@ class _SnomedSearchTools:
     def __init__(self) -> None:
         self.calls: list[dict[str, Any]] = []
 
-    def search_ols(self, query: str, ontology: str, top_k: int = 10) -> list[dict[str, Any]]:
+    def search_ols(
+        self,
+        query: str,
+        ontology: str,
+        top_k: int = 10,
+        *,
+        route_diagnostics: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         self.calls.append({"query": query, "ontology": ontology, "top_k": top_k})
         return [
             {
@@ -297,7 +304,13 @@ class _SnomedSearchTools:
 
 
 class _PipelineSearchTools:
-    def search_loinc(self, query: str, top_k: int = 10) -> list[dict[str, Any]]:
+    def search_loinc(
+        self,
+        query: str,
+        top_k: int = 10,
+        *,
+        route_diagnostics: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         return [
             {
                 "code": "LOINC:8480-6",
@@ -1345,3 +1358,151 @@ def test_strict_target_ontology_recorded_in_result_metadata() -> None:
     )
 
     assert _meta(result)["strict_target_ontology"] is True
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Retrieval telemetry: aggregate retry/error counters (see
+# planned_pipeline._summarize_retrieval_diagnostics), attached on success via
+# _attach_retrieval_diagnostics and preserved on failure via
+# PlannedPipelineError.partial_retrieval_diagnostics. Diagnostic metadata
+# only -- must never influence tp/fp/fn/gold_rank/mapped_status (verified at
+# the benchmark-integration level in tests/benchmarking/test_runner.py).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_summarize_retrieval_diagnostics_counts_success_recovered_and_final_error() -> None:
+    route_calls = [
+        {"route_name": "OLS", "candidate_ontologies": ["HPO"], "retrieval_attempts": 1},
+        {"route_name": "OLS", "candidate_ontologies": ["MONDO"], "retrieval_attempts": 2},
+        {
+            "route_name": "OLS",
+            "candidate_ontologies": ["NCIT"],
+            "retrieval_attempts": 3,
+            "retrieval_final_error_type": "timeout",
+        },
+        {
+            "route_name": "LOINC-Search-API",
+            "candidate_ontologies": ["LOINC"],
+            "retrieval_attempts": 1,
+        },
+    ]
+
+    summary = planned_pipeline_module._summarize_retrieval_diagnostics(route_calls)
+
+    assert summary["retrieval_request_count"] == 4
+    assert summary["retrieval_retry_count"] == 3  # (1-1)+(2-1)+(3-1)+(1-1)
+    assert summary["retrieval_recovered_error_count"] == 1  # MONDO: attempts=2, no final error
+    assert summary["retrieval_final_error_count"] == 1  # NCIT: exhausted retries
+    assert summary["retrieval_error_sources"] == ["OLS:NCIT"]
+    assert summary["retrieval_error_types"] == ["timeout"]
+
+
+def test_summarize_retrieval_diagnostics_ignores_calls_without_attempts() -> None:
+    """Local-mode/SapBERT route_calls carry no HTTP retry telemetry -- they
+    must not be counted as public-API requests."""
+    route_calls = [{"route": "local_sapbert", "query": "cough"}]
+
+    summary = planned_pipeline_module._summarize_retrieval_diagnostics(route_calls)
+
+    assert summary["retrieval_request_count"] == 0
+    assert summary["retrieval_retry_count"] == 0
+
+
+def test_summarize_retrieval_diagnostics_bounds_error_details() -> None:
+    route_calls = [
+        {
+            "route_name": "OLS",
+            "candidate_ontologies": [f"ONTO{i}"],
+            "retrieval_attempts": 3,
+            "retrieval_final_error_type": "timeout",
+        }
+        for i in range(15)
+    ]
+
+    summary = planned_pipeline_module._summarize_retrieval_diagnostics(route_calls)
+
+    assert summary["retrieval_final_error_count"] == 15  # counter is exact
+    assert len(summary["retrieval_error_sources"]) == 10  # details are bounded
+    assert len(summary["retrieval_error_types"]) == 10
+
+
+class _RetrieverWithRouteCalls:
+    """Public retriever fake that reports pre-built route_calls entries,
+    mirroring what PublicOntologyRetriever/SearchTools populate for real."""
+
+    def __init__(
+        self,
+        raw_candidates: list[dict[str, Any]],
+        route_call_entries: list[dict[str, Any]],
+    ) -> None:
+        self._raw = raw_candidates
+        self._entries = route_call_entries
+
+    def retrieve(
+        self,
+        query_plan: QueryPlan,
+        *,
+        route_plan: Any = None,
+        max_results_per_query: int = 10,
+        route_calls: list[dict[str, Any]] | None = None,
+    ) -> list[dict[str, Any]]:
+        if route_calls is not None:
+            route_calls.extend(self._entries)
+        return list(self._raw)
+
+
+def test_success_path_attaches_retrieval_diagnostics_to_result() -> None:
+    entries = [
+        {
+            "route_name": "OLS",
+            "candidate_ontologies": ["HPO"],
+            "retrieval_attempts": 1,
+        },
+        {
+            "route_name": "OLS",
+            "candidate_ontologies": ["MONDO"],
+            "retrieval_attempts": 3,
+            "retrieval_final_error_type": "timeout",
+        },
+    ]
+    pipeline, _ = _pipeline(public_retriever=_RetrieverWithRouteCalls([_public_raw()], entries))
+
+    result = pipeline.map_term("sys_bp", retrieval_mode=RetrievalMode.PUBLIC)
+
+    assert result.metadata is not None
+    assert result.metadata.rag_debug is not None
+    diagnostics = result.metadata.rag_debug.retrieval_diagnostics
+    assert diagnostics is not None
+    assert diagnostics["retrieval_request_count"] == 2
+    assert diagnostics["retrieval_final_error_count"] == 1
+    # Diagnostic metadata must not perturb the actual mapping outcome.
+    assert result.target_code == "LOINC:8480-6"
+
+
+def test_error_path_preserves_partial_retrieval_diagnostics_on_exception() -> None:
+    entries = [
+        {
+            "route_name": "OLS",
+            "candidate_ontologies": ["HPO"],
+            "retrieval_attempts": 3,
+            "retrieval_final_error_type": "timeout",
+        },
+    ]
+
+    class _RaisingReranker:
+        def rerank(self, *args: Any, **kwargs: Any) -> RerankDecision:
+            raise RuntimeError("simulated reranker failure")
+
+    pipeline, _ = _pipeline(
+        public_retriever=_RetrieverWithRouteCalls([_public_raw()], entries),
+        reranker=_RaisingReranker(),
+    )
+
+    with pytest.raises(PlannedPipelineError) as exc_info:
+        pipeline.map_term("sys_bp", retrieval_mode=RetrievalMode.PUBLIC)
+
+    partial = exc_info.value.partial_retrieval_diagnostics
+    assert partial is not None
+    assert partial["retrieval_request_count"] == 1
+    assert partial["retrieval_final_error_count"] == 1
+    assert partial["retrieval_error_types"] == ["timeout"]

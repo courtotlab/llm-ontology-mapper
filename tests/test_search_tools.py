@@ -4,6 +4,7 @@ import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 from llm_ontology_mapper.search_tools import SearchTools
 
@@ -26,6 +27,7 @@ def _loinc_response(status_code: int = 200) -> MagicMock:
 
 def _ols_response(docs: list[dict]) -> MagicMock:
     response = MagicMock()
+    response.status_code = 200
     response.raise_for_status.return_value = None
     response.json.return_value = {"response": {"docs": docs}}
     return response
@@ -438,3 +440,204 @@ def test_search_rxnorm_caps_concepts_not_atoms() -> None:
     # Confirm none of the returned candidates have a blank term
     for r in results:
         assert r["term"], f"blank term in result {r}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Bounded retry for transient public-API failures (search_tools._get_with_retry)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _cough_doc() -> dict:
+    return {
+        "obo_id": "HP:0012735",
+        "iri": "http://purl.obolibrary.org/obo/HP_0012735",
+        "label": "Cough",
+    }
+
+
+def _status_response(status_code: int, body: str = "") -> MagicMock:
+    response = MagicMock()
+    response.status_code = status_code
+    response.text = body
+    if status_code >= 400:
+        response.raise_for_status.side_effect = requests.exceptions.HTTPError(
+            f"{status_code} error", response=response
+        )
+    else:
+        response.raise_for_status.return_value = None
+    response.json.return_value = {"response": {"docs": []}}
+    return response
+
+
+@pytest.mark.unit
+def test_ols_successful_request_makes_one_attempt() -> None:
+    tools = SearchTools(request_delay=0)
+
+    with patch("requests.get", return_value=_ols_response([_cough_doc()])) as mock_get:
+        diagnostics: dict = {}
+        results = tools.search_ols("cough", ontology="HPO", route_diagnostics=diagnostics)
+
+    assert mock_get.call_count == 1
+    assert len(results) == 1
+    assert diagnostics == {"attempts": 1}
+
+
+@pytest.mark.unit
+def test_ols_timeout_then_success_retries_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("llm_ontology_mapper.search_tools.time.sleep", lambda *_: None)
+    tools = SearchTools(request_delay=0)
+
+    with patch(
+        "requests.get",
+        side_effect=[
+            requests.exceptions.ReadTimeout("read timeout"),
+            _ols_response([_cough_doc()]),
+        ],
+    ) as mock_get:
+        diagnostics: dict = {}
+        results = tools.search_ols("cough", ontology="HPO", route_diagnostics=diagnostics)
+
+    assert mock_get.call_count == 2
+    assert len(results) == 1
+    assert diagnostics["attempts"] == 2
+    assert "final_error_type" not in diagnostics
+
+
+@pytest.mark.unit
+def test_ols_connection_reset_then_success_retries(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("llm_ontology_mapper.search_tools.time.sleep", lambda *_: None)
+    tools = SearchTools(request_delay=0)
+    reset_exc = requests.exceptions.ConnectionError("Connection reset by peer")
+
+    with patch("requests.get", side_effect=[reset_exc, _ols_response([_cough_doc()])]) as mock_get:
+        diagnostics: dict = {}
+        results = tools.search_ols("cough", ontology="HPO", route_diagnostics=diagnostics)
+
+    assert mock_get.call_count == 2
+    assert len(results) == 1
+    assert diagnostics["attempts"] == 2
+
+
+@pytest.mark.unit
+def test_ols_http_500_then_success_retries(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("llm_ontology_mapper.search_tools.time.sleep", lambda *_: None)
+    tools = SearchTools(request_delay=0)
+
+    with patch(
+        "requests.get", side_effect=[_status_response(500), _ols_response([_cough_doc()])]
+    ) as mock_get:
+        diagnostics: dict = {}
+        results = tools.search_ols("cough", ontology="HPO", route_diagnostics=diagnostics)
+
+    assert mock_get.call_count == 2
+    assert len(results) == 1
+    assert diagnostics["attempts"] == 2
+    assert "final_error_type" not in diagnostics
+
+
+@pytest.mark.unit
+def test_ols_http_429_then_success_retries(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("llm_ontology_mapper.search_tools.time.sleep", lambda *_: None)
+    tools = SearchTools(request_delay=0)
+
+    with patch(
+        "requests.get", side_effect=[_status_response(429), _ols_response([_cough_doc()])]
+    ) as mock_get:
+        diagnostics: dict = {}
+        results = tools.search_ols("cough", ontology="HPO", route_diagnostics=diagnostics)
+
+    assert mock_get.call_count == 2
+    assert len(results) == 1
+
+
+@pytest.mark.unit
+def test_ols_timeout_on_all_attempts_gives_up_after_exactly_three(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sleeps: list[float] = []
+    monkeypatch.setattr("llm_ontology_mapper.search_tools.time.sleep", lambda s: sleeps.append(s))
+    tools = SearchTools(request_delay=0)
+
+    with patch(
+        "requests.get",
+        side_effect=[
+            requests.exceptions.ReadTimeout("timeout 1"),
+            requests.exceptions.ReadTimeout("timeout 2"),
+            requests.exceptions.ReadTimeout("timeout 3"),
+        ],
+    ) as mock_get:
+        diagnostics: dict = {}
+        results = tools.search_ols("cough", ontology="HPO", route_diagnostics=diagnostics)
+
+    assert mock_get.call_count == 3
+    assert results == []  # graceful final retrieval failure, no exception escapes
+    assert diagnostics["attempts"] == 3
+    assert diagnostics["final_error_type"] == "timeout"
+    assert len(sleeps) == 2  # exactly two waits between three attempts
+
+
+@pytest.mark.unit
+def test_ols_http_400_does_not_retry() -> None:
+    tools = SearchTools(request_delay=0)
+
+    with patch("requests.get", return_value=_status_response(400)) as mock_get:
+        diagnostics: dict = {}
+        results = tools.search_ols("cough", ontology="HPO", route_diagnostics=diagnostics)
+
+    assert mock_get.call_count == 1
+    assert results == []
+    assert diagnostics["attempts"] == 1
+    assert diagnostics["final_error_type"] == "http_400"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("status_code", [401, 403])
+def test_ols_http_401_403_does_not_retry(status_code: int) -> None:
+    tools = SearchTools(request_delay=0)
+
+    with patch("requests.get", return_value=_status_response(status_code)) as mock_get:
+        diagnostics: dict = {}
+        results = tools.search_ols("cough", ontology="HPO", route_diagnostics=diagnostics)
+
+    assert mock_get.call_count == 1
+    assert results == []
+    assert diagnostics["final_error_type"] == f"http_{status_code}"
+
+
+@pytest.mark.unit
+def test_retry_backoff_does_not_duplicate_candidates(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("llm_ontology_mapper.search_tools.time.sleep", lambda *_: None)
+    tools = SearchTools(request_delay=0)
+
+    with patch(
+        "requests.get",
+        side_effect=[requests.exceptions.ReadTimeout("timeout"), _ols_response([_cough_doc()])],
+    ):
+        results = tools.search_ols("cough", ontology="HPO")
+
+    assert len(results) == 1  # the failed first attempt contributed nothing
+
+
+@pytest.mark.unit
+def test_loinc_credentials_never_appear_in_logs_on_retry_or_error(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr("llm_ontology_mapper.search_tools.time.sleep", lambda *_: None)
+    username, password = "secret-user", "secret-pass"
+    tools = SearchTools(loinc_username=username, loinc_password=password, request_delay=0)
+
+    with (
+        patch(
+            "requests.get",
+            side_effect=[
+                requests.exceptions.ReadTimeout("timeout"),
+                _status_response(400, body="Bad request: malformed query"),
+            ],
+        ),
+        caplog.at_level(logging.WARNING),
+    ):
+        results = tools.search_loinc("systolic blood pressure")
+
+    assert results == []
+    assert username not in caplog.text
+    assert password not in caplog.text

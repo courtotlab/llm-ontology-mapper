@@ -93,24 +93,57 @@ class FakeSearchTools:
         if self._raise_on == method:
             raise self._raise_exc
 
-    def search_ols(self, query: str, ontology: str, top_k: int = 10) -> list[dict[str, Any]]:
+    def search_ols(
+        self,
+        query: str,
+        ontology: str,
+        top_k: int = 10,
+        *,
+        route_diagnostics: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         self._maybe_raise("search_ols")
         self.calls.append(("search_ols", {"query": query, "ontology": ontology, "top_k": top_k}))
+        if route_diagnostics is not None:
+            route_diagnostics.setdefault("attempts", 1)
         return list(self._ols_returns)
 
-    def search_loinc(self, query: str, top_k: int = 10) -> list[dict[str, Any]]:
+    def search_loinc(
+        self,
+        query: str,
+        top_k: int = 10,
+        *,
+        route_diagnostics: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         self._maybe_raise("search_loinc")
         self.calls.append(("search_loinc", {"query": query, "top_k": top_k}))
+        if route_diagnostics is not None:
+            route_diagnostics.setdefault("attempts", 1)
         return list(self._loinc_returns)
 
-    def search_rxnorm(self, query: str, top_k: int = 10) -> list[dict[str, Any]]:
+    def search_rxnorm(
+        self,
+        query: str,
+        top_k: int = 10,
+        *,
+        route_diagnostics: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         self._maybe_raise("search_rxnorm")
         self.calls.append(("search_rxnorm", {"query": query, "top_k": top_k}))
+        if route_diagnostics is not None:
+            route_diagnostics.setdefault("attempts", 1)
         return list(self._rxnorm_returns)
 
-    def search_icd10(self, query: str, top_k: int = 10) -> list[dict[str, Any]]:
+    def search_icd10(
+        self,
+        query: str,
+        top_k: int = 10,
+        *,
+        route_diagnostics: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         self._maybe_raise("search_icd10")
         self.calls.append(("search_icd10", {"query": query, "top_k": top_k}))
+        if route_diagnostics is not None:
+            route_diagnostics.setdefault("attempts", 1)
         return list(self._icd10_returns)
 
     # Guard: these methods must NOT be called by PublicOntologyRetriever
@@ -512,7 +545,14 @@ def test_preferred_ontology_is_first_in_search_order() -> None:
     order: list[str] = []
 
     class OrderTrackingFake(FakeSearchTools):
-        def search_ols(self, query: str, ontology: str, top_k: int = 10) -> list[dict[str, Any]]:
+        def search_ols(
+            self,
+            query: str,
+            ontology: str,
+            top_k: int = 10,
+            *,
+            route_diagnostics: dict[str, Any] | None = None,
+        ) -> list[dict[str, Any]]:
             order.append(ontology)
             return []
 
@@ -827,7 +867,14 @@ def test_multiple_queries_produce_combined_results() -> None:
     responses = [[ols_result_a], [ols_result_b]]
 
     class SequentialFake(FakeSearchTools):
-        def search_ols(self, query: str, ontology: str, top_k: int = 10) -> list[dict[str, Any]]:
+        def search_ols(
+            self,
+            query: str,
+            ontology: str,
+            top_k: int = 10,
+            *,
+            route_diagnostics: dict[str, Any] | None = None,
+        ) -> list[dict[str, Any]]:
             self.calls.append(
                 ("search_ols", {"query": query, "ontology": ontology, "top_k": top_k})
             )
@@ -1143,3 +1190,124 @@ def test_results_are_raw_dicts_not_normalized_candidates() -> None:
     for r in results:
         assert isinstance(r, dict)
         assert not isinstance(r, NormalizedCandidate)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Retrieval retry telemetry: route_calls entries carry retrieval_attempts /
+# retrieval_final_error_type (see SearchTools._get_with_retry), and one
+# query's retrieval failure never erases a sibling query's candidates.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_route_calls_include_route_name() -> None:
+    fake = FakeSearchTools(ols_returns=[_OLS_CANDIDATE])
+    retriever = PublicOntologyRetriever(search_tools=fake)
+    plan = _public_plan(preferred_ontology="HPO")
+    route_calls: list[dict[str, Any]] = []
+
+    retriever.retrieve(plan, route_calls=route_calls)
+
+    assert route_calls[0]["route_name"] == "OLS"
+
+
+def test_route_calls_record_first_attempt_success() -> None:
+    fake = FakeSearchTools(ols_returns=[_OLS_CANDIDATE])
+    retriever = PublicOntologyRetriever(search_tools=fake)
+    plan = _public_plan(preferred_ontology="HPO")
+    route_calls: list[dict[str, Any]] = []
+
+    retriever.retrieve(plan, route_calls=route_calls)
+
+    assert route_calls[0]["retrieval_attempts"] == 1
+    assert "retrieval_final_error_type" not in route_calls[0]
+
+
+def test_route_calls_record_recovered_retry() -> None:
+    class RecoveredFake(FakeSearchTools):
+        def search_ols(
+            self,
+            query: str,
+            ontology: str,
+            top_k: int = 10,
+            *,
+            route_diagnostics: dict[str, Any] | None = None,
+        ) -> list[dict[str, Any]]:
+            if route_diagnostics is not None:
+                route_diagnostics["attempts"] = 2  # succeeded on the retry
+            return list(self._ols_returns)
+
+    fake = RecoveredFake(ols_returns=[_OLS_CANDIDATE])
+    retriever = PublicOntologyRetriever(search_tools=fake)
+    plan = _public_plan(preferred_ontology="HPO")
+    route_calls: list[dict[str, Any]] = []
+
+    retriever.retrieve(plan, route_calls=route_calls)
+
+    assert route_calls[0]["retrieval_attempts"] == 2
+    assert "retrieval_final_error_type" not in route_calls[0]
+
+
+def test_route_calls_record_final_error() -> None:
+    class ExhaustedFake(FakeSearchTools):
+        def search_ols(
+            self,
+            query: str,
+            ontology: str,
+            top_k: int = 10,
+            *,
+            route_diagnostics: dict[str, Any] | None = None,
+        ) -> list[dict[str, Any]]:
+            if route_diagnostics is not None:
+                route_diagnostics["attempts"] = 3
+                route_diagnostics["final_error_type"] = "timeout"
+            return []  # exhausted retries -- SearchTools always degrades gracefully
+
+    fake = ExhaustedFake()
+    retriever = PublicOntologyRetriever(search_tools=fake)
+    plan = _public_plan(preferred_ontology="HPO")
+    route_calls: list[dict[str, Any]] = []
+
+    results = retriever.retrieve(plan, route_calls=route_calls)
+
+    assert results == []
+    assert route_calls[0]["retrieval_attempts"] == 3
+    assert route_calls[0]["retrieval_final_error_type"] == "timeout"
+
+
+def test_failed_query_does_not_erase_candidates_from_successful_sibling_queries() -> None:
+    """One query's retrieval exhausts its retries and comes back empty
+    (SearchTools always degrades gracefully rather than raising) -- the
+    sibling query's candidates must still be returned in full."""
+
+    class PartiallyFailingFake(FakeSearchTools):
+        def search_ols(
+            self,
+            query: str,
+            ontology: str,
+            top_k: int = 10,
+            *,
+            route_diagnostics: dict[str, Any] | None = None,
+        ) -> list[dict[str, Any]]:
+            if route_diagnostics is not None:
+                route_diagnostics["attempts"] = 3
+                if query == "sinus pain":
+                    route_diagnostics["final_error_type"] = "timeout"
+            if query == "sinus pain":
+                return []
+            return list(self._ols_returns)
+
+    fake = PartiallyFailingFake(ols_returns=[_OLS_CANDIDATE])
+    retriever = PublicOntologyRetriever(search_tools=fake)
+    plan = _public_plan(
+        expanded_queries=["sinus pain", "nasal congestion"],
+        preferred_ontology="HPO",
+    )
+    route_calls: list[dict[str, Any]] = []
+
+    results = retriever.retrieve(plan, route_calls=route_calls)
+
+    assert len(results) == 1
+    assert results[0]["matched_query"] == "nasal congestion"
+    assert len(route_calls) == 2
+    assert route_calls[0]["retrieval_final_error_type"] == "timeout"
+    assert "retrieval_final_error_type" not in route_calls[1]

@@ -118,6 +118,23 @@ class RAGDebugInfo(BaseModel):
         default=None,
         description="Major planned-pipeline stage timings in milliseconds, when available",
     )
+    pipeline_usage: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "LLM token usage per planned-pipeline stage (query_planner, "
+            "llm_reranker), when available"
+        ),
+    )
+    retrieval_diagnostics: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Aggregate public-retrieval retry/error telemetry for this mapping "
+            "(retrieval_request_count, retrieval_retry_count, "
+            "retrieval_recovered_error_count, retrieval_final_error_count, "
+            "retrieval_error_sources, retrieval_error_types), when available. "
+            "Diagnostic metadata only -- never affects scoring or mapped_status."
+        ),
+    )
 
     model_config = {"frozen": True}
 

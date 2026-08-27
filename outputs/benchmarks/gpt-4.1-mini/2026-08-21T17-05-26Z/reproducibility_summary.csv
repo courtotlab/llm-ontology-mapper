@@ -1,0 +1,2 @@
+model,rows_compared,rows_skipped_execution_error,top1_exact_agreement,top5_set_agreement,run_1_weighted_f1,run_2_weighted_f1,weighted_f1_absolute_difference,run_1_top1_accuracy,run_2_top1_accuracy,top1_absolute_difference,run_1_top5_hit_rate,run_2_top5_hit_rate,top5_absolute_difference
+gpt-4.1-mini,217,1,0.9262672811059908,0.6221198156682027,0.7270394133822181,0.7293260473588343,0.0022866339766162147,0.5391705069124424,0.5412844036697247,0.002113896757282352,0.6267281105990783,0.6284403669724771,0.0017122563733987795

@@ -1,0 +1,2 @@
+query_id,query,predicted_code,predicted_label,predicted_ontology,gold_codes,gold_labels,graph_relationship,graph_matched_gold_code,reviewer_decision,reviewer_notes
+3,B Lymphoblastic Leukemia/Lymphoma,EFO:0009119,precursor lymphoblastic lymphoma/leukemia,EFO,EFO:0000094,B-cell acute lymphoblastic leukemia,More General,EFO:0000094,,

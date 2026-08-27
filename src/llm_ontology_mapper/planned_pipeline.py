@@ -33,6 +33,7 @@ from llm_ontology_mapper.models import (
     RetrievalRoutePlan,
     RetrievalTrace,
 )
+from llm_ontology_mapper.providers import LLMCallConfig
 from llm_ontology_mapper.public_retriever import PublicOntologyRetriever
 from llm_ontology_mapper.query_planner import QueryPlanner
 from llm_ontology_mapper.retrieval_router import RetrievalRouter
@@ -43,7 +44,22 @@ _T = TypeVar("_T")
 
 
 class PlannedPipelineError(Exception):
-    """Raised when a planned pipeline component fails during orchestration."""
+    """Raised when a planned pipeline component fails during orchestration.
+
+    Carries whatever pipeline_timings/pipeline_usage/retrieval telemetry had
+    already been recorded before the failing stage raised (see
+    PlannedPipeline.map_term()), so a caller catching this exception -- e.g.
+    the benchmark runner -- can still report the cost/latency of
+    billed-but-failed LLM calls, and any retrieval retries/errors already
+    encountered, instead of losing that telemetry entirely. All three default
+    to None and are only populated by map_term() itself; never fabricated.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.partial_timings: dict[str, float] | None = None
+        self.partial_usage: dict[str, Any] | None = None
+        self.partial_retrieval_diagnostics: dict[str, Any] | None = None
 
 
 class PlannedPipeline:
@@ -74,15 +90,26 @@ class PlannedPipeline:
         llm_reranker: LLMReranker | None = None,
         mapping_result_builder: MappingResultBuilder | None = None,
         disabled_mapping_runner: DisabledMappingRunner | None = None,
+        llm_call_config: LLMCallConfig | None = None,
     ) -> None:
+        """
+        llm_call_config: explicit temperature/seed/reasoning_effort override
+            forwarded to the default QueryPlanner and LLMReranker so every
+            applicable LLM call in the pipeline uses identical sampling
+            parameters (see providers.LLMCallConfig). Ignored when
+            query_planner / llm_reranker are explicitly injected — those
+            instances own their own configuration.
+        """
         self._provider = provider
-        self._query_planner = query_planner or QueryPlanner(provider)
+        self._query_planner = query_planner or QueryPlanner(
+            provider, llm_call_config=llm_call_config
+        )
         self._retrieval_router = retrieval_router or RetrievalRouter()
         self._public_retriever = public_retriever or PublicOntologyRetriever()
         self._local_retriever = local_retriever or LocalSemanticRetriever()
         self._candidate_normalizer = candidate_normalizer or CandidateNormalizer()
         self._candidate_merger = candidate_merger or CandidateMerger()
-        self._llm_reranker = llm_reranker or LLMReranker(provider)
+        self._llm_reranker = llm_reranker or LLMReranker(provider, llm_call_config=llm_call_config)
         self._mapping_result_builder = mapping_result_builder or MappingResultBuilder()
         self._disabled_mapping_runner = disabled_mapping_runner or DisabledMappingRunner(provider)
 
@@ -119,99 +146,119 @@ class PlannedPipeline:
         """
         mode = self._resolve_mode(retrieval_mode)
         timings: dict[str, float] = {}
-
-        query_plan = _time_stage(
-            timings,
-            "query_planning_ms",
-            lambda: self._plan(
-                source_term=source_term,
-                source_label=source_label,
-                source_description=source_description,
-                source_type=source_type,
-                clinical_area=clinical_area,
-                target_ontology=target_ontology,
-                allowed_target_ontologies=allowed_target_ontologies,
-                retrieval_mode=mode,
-                timings=timings,
-            ),
-        )
-        timings.setdefault("query_planning_provider_ms", 0.0)
-        route_plan = _time_stage(
-            timings,
-            "routing_ms",
-            lambda: self._route(query_plan),
-        )
-
-        if mode == RetrievalMode.DISABLED:
-            return self._map_disabled(query_plan, source_type=source_type)
-
+        usage: dict[str, Any] = {}
+        # Declared before the try block (not inside it) so it is always bound
+        # for the except clause below, even when a failure occurs before
+        # retrieval runs (e.g. QueryPlanner failure).
         timed_route_calls: list[dict[str, Any]] = []
-        raw_candidates = _time_stage(
-            timings,
-            "retrieval_ms",
-            lambda: self._retrieve(
-                query_plan=query_plan,
-                route_plan=route_plan,
-                max_results_per_query=max_results_per_query,
-                route_calls=timed_route_calls,
-            ),
-        )
-        normalized_candidates, normalization_errors = _time_stage(
-            timings,
-            "candidate_normalization_ms",
-            lambda: self._normalize_raw_candidates(
-                raw_candidates,
-                query_plan=query_plan,
-            ),
-        )
-        merged_candidates = _time_stage(
-            timings,
-            "candidate_merging_ms",
-            lambda: self._merge_candidates(
-                normalized_candidates,
-                target_ontology_constraint=query_plan.target_ontology_constraint,
-                allowed_target_ontologies=query_plan.allowed_target_ontologies,
-                max_candidates=max_candidates,
-                strict_target_ontology=strict_target_ontology,
-            ),
-        )
-        rerank_decision = _time_stage(
-            timings,
-            "llm_reranking_ms",
-            lambda: self._rerank(
-                query_plan,
-                merged_candidates,
-                timings=timings,
-                strict_target_ontology=strict_target_ontology,
-            ),
-        )
-        retrieval_trace = _time_stage(
-            timings,
-            "trace_building_ms",
-            lambda: self._build_trace(
-                query_plan=query_plan,
-                route_plan=route_plan,
-                raw_candidate_count=len(raw_candidates),
-                merged_candidates=merged_candidates,
-                rerank_decision=rerank_decision,
-                normalization_errors=normalization_errors,
-                route_calls=timed_route_calls or None,
-            ),
-        )
-        result = _time_stage(
-            timings,
-            "result_building_ms",
-            lambda: self._build_result(
-                query_plan=query_plan,
-                rerank_decision=rerank_decision,
-                candidates=merged_candidates,
-                retrieval_trace=retrieval_trace,
-                source_type=source_type,
-                max_alternatives=max_alternatives,
-                strict_target_ontology=strict_target_ontology,
-            ),
-        )
+
+        try:
+            query_plan = _time_stage(
+                timings,
+                "query_planning_ms",
+                lambda: self._plan(
+                    source_term=source_term,
+                    source_label=source_label,
+                    source_description=source_description,
+                    source_type=source_type,
+                    clinical_area=clinical_area,
+                    target_ontology=target_ontology,
+                    allowed_target_ontologies=allowed_target_ontologies,
+                    retrieval_mode=mode,
+                    timings=timings,
+                    usage=usage,
+                ),
+            )
+            timings.setdefault("query_planning_provider_ms", 0.0)
+            route_plan = _time_stage(
+                timings,
+                "routing_ms",
+                lambda: self._route(query_plan),
+            )
+
+            if mode == RetrievalMode.DISABLED:
+                return self._map_disabled(query_plan, source_type=source_type)
+
+            raw_candidates = _time_stage(
+                timings,
+                "retrieval_ms",
+                lambda: self._retrieve(
+                    query_plan=query_plan,
+                    route_plan=route_plan,
+                    max_results_per_query=max_results_per_query,
+                    route_calls=timed_route_calls,
+                ),
+            )
+            normalized_candidates, normalization_errors = _time_stage(
+                timings,
+                "candidate_normalization_ms",
+                lambda: self._normalize_raw_candidates(
+                    raw_candidates,
+                    query_plan=query_plan,
+                ),
+            )
+            merged_candidates = _time_stage(
+                timings,
+                "candidate_merging_ms",
+                lambda: self._merge_candidates(
+                    normalized_candidates,
+                    target_ontology_constraint=query_plan.target_ontology_constraint,
+                    allowed_target_ontologies=query_plan.allowed_target_ontologies,
+                    max_candidates=max_candidates,
+                    strict_target_ontology=strict_target_ontology,
+                ),
+            )
+            rerank_decision = _time_stage(
+                timings,
+                "llm_reranking_ms",
+                lambda: self._rerank(
+                    query_plan,
+                    merged_candidates,
+                    timings=timings,
+                    usage=usage,
+                    strict_target_ontology=strict_target_ontology,
+                ),
+            )
+            retrieval_trace = _time_stage(
+                timings,
+                "trace_building_ms",
+                lambda: self._build_trace(
+                    query_plan=query_plan,
+                    route_plan=route_plan,
+                    raw_candidate_count=len(raw_candidates),
+                    merged_candidates=merged_candidates,
+                    rerank_decision=rerank_decision,
+                    normalization_errors=normalization_errors,
+                    route_calls=timed_route_calls or None,
+                ),
+            )
+            result = _time_stage(
+                timings,
+                "result_building_ms",
+                lambda: self._build_result(
+                    query_plan=query_plan,
+                    rerank_decision=rerank_decision,
+                    candidates=merged_candidates,
+                    retrieval_trace=retrieval_trace,
+                    source_type=source_type,
+                    max_alternatives=max_alternatives,
+                    strict_target_ontology=strict_target_ontology,
+                ),
+            )
+        except PlannedPipelineError as exc:
+            # Whatever timing/usage/retrieval telemetry had already been
+            # recorded before the failing stage raised is still real -- those
+            # calls were billed even though the overall mapping failed. Attach
+            # it to the exception so a caller catching PlannedPipelineError
+            # (e.g. the benchmark runner) does not lose it entirely.
+            exc.partial_timings = dict(timings)
+            exc.partial_usage = dict(usage)
+            exc.partial_retrieval_diagnostics = _summarize_retrieval_diagnostics(timed_route_calls)
+            raise
+
         _attach_pipeline_timings(result, timings)
+        _attach_pipeline_usage(result, usage)
+        _attach_retrieval_diagnostics(result, timed_route_calls)
         return result
 
     @staticmethod
@@ -232,6 +279,7 @@ class PlannedPipeline:
         allowed_target_ontologies: list[str] | None,
         retrieval_mode: RetrievalMode,
         timings: dict[str, float],
+        usage: dict[str, Any],
     ) -> QueryPlan:
         try:
             kwargs: dict[str, Any] = {
@@ -246,6 +294,8 @@ class PlannedPipeline:
             }
             if _accepts_keyword(self._query_planner.plan, "timing_sink"):
                 kwargs["timing_sink"] = timings
+            if _accepts_keyword(self._query_planner.plan, "usage_sink"):
+                kwargs["usage_sink"] = usage
             return self._query_planner.plan(**kwargs)
         except Exception as exc:
             raise PlannedPipelineError("QueryPlanner failed during planned mapping.") from exc
@@ -387,12 +437,15 @@ class PlannedPipeline:
         candidates: list[NormalizedCandidate],
         *,
         timings: dict[str, float],
+        usage: dict[str, Any],
         strict_target_ontology: bool = False,
     ) -> RerankDecision:
         try:
             kwargs: dict[str, Any] = {}
             if _accepts_keyword(self._llm_reranker.rerank, "timing_sink"):
                 kwargs["timing_sink"] = timings
+            if _accepts_keyword(self._llm_reranker.rerank, "usage_sink"):
+                kwargs["usage_sink"] = usage
             decision = self._llm_reranker.rerank(
                 query_plan,
                 candidates,
@@ -529,4 +582,90 @@ def _attach_pipeline_timings(result: MappingResult, timings: dict[str, float]) -
     if metadata is None or metadata.rag_debug is None:
         return
     rag_debug = metadata.rag_debug.model_copy(update={"pipeline_timings": dict(timings)})
+    result.metadata = metadata.model_copy(update={"rag_debug": rag_debug})
+
+
+def _attach_pipeline_usage(result: MappingResult, usage: dict[str, Any]) -> None:
+    """Attach per-stage LLM token usage collected via usage_sink, when any was recorded.
+
+    Mirrors _attach_pipeline_timings: usage_sink is only populated by
+    QueryPlanner/LLMReranker implementations that opt into the usage_sink
+    keyword (see _accepts_keyword), so an empty dict here means no usage
+    telemetry was available — nothing is fabricated.
+    """
+    if not usage:
+        return
+    metadata = result.metadata
+    if metadata is None or metadata.rag_debug is None:
+        return
+    rag_debug = metadata.rag_debug.model_copy(update={"pipeline_usage": dict(usage)})
+    result.metadata = metadata.model_copy(update={"rag_debug": rag_debug})
+
+
+_MAX_RETRIEVAL_ERROR_DETAILS = 10
+
+
+def _summarize_retrieval_diagnostics(route_calls: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate per-route-call retry/error diagnostics already captured on
+    each route_calls entry (see PublicOntologyRetriever._call_route_timed)
+    into the small set of counters and bounded error details useful for
+    benchmark output, rather than dumping every route call.
+
+    A route call the retriever never annotated with retrieval_attempts
+    (e.g. a local-mode SapBERT call, which carries no HTTP retry telemetry)
+    is not counted here -- request_count reflects public-API calls only.
+
+    A route call whose final_error_type is unset succeeded, either on the
+    first attempt (attempts == 1) or after one or more retries
+    ("recovered"). One whose final_error_type is set exhausted its retries
+    (or hit a non-retryable status immediately) and is a final error.
+    """
+    request_count = 0
+    retry_count = 0
+    recovered_count = 0
+    final_error_count = 0
+    error_sources: list[str] = []
+    error_types: list[str] = []
+
+    for call in route_calls:
+        attempts = call.get("retrieval_attempts")
+        if attempts is None:
+            continue
+        request_count += 1
+        retry_count += max(0, attempts - 1)
+        final_error_type = call.get("retrieval_final_error_type")
+        if final_error_type:
+            final_error_count += 1
+            route_name = call.get("route_name") or call.get("route") or "unknown"
+            ontologies = call.get("candidate_ontologies") or []
+            target = ontologies[0] if ontologies else None
+            error_sources.append(f"{route_name}:{target}" if target else str(route_name))
+            error_types.append(str(final_error_type))
+        elif attempts > 1:
+            recovered_count += 1
+
+    return {
+        "retrieval_request_count": request_count,
+        "retrieval_retry_count": retry_count,
+        "retrieval_recovered_error_count": recovered_count,
+        "retrieval_final_error_count": final_error_count,
+        "retrieval_error_sources": error_sources[:_MAX_RETRIEVAL_ERROR_DETAILS],
+        "retrieval_error_types": error_types[:_MAX_RETRIEVAL_ERROR_DETAILS],
+    }
+
+
+def _attach_retrieval_diagnostics(result: MappingResult, route_calls: list[dict[str, Any]]) -> None:
+    """Attach aggregate retrieval retry/error telemetry, when any route call
+    carried it (see _summarize_retrieval_diagnostics). Diagnostic metadata
+    only -- never affects scoring, mapped_status, or candidate content.
+    """
+    if not route_calls:
+        return
+    summary = _summarize_retrieval_diagnostics(route_calls)
+    if summary["retrieval_request_count"] == 0:
+        return
+    metadata = result.metadata
+    if metadata is None or metadata.rag_debug is None:
+        return
+    rag_debug = metadata.rag_debug.model_copy(update={"retrieval_diagnostics": summary})
     result.metadata = metadata.model_copy(update={"rag_debug": rag_debug})

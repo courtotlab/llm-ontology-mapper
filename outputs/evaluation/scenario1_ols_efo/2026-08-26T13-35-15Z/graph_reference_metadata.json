@@ -1,0 +1,11 @@
+{
+  "source_repository": "https://github.com/rsgoncalves/text2term-evaluation",
+  "source_file": "compare_ontology_mappings.py (compare_mappings)",
+  "pinned_commit": "b999dbb670fa13c9ceb1ba631a7abc7557f3293b",
+  "efo_version": "3.62.0",
+  "efo_url": "http://www.ebi.ac.uk/efo/releases/v3.62.0/efo.owl",
+  "edges_file": "/Users/akandwal/Developer/llm-ontology-mapper/data/text2term_evaluation/efo_edges.tsv",
+  "edges_sha256": "6aa7182b70e23addb9f6d4e24bab94520bf9ff26ea26471403dd4a568689e90c",
+  "entailed_edges_file": "/Users/akandwal/Developer/llm-ontology-mapper/data/text2term_evaluation/efo_entailed_edges.tsv",
+  "entailed_edges_sha256": "589ab467d24ddd22065abc75dff3aace28a9377197edf7caef201a273015d243"
+}

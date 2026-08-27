@@ -23,14 +23,26 @@ from typing import Any
 
 from llm_ontology_mapper.models import QueryPlan, RetrievalMode
 from llm_ontology_mapper.providers import (
+    REASONING_EMPTY_RESPONSE_RETRY_TOKENS,
     BaseLLMProvider,
     ChatMessage,
+    CompletionResponse,
+    LLMCallConfig,
+    accumulate_usage,
+    extract_completion_usage,
     openai_reasoning_effort_for_model,
+    provider_uses_reasoning_model,
+    resolve_llm_call_params,
 )
 
 logger = logging.getLogger(__name__)
 
 _PROMPT_DIR = Path(__file__).parent / "assets" / "prompts"
+_PLAN_MAX_TOKENS = 2048
+_MAX_PLAN_ATTEMPTS = 2
+"""Hard cap on provider calls per plan(): the normal call plus at most one
+recovery attempt (empty-response-from-reasoning-model OR malformed-JSON --
+never both, since the second attempt's outcome is never re-triaged)."""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -74,8 +86,10 @@ class QueryPlanner:
         provider: BaseLLMProvider,
         *,
         prompt_template_path: str | None = None,
+        llm_call_config: LLMCallConfig | None = None,
     ) -> None:
         self._provider = provider
+        self._llm_call_config = llm_call_config
         path = (
             Path(prompt_template_path)
             if prompt_template_path
@@ -97,6 +111,7 @@ class QueryPlanner:
         source_description: str | None = None,
         source_type: str | None = None,
         timing_sink: dict[str, float] | None = None,
+        usage_sink: dict[str, Any] | None = None,
     ) -> QueryPlan:
         """
         Produce a QueryPlan by calling the LLM provider.
@@ -147,28 +162,75 @@ class QueryPlanner:
             target_norm,
             allowed_norm,
         )
-        provider_start = time.monotonic()
-        try:
-            response = self._provider.complete(
-                messages,
-                temperature=0.1,
-                max_tokens=2048,
-                **_openai_reasoning_kwargs(self._provider),
-            )
-        finally:
-            if timing_sink is not None:
-                timing_sink["query_planning_provider_ms"] = (
-                    time.monotonic() - provider_start
-                ) * 1000
+        temperature, extra_kwargs = resolve_llm_call_params(
+            self._llm_call_config,
+            default_temperature=0.1,
+            default_extra_kwargs=_openai_reasoning_kwargs(self._provider),
+        )
+        response = self._complete_plan_timed(
+            messages,
+            temperature=temperature,
+            extra_kwargs=extra_kwargs,
+            timing_sink=timing_sink,
+            usage_sink=usage_sink,
+        )
 
+        # At most one recovery attempt total: an empty response from a
+        # reasoning model retries with a larger completion budget; a
+        # non-empty-but-malformed response retries with the normal budget.
+        # These are mutually exclusive (if/elif) so a pathological response
+        # can never chain into a third provider call -- see
+        # _MAX_PLAN_ATTEMPTS below.
         raw = _strip_fences(response.content)
-        try:
-            data: dict[str, Any] = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            raise QueryPlanningError(
-                f"LLM returned malformed JSON for source_term={source_term!r}: {exc}\n"
-                f"Response (first 500 chars): {response.content[:500]!r}"
-            ) from exc
+        data: dict[str, Any] | None = None
+        if raw.strip():
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                logger.warning(
+                    "QueryPlanner returned malformed JSON; retrying once "
+                    "(final allowed attempt). source_term=%r model=%s error=%s",
+                    source_term,
+                    getattr(self._provider, "model", None),
+                    exc,
+                )
+                response = self._complete_plan_timed(
+                    messages,
+                    temperature=temperature,
+                    extra_kwargs=extra_kwargs,
+                    timing_sink=timing_sink,
+                    usage_sink=usage_sink,
+                )
+                raw = _strip_fences(response.content)
+        elif provider_uses_reasoning_model(self._provider):
+            logger.warning(
+                "QueryPlanner received empty response from reasoning model; "
+                "retrying once with a larger completion budget (final allowed "
+                "attempt). source_term=%r model=%s",
+                source_term,
+                getattr(self._provider, "model", None),
+            )
+            response = self._complete_plan_timed(
+                messages,
+                temperature=temperature,
+                extra_kwargs=extra_kwargs,
+                timing_sink=timing_sink,
+                usage_sink=usage_sink,
+                max_tokens=REASONING_EMPTY_RESPONSE_RETRY_TOKENS,
+                min_completion_tokens=REASONING_EMPTY_RESPONSE_RETRY_TOKENS,
+            )
+            raw = _strip_fences(response.content)
+        # else: empty content and not a reasoning model -- no retry available;
+        # data stays None and the final parse below raises immediately.
+
+        if data is None:
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                raise QueryPlanningError(
+                    f"LLM returned malformed JSON for source_term={source_term!r}: {exc}\n"
+                    f"Response (first 500 chars): {response.content[:500]!r}"
+                ) from exc
 
         return self._build_plan(
             data,
@@ -182,6 +244,48 @@ class QueryPlanner:
         )
 
     # ── Private helpers ───────────────────────────────────────────────────────
+
+    def _complete_plan_timed(
+        self,
+        messages: list[ChatMessage],
+        *,
+        temperature: float | None,
+        extra_kwargs: dict[str, Any],
+        timing_sink: dict[str, float] | None,
+        usage_sink: dict[str, Any] | None,
+        max_tokens: int = _PLAN_MAX_TOKENS,
+        min_completion_tokens: int | None = None,
+    ) -> CompletionResponse:
+        """Call the provider once, accumulating timing/usage across attempts.
+
+        Mirrors LLMReranker._complete_rerank_timed: timing_sink and usage_sink
+        accumulate across the normal call and the empty-response retry (if
+        any), so both billed calls are reflected in QueryPlanner's reported
+        provider time and token usage rather than only the last attempt.
+        """
+        kwargs = dict(extra_kwargs)
+        if min_completion_tokens is not None:
+            kwargs["min_completion_tokens"] = min_completion_tokens
+        provider_start = time.monotonic()
+        try:
+            response = self._provider.complete(
+                messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                **kwargs,
+            )
+        finally:
+            if timing_sink is not None:
+                timing_sink["query_planning_provider_ms"] = (
+                    timing_sink.get("query_planning_provider_ms", 0.0)
+                    + (time.monotonic() - provider_start) * 1000
+                )
+        if usage_sink is not None:
+            usage_sink["query_planner"] = accumulate_usage(
+                usage_sink.get("query_planner"),
+                extract_completion_usage(response),
+            )
+        return response
 
     def _build_messages(
         self,

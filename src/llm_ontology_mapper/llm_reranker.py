@@ -39,11 +39,16 @@ from llm_ontology_mapper.models import (
 )
 from llm_ontology_mapper.ontology_identity import validate_candidate_identity
 from llm_ontology_mapper.providers import (
+    REASONING_EMPTY_RESPONSE_RETRY_TOKENS,
     BaseLLMProvider,
     ChatMessage,
     CompletionResponse,
-    is_reasoning_model,
+    LLMCallConfig,
+    accumulate_usage,
+    extract_completion_usage,
     openai_reasoning_effort_for_model,
+    provider_uses_reasoning_model,
+    resolve_llm_call_params,
 )
 from llm_ontology_mapper.target_eligibility import candidate_allowed_for_targets
 
@@ -52,7 +57,11 @@ logger = logging.getLogger(__name__)
 _PROMPT_DIR = Path(__file__).parent / "assets" / "prompts"
 _RERANK_MAX_TOKENS = 512
 _REASONING_RERANK_MIN_COMPLETION_TOKENS = 4096
-_REASONING_RERANK_RETRY_TOKENS = 8192
+_REASONING_RERANK_RETRY_TOKENS = REASONING_EMPTY_RESPONSE_RETRY_TOKENS
+_MAX_RERANK_ATTEMPTS = 2
+"""Hard cap on provider calls per rerank(): the normal call plus at most one
+recovery attempt (empty-response-from-reasoning-model OR malformed-JSON --
+never both, since the second attempt's outcome is never re-triaged)."""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -104,8 +113,10 @@ class LLMReranker:
         provider: BaseLLMProvider,
         *,
         prompt_template_path: str | None = None,
+        llm_call_config: LLMCallConfig | None = None,
     ) -> None:
         self._provider = provider
+        self._llm_call_config = llm_call_config
         path = (
             Path(prompt_template_path)
             if prompt_template_path
@@ -121,6 +132,7 @@ class LLMReranker:
         candidates: Sequence[NormalizedCandidate],
         *,
         timing_sink: dict[str, float] | None = None,
+        usage_sink: dict[str, Any] | None = None,
         strict_target_ontology: bool = False,
     ) -> RerankDecision:
         """
@@ -194,13 +206,40 @@ class LLMReranker:
             len(eligible_candidates),
         )
 
-        response = self._complete_rerank_timed(messages, timing_sink=timing_sink)
+        response = self._complete_rerank_timed(
+            messages, timing_sink=timing_sink, usage_sink=usage_sink
+        )
+
+        # At most one recovery attempt total: an empty response from a
+        # reasoning model retries with a larger completion budget; a
+        # non-empty-but-malformed response retries with the normal reranker
+        # budget. These are mutually exclusive (if/elif) so a pathological
+        # response can never chain into a third provider call -- the second
+        # attempt's outcome is never re-triaged, only parsed or failed below.
         raw = _strip_fences(response.content)
-        if not raw.strip() and _provider_uses_reasoning_model(self._provider):
+        data: dict[str, Any] | None = None
+        if raw.strip():
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                logger.warning(
+                    "LLMReranker returned malformed JSON; retrying once "
+                    "(final allowed attempt). source_term=%r candidate_count=%d "
+                    "model=%s error=%s",
+                    query_plan.original_term,
+                    len(eligible_candidates),
+                    getattr(self._provider, "model", None),
+                    exc,
+                )
+                response = self._complete_rerank_timed(
+                    messages, timing_sink=timing_sink, usage_sink=usage_sink
+                )
+                raw = _strip_fences(response.content)
+        elif _provider_uses_reasoning_model(self._provider):
             logger.warning(
                 "LLMReranker received empty response from reasoning model; "
-                "retrying once with a larger completion budget. source_term=%r "
-                "candidate_count=%d model=%s",
+                "retrying once with a larger completion budget (final allowed "
+                "attempt). source_term=%r candidate_count=%d model=%s",
                 query_plan.original_term,
                 len(eligible_candidates),
                 getattr(self._provider, "model", None),
@@ -208,29 +247,32 @@ class LLMReranker:
             response = self._complete_rerank_timed(
                 messages,
                 timing_sink=timing_sink,
+                usage_sink=usage_sink,
                 max_tokens=_REASONING_RERANK_RETRY_TOKENS,
                 min_completion_tokens=_REASONING_RERANK_RETRY_TOKENS,
             )
             raw = _strip_fences(response.content)
+        # else: empty content and not a reasoning model -- no retry available;
+        # data stays None and the checks below fail immediately.
 
-        if not raw.strip():
-            raise LLMRerankerError(
-                "LLM returned empty response; for reasoning models this may "
-                "indicate max_completion_tokens was too low or no visible output "
-                "was produced. "
-                f"source_term={query_plan.original_term!r} "
-                f"candidate_count={len(eligible_candidates)} "
-                f"model={getattr(self._provider, 'model', None)!r}"
-            )
-
-        try:
-            data: dict[str, Any] = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            raise LLMRerankerError(
-                f"LLM returned malformed JSON for "
-                f"source_term={query_plan.original_term!r}: {exc}\n"
-                f"Response (first 500 chars): {response.content[:500]!r}"
-            ) from exc
+        if data is None:
+            if not raw.strip():
+                raise LLMRerankerError(
+                    "LLM returned empty response; for reasoning models this may "
+                    "indicate max_completion_tokens was too low or no visible output "
+                    "was produced. "
+                    f"source_term={query_plan.original_term!r} "
+                    f"candidate_count={len(eligible_candidates)} "
+                    f"model={getattr(self._provider, 'model', None)!r}"
+                )
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                raise LLMRerankerError(
+                    f"LLM returned malformed JSON for "
+                    f"source_term={query_plan.original_term!r}: {exc}\n"
+                    f"Response (first 500 chars): {response.content[:500]!r}"
+                ) from exc
 
         return self._build_decision(
             data,
@@ -251,15 +293,20 @@ class LLMReranker:
         max_tokens: int = _RERANK_MAX_TOKENS,
         min_completion_tokens: int = _REASONING_RERANK_MIN_COMPLETION_TOKENS,
     ) -> CompletionResponse:
-        kwargs: dict[str, Any] = {}
+        default_kwargs: dict[str, Any] = {}
         if _provider_uses_reasoning_model(self._provider):
-            kwargs["min_completion_tokens"] = min_completion_tokens
-            kwargs["reasoning_effort"] = (
+            default_kwargs["min_completion_tokens"] = min_completion_tokens
+            default_kwargs["reasoning_effort"] = (
                 _openai_stage_reasoning_effort(self._provider) or "minimal"
             )
+        temperature, kwargs = resolve_llm_call_params(
+            self._llm_call_config,
+            default_temperature=0.1,
+            default_extra_kwargs=default_kwargs,
+        )
         return self._provider.complete(
             messages,
-            temperature=0.1,
+            temperature=temperature,
             max_tokens=max_tokens,
             **kwargs,
         )
@@ -269,16 +316,23 @@ class LLMReranker:
         messages: list[ChatMessage],
         *,
         timing_sink: dict[str, float] | None,
+        usage_sink: dict[str, Any] | None = None,
         max_tokens: int = _RERANK_MAX_TOKENS,
         min_completion_tokens: int = _REASONING_RERANK_MIN_COMPLETION_TOKENS,
     ) -> CompletionResponse:
         provider_start = time.monotonic()
         try:
-            return self._complete_rerank(
+            response = self._complete_rerank(
                 messages,
                 max_tokens=max_tokens,
                 min_completion_tokens=min_completion_tokens,
             )
+            if usage_sink is not None:
+                usage_sink["llm_reranker"] = accumulate_usage(
+                    usage_sink.get("llm_reranker"),
+                    extract_completion_usage(response),
+                )
+            return response
         finally:
             if timing_sink is not None:
                 timing_sink["llm_reranker_provider_ms"] = (
@@ -712,10 +766,7 @@ def _concise_candidate_term(term: str, max_words: int = 8) -> str:
 
 
 def _provider_uses_reasoning_model(provider: BaseLLMProvider) -> bool:
-    return (
-        getattr(provider, "provider_name", "") == "openai"
-        and is_reasoning_model(str(getattr(provider, "model", "")))
-    )
+    return provider_uses_reasoning_model(provider)
 
 
 def _openai_stage_reasoning_effort(provider: BaseLLMProvider) -> str | None:

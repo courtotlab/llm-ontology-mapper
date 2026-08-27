@@ -1,0 +1,24 @@
+query_id,source_query,gold_code,gold_label,raw_row_index,rank_1_code,rank_2_code,rank_3_code,rank_4_code,rank_5_code,first_gold_rank,top1_hit,top3_hit,top5_hit,reciprocal_rank,status
+0,B-lymphoblastic leukemia/lymphoma,EFO:0000094,B-cell acute lymphoblastic leukemia,0,EFO:0000094,EFO:0009119,MONDO:0020511,MONDO:0000873,EFO:0000220,1,True,True,True,1.0,mapped
+1,obsolete precursor B lymphoblastic lymphoma/leukemia,EFO:0000094,B-cell acute lymphoblastic leukemia,1,EFO:0000094,EFO:0009119,MONDO:0020511,MONDO:0000873,EFO:0000220,1,True,True,True,1.0,mapped
+2,B-cell acute lymphoblastic leukemia,EFO:0000094,B-cell acute lymphoblastic leukemia,2,EFO:0000094,MONDO:0020511,EFO:1001935,EFO:1001946,,1,True,True,True,1.0,mapped
+3,B Lymphoblastic Leukemia/Lymphoma,EFO:0000094,B-cell acute lymphoblastic leukemia,4,EFO:0009119,EFO:0000094,MONDO:0020511,MONDO:0000873,EFO:0000220,2,False,True,True,0.5,mapped
+4,chronic lymphocytic leukemia,EFO:0000095,chronic lymphocytic leukemia,5,EFO:0000095,EFO:0004289,MONDO:0001014,,,1,True,True,True,1.0,mapped
+5,B-cell chronic lymphocytic leukemia,EFO:0000095,chronic lymphocytic leukemia,7,EFO:0000095,EFO:0004289,MONDO:0001014,MONDO:0004095,,1,True,True,True,1.0,mapped
+6,Chronic Lymphocytic Leukemia,EFO:0000095,chronic lymphocytic leukemia,8,EFO:0000095,EFO:0004289,MONDO:0001014,,,1,True,True,True,1.0,mapped
+7,mature B-cell neoplasm,EFO:0000096,neoplasm of mature B-cells,9,EFO:0000096,MONDO:0004095,EFO:1001938,EFO:0006889,,1,True,True,True,1.0,mapped
+8,neoplasm of mature B-cells,EFO:0000096,neoplasm of mature B-cells,10,EFO:0000096,MONDO:0004095,EFO:1001938,EFO:0000200,EFO:0006889,1,True,True,True,1.0,mapped
+9,Mature B-Cell Neoplasm,EFO:0000096,neoplasm of mature B-cells,12,EFO:0000096,MONDO:0004095,EFO:1001938,EFO:0000200,,1,True,True,True,1.0,mapped
+10,B-Cell Non-Hodgkin Lymphoma,EFO:0000096,neoplasm of mature B-cells,13,EFO:1001938,EFO:0005952,MONDO:0004095,EFO:0000096,MONDO:0044889,4,False,False,True,0.25,mapped
+10,B-Cell Non-Hodgkin Lymphoma,EFO:1001938,B-cell non-Hodgkins lymphoma,9793,EFO:1001938,EFO:0005952,MONDO:0004095,EFO:0000096,MONDO:0044889,1,True,True,True,1.0,mapped
+11,B cell,EFO:0000097,obsolete_B-lymphocyte,14,CL:0000236,CL:0000945,CL:0000785,CL:0000787,EFO:0005293,,False,False,False,0.0,mapped
+11,B cell,EFO:0000102,obsolete_B lymphocyte,15,CL:0000236,CL:0000945,CL:0000785,CL:0000787,EFO:0005293,,False,False,False,0.0,mapped
+12,hypothalamus,EFO:0000107,obsolete_hypothalamus,16,UBERON:0001898,UBERON:0001928,UBERON:0001929,UBERON:0002034,EFO:1000979,,False,False,False,0.0,mapped
+13,Hypothalamus,EFO:0000107,obsolete_hypothalamus,18,UBERON:0001898,UBERON:0001928,UBERON:0001929,UBERON:0002034,EFO:1000979,,False,False,False,0.0,mapped
+14,olfactory lobe,EFO:0000108,obsolete_olfactory lobe,21,UBERON:0005366,UBERON:0003112,UBERON:0005725,UBERON:0001997,UBERON:0005870,,False,False,False,0.0,mapped
+15,Olfactory bulb,EFO:0000108,obsolete_olfactory lobe,23,UBERON:0005366,EFO:0001048,UBERON:0005725,UBERON:0003112,,,False,False,False,0.0,mapped
+16,olfactory bulb,EFO:0000108,obsolete_olfactory lobe,24,UBERON:0005366,EFO:0001048,UBERON:0005725,UBERON:0003112,,,False,False,False,0.0,mapped
+17,spinal cord,EFO:0000110,obsolete_spinal cord,25,UBERON:0002240,EFO:0001369,UBERON:0001017,UBERON:0006241,,,False,False,False,0.0,mapped
+18,Spinal cord,EFO:0000110,obsolete_spinal cord,27,UBERON:0002240,UBERON:0001017,EFO:0001369,,,,False,False,False,0.0,mapped
+19,Ewing sarcoma,EFO:0000173,obsolete_Ewing family tumor,31,EFO:0000174,MONDO:0021038,EFO:1000250,MONDO:0021123,MONDO:0016713,,False,False,False,0.0,mapped
+19,Ewing sarcoma,EFO:0000174,Ewing sarcoma,33,EFO:0000174,MONDO:0021038,EFO:1000250,MONDO:0021123,MONDO:0016713,1,True,True,True,1.0,mapped

@@ -30,6 +30,144 @@ from llm_ontology_mapper.ontology_identity import (
 logger = logging.getLogger(__name__)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Bounded retry for transient public-API failures
+#
+# Applies uniformly to every SearchTools caller (OntologyMapper legacy path,
+# AgenticMapper, PublicOntologyRetriever) since it lives at the lowest level
+# that issues the actual HTTP request -- no per-caller opt-in needed for the
+# retry itself. Diagnostics capture (attempts/final_error_type) is opt-in via
+# the `route_diagnostics` sink parameter so existing callers that don't pass
+# it see no change beyond the retry.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_RETRYABLE_STATUS_CODES: frozenset[int] = frozenset({429, 500, 502, 503, 504})
+_MAX_REQUEST_ATTEMPTS = 3
+_RETRY_BACKOFF_SECONDS: tuple[float, ...] = (0.5, 1.0)  # wait before attempt 2, before attempt 3
+
+
+def _classify_request_error(exc: Exception) -> str:
+    """Best-effort classification of a requests exception for telemetry only
+    -- never affects retry/control flow, which is driven by exception type."""
+    if isinstance(exc, requests.exceptions.Timeout):
+        return "timeout"
+    if isinstance(exc, requests.exceptions.ConnectionError):
+        return "connection_reset" if "reset" in str(exc).lower() else "connection_error"
+    return type(exc).__name__
+
+
+def _get_with_retry(
+    url: str,
+    *,
+    route_diagnostics: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> requests.Response:
+    """
+    GET *url* with a small bounded retry for transient failures only.
+
+    Retries (up to _MAX_REQUEST_ATTEMPTS attempts total, short fixed backoff
+    between attempts) on:
+      - connection errors, including connection reset
+      - connect/read timeouts
+      - HTTP 429, 500, 502, 503, 504
+
+    Never retries other statuses (400, 401, 403, 404, ...) or other request
+    exceptions -- those are returned/raised on the first attempt exactly as
+    a single requests.get() call would, so each caller's existing
+    status-code handling (e.g. LOINC's 400/401/403 checks) is unaffected.
+
+    route_diagnostics, when provided, is populated in place with:
+      attempts:          total attempts made (1..3)
+      final_error_type:  set only when this call exhausted all retries on a
+                         transient condition (e.g. "timeout", "http_503").
+                         Left unset on any response returned to the caller
+                         for its own status handling (including ordinary
+                         permanent errors like 400/404) -- callers that also
+                         classify those set final_error_type themselves.
+    """
+    last_exc: Exception | None = None
+    for attempt in range(1, _MAX_REQUEST_ATTEMPTS + 1):
+        try:
+            response = requests.get(url, **kwargs)
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+            last_exc = exc
+            if attempt < _MAX_REQUEST_ATTEMPTS:
+                wait = _RETRY_BACKOFF_SECONDS[attempt - 1]
+                logger.warning(
+                    "Transient request error for %s (attempt %d/%d): %s -- retrying in %.1fs",
+                    url,
+                    attempt,
+                    _MAX_REQUEST_ATTEMPTS,
+                    exc,
+                    wait,
+                )
+                time.sleep(wait)
+                continue
+            if route_diagnostics is not None:
+                route_diagnostics["attempts"] = attempt
+                route_diagnostics["final_error_type"] = _classify_request_error(exc)
+            raise
+        else:
+            if response.status_code in _RETRYABLE_STATUS_CODES and attempt < _MAX_REQUEST_ATTEMPTS:
+                wait = _RETRY_BACKOFF_SECONDS[attempt - 1]
+                logger.warning(
+                    "Transient HTTP %d for %s (attempt %d/%d) -- retrying in %.1fs",
+                    response.status_code,
+                    url,
+                    attempt,
+                    _MAX_REQUEST_ATTEMPTS,
+                    wait,
+                )
+                time.sleep(wait)
+                continue
+            if route_diagnostics is not None:
+                route_diagnostics["attempts"] = attempt
+                if response.status_code in _RETRYABLE_STATUS_CODES:
+                    route_diagnostics["final_error_type"] = f"http_{response.status_code}"
+            return response
+
+    # Every attempt above either returns or raises before falling through;
+    # this satisfies type-checkers without implying a real code path.
+    assert last_exc is not None  # pragma: no cover
+    raise last_exc
+
+
+def _record_http_error_diagnostics(
+    route_diagnostics: dict[str, Any] | None, status_code: int
+) -> None:
+    """Classify a permanent (non-retried) HTTP error status for telemetry.
+
+    _get_with_retry only sets final_error_type for statuses it retried and
+    then exhausted; a status it never retried (e.g. 400/401/403/404) still
+    needs classifying so callers get a consistent error_type for any failed
+    request, not just transient ones. A no-op below 400 or once
+    final_error_type is already set (never overwrites a retry-exhaustion
+    classification).
+    """
+    if route_diagnostics is None or status_code < 400:
+        return
+    route_diagnostics.setdefault("final_error_type", f"http_{status_code}")
+
+
+def _bounded_text(text: str, max_len: int) -> str:
+    """Truncate diagnostic text to a bounded length -- never logs credentials,
+    only caller-supplied query strings or public response bodies."""
+    return text if len(text) <= max_len else text[:max_len] + "…"
+
+
+def _bounded_response_preview(response: requests.Response, max_len: int = 300) -> str:
+    """Best-effort bounded preview of a response body for error diagnostics.
+
+    Never includes request headers (so never Authorization/credentials) --
+    only the server's own response body, truncated. Falls back to a plain
+    marker if the body cannot be decoded as text.
+    """
+    try:
+        return _bounded_text(response.text, max_len)
+    except Exception:  # noqa: BLE001 -- diagnostic best-effort only
+        return "<response body unavailable>"
+
+
 class SearchTools:
     """
     Stateless search adapters for four public ontology APIs.
@@ -107,14 +245,21 @@ class SearchTools:
     # Public search methods
     # ------------------------------------------------------------------
 
-    def search_ols(self, query: str, ontology: str, top_k: int = 10) -> list[dict[str, Any]]:
+    def search_ols(
+        self,
+        query: str,
+        ontology: str,
+        top_k: int = 10,
+        *,
+        route_diagnostics: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """Search EBI OLS4 for *query* within *ontology*."""
         ontology_id = self.OLS_ONTOLOGY_MAP.get(ontology.upper())
         if not ontology_id:
             logger.warning(f"Ontology {ontology} not supported by OLS")
             return []
         try:
-            response = requests.get(
+            response = _get_with_retry(
                 f"{self.ols_base}/search",
                 params={
                     "q": query,
@@ -125,7 +270,9 @@ class SearchTools:
                     "start": "0",
                 },
                 timeout=self.api_timeout,
+                route_diagnostics=route_diagnostics,
             )
+            _record_http_error_diagnostics(route_diagnostics, response.status_code)
             response.raise_for_status()
             docs = response.json().get("response", {}).get("docs", [])
             candidates = []
@@ -177,7 +324,13 @@ class SearchTools:
             logger.error(f"Error parsing OLS results: {e}")
             return []
 
-    def search_loinc(self, query: str, top_k: int = 10) -> list[dict[str, Any]]:
+    def search_loinc(
+        self,
+        query: str,
+        top_k: int = 10,
+        *,
+        route_diagnostics: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """Search LOINC codes using the official LOINC Search API."""
         if not self.loinc_username or not self.loinc_password:
             logger.warning(
@@ -186,14 +339,17 @@ class SearchTools:
             )
             return []
 
+        request_params = {"query": query, "rows": str(top_k), "offset": "0"}
         try:
-            response = requests.get(
+            response = _get_with_retry(
                 self.loinc_search_url,
-                params={"query": query, "rows": str(top_k), "offset": "0"},
+                params=request_params,
                 auth=HTTPBasicAuth(self.loinc_username, self.loinc_password),
                 timeout=self.api_timeout,
+                route_diagnostics=route_diagnostics,
             )
             if response.status_code in (401, 403):
+                _record_http_error_diagnostics(route_diagnostics, response.status_code)
                 logger.error(
                     "LOINC Search API authentication failed (HTTP %s). "
                     "Check the configured LOINC service credentials.",
@@ -201,8 +357,18 @@ class SearchTools:
                 )
                 return []
             if response.status_code == 400:
-                logger.error("LOINC Search API rejected the search request (HTTP 400).")
+                _record_http_error_diagnostics(route_diagnostics, response.status_code)
+                logger.error(
+                    "LOINC Search API rejected the search request (HTTP 400). "
+                    "query=%r query_length=%d rows=%s offset=%s response_body=%r",
+                    _bounded_text(query, 200),
+                    len(query),
+                    request_params["rows"],
+                    request_params["offset"],
+                    _bounded_response_preview(response),
+                )
                 return []
+            _record_http_error_diagnostics(route_diagnostics, response.status_code)
             response.raise_for_status()
             candidates: list[dict[str, Any]] = []
             for idx, concept in enumerate(self._loinc_results(response.json())[:top_k]):
@@ -284,7 +450,13 @@ class SearchTools:
                 return str(value).strip()
         return ""
 
-    def search_rxnorm(self, query: str, top_k: int = 10) -> list[dict[str, Any]]:
+    def search_rxnorm(
+        self,
+        query: str,
+        top_k: int = 10,
+        *,
+        route_diagnostics: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """Search RxNav for *query* using the approximateTerm endpoint.
 
         approximateTerm.json returns one record per source atom, not per concept.
@@ -296,11 +468,13 @@ class SearchTools:
         """
         max_entries = max(top_k * 4, 20)
         try:
-            response = requests.get(
+            response = _get_with_retry(
                 f"{self.rxnav_base_url}/approximateTerm.json",
                 params={"term": query, "maxEntries": str(max_entries)},
                 timeout=self.api_timeout,
+                route_diagnostics=route_diagnostics,
             )
+            _record_http_error_diagnostics(route_diagnostics, response.status_code)
             response.raise_for_status()
             atom_list = response.json().get("approximateGroup", {}).get("candidate", [])
             if not isinstance(atom_list, list):
@@ -339,14 +513,22 @@ class SearchTools:
             logger.error(f"RxNorm search error: {e}")
             return []
 
-    def search_icd10(self, query: str, top_k: int = 10) -> list[dict[str, Any]]:
+    def search_icd10(
+        self,
+        query: str,
+        top_k: int = 10,
+        *,
+        route_diagnostics: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """Search NIH Clinical Tables ICD-10-CM endpoint."""
         try:
-            response = requests.get(
+            response = _get_with_retry(
                 self.icd10_nih_url,
                 params={"sf": "code,name", "terms": query, "maxList": str(top_k)},
                 timeout=self.api_timeout,
+                route_diagnostics=route_diagnostics,
             )
+            _record_http_error_diagnostics(route_diagnostics, response.status_code)
             response.raise_for_status()
             data = response.json()
             candidates = []
