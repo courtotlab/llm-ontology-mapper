@@ -1,0 +1,19 @@
+mode,outcome,count,percent
+public,Execution error,0,0.0
+public,Abstained,48,0.22018348623853212
+public,Gold rank 1,128,0.5871559633027523
+public,Gold rank 2-3,8,0.03669724770642202
+public,Gold rank 4-5,0,0.0
+public,No gold in Top 5,34,0.1559633027522936
+local,Execution error,0,0.0
+local,Abstained,13,0.05963302752293578
+local,Gold rank 1,156,0.7155963302752294
+local,Gold rank 2-3,14,0.06422018348623854
+local,Gold rank 4-5,0,0.0
+local,No gold in Top 5,35,0.16055045871559634
+disabled,Execution error,13,0.05963302752293578
+disabled,Abstained,62,0.28440366972477066
+disabled,Gold rank 1,107,0.4908256880733945
+disabled,Gold rank 2-3,0,0.0
+disabled,Gold rank 4-5,0,0.0
+disabled,No gold in Top 5,36,0.1651376146788991

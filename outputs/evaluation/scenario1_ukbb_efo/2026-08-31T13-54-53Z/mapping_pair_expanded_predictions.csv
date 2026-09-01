@@ -1,0 +1,889 @@
+query_id,source_query,gold_code,gold_label,raw_row_index,rank_1_code,rank_2_code,rank_3_code,rank_4_code,rank_5_code,first_gold_rank,top1_hit,top3_hit,top5_hit,reciprocal_rank,status
+0,Alzheimer s disease,EFO:0000249,Alzheimer's disease,0,MONDO:0004975,EFO:1001870,MONDO:0100087,MONDO:0015140,EFO:0006801,,False,False,False,0.0,mapped
+1,Endocarditis valve unspecified,EFO:0000465,endocarditis,1,EFO:0000465,EFO:1000830,MONDO:0000565,EFO:0009551,EFO:1001193,1,True,True,True,1.0,mapped
+2,Family history of other conditions,EFO:0000493,family history,2,EFO:0000493,EFO:0009640,EFO:0008346,EFO:0000319,EFO:0000408,1,True,True,True,1.0,mapped
+3,Unspecified maternal hypertension,EFO:0000668,preeclampsia,3,MONDO:0024664,EFO:0000537,EFO:0000668,,,3,False,True,True,0.3333333333333333,mapped
+4,Stroke not specified as haemorrhage or infarction,EFO:0000712,stroke,4,EFO:0000712,MONDO:0005098,EFO:0003763,,,1,True,True,True,1.0,mapped
+5,Subarachnoid haemorrhage,EFO:0000713,subarachnoid hemorrhage,5,EFO:0000713,EFO:0020921,EFO:0000551,EFO:0005669,,1,True,True,True,1.0,mapped
+6,Unspecified human immunodeficiency virus,EFO:0000764,HIV infection,6,EFO:0000764,EFO:0000180,EFO:0000765,EFO:0009528,,1,True,True,True,1.0,mapped
+7,Other endocrine disorders,EFO:0001379,endocrine system disease,7,EFO:0001379,HP:0000818,MONDO:0000569,EFO:0003769,MONDO:0021069,1,True,True,True,1.0,mapped
+8,Other diseases of liver,EFO:0001421,liver disease,8,EFO:0001421,EFO:0010284,HP:0001392,HP:0001410,,1,True,True,True,1.0,mapped
+9,Primary disorders of muscles,EFO:0002970,muscular disease,9,EFO:0002970,EFO:0004145,MONDO:0003939,MONDO:0020120,MONDO:0016105,1,True,True,True,1.0,mapped
+10,Pervasive developmental disorders,EFO:0003759,pervasive developmental disorder - not otherwise specified,10,MONDO:0000594,EFO:0003759,EFO:0003756,EFO:0003758,,2,False,True,True,0.5,mapped
+11,Other cerebrovascular diseases,EFO:0003763,cerebrovascular disorder,11,EFO:0003763,EFO:0000712,EFO:0008493,EFO:0000319,,1,True,True,True,1.0,mapped
+12,Other diseases of gallbladder,EFO:0003832,gallbladder disease,12,EFO:0003832,EFO:0000405,EFO:0009534,HP:0005609,,1,True,True,True,1.0,mapped
+13,Pain,EFO:0003843,pain,13,EFO:0003843,EFO:0010639,HP:0012532,EFO:0009430,HP:0003326,1,True,True,True,1.0,mapped
+14,Fracture of spine level unspecified,EFO:0003902,spinal fracture',14,EFO:0003902,EFO:0003931,HP:0002756,MONDO:0037747,,1,True,True,True,1.0,mapped
+15,Acute hepatitis B,EFO:0004197,hepatitis B infection,15,EFO:0004197,EFO:0004239,EFO:0004196,HP:0200119,,1,True,True,True,1.0,mapped
+16,Abnormalities of heart beat,EFO:0004269,cardiac arrythmia,16,EFO:0004269,MONDO:0007263,HP:0004308,MONDO:0000992,EFO:0009275,1,True,True,True,1.0,mapped
+17,Scoliosis,EFO:0004273,scoliosis,17,EFO:0004273,MONDO:0000726,HP:0002943,HP:0002944,EFO:0005423,1,True,True,True,1.0,mapped
+18,Other congenital malformations of heart,EFO:0005269,congenital heart malformation,18,EFO:0005269,EFO:0005207,MONDO:0000119,HP:0001627,MONDO:0024239,1,True,True,True,1.0,mapped
+19,Disorders of tooth development and eruption,EFO:0005410,tooth agenesis,19,EFO:1001216,HP:0000164,HP:0006482,GO:0044691,GO:0042476,,False,False,False,0.0,mapped
+20,Intracerebral haemorrhage,EFO:0005669,intracerebral hemorrhage,20,EFO:0005669,EFO:0000551,EFO:0020921,EFO:0010178,EFO:0010177,1,True,True,True,1.0,mapped
+21,Retinal detachments and breaks,EFO:0005773,retinal detachment,21,EFO:0005773,EFO:0010698,EFO:0005240,,,1,True,True,True,1.0,mapped
+22,Tuberculosis of nervous system,EFO:0007199,central nervous system tuberculosis,22,EFO:0007199,EFO:1000039,MONDO:0020010,MONDO:0018076,,1,True,True,True,1.0,mapped
+23,Acute hepatitis A,EFO:0007305,hepatitis A,23,EFO:0007305,HP:0200119,EFO:0004196,HP:0004787,EFO:0007303,1,True,True,True,1.0,mapped
+24,Hookworm diseases,EFO:0007314,hookworm infectious disease,24,EFO:0007314,EFO:0007145,EFO:1001342,EFO:0007500,MONDO:0024271,1,True,True,True,1.0,mapped
+25,Female infertility,EFO:0008560,female infertility,25,EFO:0008560,EFO:0000545,ORDO:404469,EFO:0021795,,1,True,True,True,1.0,mapped
+26,Sleep disorders,EFO:0008568,sleep disorder,26,EFO:0008568,MONDO:0003406,MONDO:0024361,HP:0025234,EFO:0003877,1,True,True,True,1.0,mapped
+27,Thiamine deficiency,EFO:0008569,Thiamine deficiency,27,EFO:0008569,EFO:1000837,EFO:1001241,MONDO:0042976,,1,True,True,True,1.0,mapped
+28,Viral conjunctivitis,EFO:0008571,viral conjunctivitis,28,EFO:0008571,EFO:0007131,EFO:0009450,MONDO:0020950,EFO:0007324,1,True,True,True,1.0,mapped
+29,Alcoholic liver disease,EFO:0008573,alcoholic liver disease,29,EFO:0008573,EFO:1001345,EFO:1000802,,,1,True,True,True,1.0,mapped
+30,Spinal osteochondrosis,EFO:0008576,Spinal Osteochondrosis,30,EFO:0008576,MONDO:0008410,HP:0040188,EFO:1000787,EFO:0000706,1,True,True,True,1.0,mapped
+31,Diseases of salivary glands,EFO:0008581,salivary gland disease,31,EFO:0008581,MONDO:0001597,EFO:1001179,EFO:0007124,EFO:0007422,1,True,True,True,1.0,mapped
+32,Gender identity disorders,EFO:0008587,gender identity disorder,32,EFO:0008587,MONDO:0000595,EFO:0020103,,,1,True,True,True,1.0,mapped
+33,Status asthmaticus,EFO:0008590,status asthmaticus,33,EFO:0008590,MONDO:0004979,EFO:0007614,MONDO:0004784,,1,True,True,True,1.0,mapped
+34,Cystic kidney disease,EFO:0008615,cystic kidney disease,34,EFO:0008615,EFO:0008620,EFO:0008621,MONDO:0019741,EFO:1000313,1,True,True,True,1.0,mapped
+35,Polyp of female genital tract,EFO:0008622,female genital tract polyp,35,EFO:0008622,EFO:0009484,EFO:0009475,EFO:1000237,MONDO:0021396,1,True,True,True,1.0,mapped
+36,Persistent mood,EFO:0008623,dysthymic disorder,36,EFO:0008623,EFO:0004247,EFO:0003761,EFO:0008475,,1,True,True,True,1.0,mapped
+37,Disorders of vitreous body,EFO:0008624,vitreous body disease,37,EFO:0008624,MONDO:0004860,MONDO:0001377,EFO:0008625,EFO:0008626,1,True,True,True,1.0,mapped
+38,Ovarian dysfunction,EFO:0009003,ovarian dysfunction,38,EFO:0009003,EFO:0005771,EFO:0004266,HP:0008209,MONDO:0002259,1,True,True,True,1.0,mapped
+39,Other coagulation defects,EFO:0009314,blood coagulation disease,39,EFO:0009314,HP:0001928,MONDO:0021181,MONDO:0002242,MONDO:0020599,1,True,True,True,1.0,mapped
+40,Granulomatous disorders of skin and subcutaneous tissue,EFO:1000705,granulomatous dermatitis,40,EFO:1000705,EFO:1000767,MONDO:0000255,MONDO:0009306,EFO:0000701,1,True,True,True,1.0,mapped
+41,Excessive vomiting in pregnancy,EFO:1000971,hyperemesis gravidarum,41,EFO:1000971,,,,,1,True,True,True,1.0,mapped
+42,Hyperfunction of pituitary gland,EFO:1000973,hyperpituitarism,42,EFO:1000973,EFO:1001110,EFO:0007319,EFO:0009607,EFO:0003099,1,True,True,True,1.0,mapped
+43,Other nutritional deficiencies,EFO:1001067,nutritional deficiency disease,43,EFO:1001067,EFO:0001069,EFO:0008572,EFO:0005878,MONDO:0024298,1,True,True,True,1.0,mapped
+44,Other rheumatic heart diseases,EFO:1001161,rheumatic heart disease,44,EFO:1001161,MONDO:0004582,EFO:0003777,EFO:0000319,,1,True,True,True,1.0,mapped
+45,Other helminthiases,EFO:1001342,Helminthiasis,45,EFO:1001342,EFO:0007391,EFO:1001438,EFO:1001287,MONDO:0024271,1,True,True,True,1.0,mapped
+46,Unspecified viral infection of CNS,EFO:1001456,central nervous system infection,46,MONDO:0024318,EFO:1001456,EFO:0007538,EFO:1001236,MONDO:0020010,2,False,True,True,0.5,mapped
+47,Diverticular disease of intestine,EFO:1001460,diverticulitis,47,EFO:0009959,EFO:1001460,,,,2,False,True,True,0.5,mapped
+48,Premature separation of placenta,EFO:1001754,Abruptio Placentae,48,EFO:1001754,,,,,1,True,True,True,1.0,mapped
+49,Retention of urine,HP:0000016,Urinary retention,49,HP:0000016,EFO:0009571,MONDO:0008630,EFO:0009530,,1,True,True,True,1.0,mapped
+50,Unspecified urinary incontinence,HP:0000020,Urinary incontinence,50,HP:0000020,EFO:0006865,HP:0010992,MONDO:0024290,,1,True,True,True,1.0,mapped
+51,Isolated proteinuria,HP:0000093,proteinuria,51,HP:0000093,MONDO:0030042,HP:0012595,EFO:0020074,,1,True,True,True,1.0,mapped
+52,Cleft palate,HP:0000175,cleft palate,52,HP:0000175,MONDO:0016064,MONDO:0007336,HP:0000202,MONDO:0016044,1,True,True,True,1.0,mapped
+53,Hydrocephalus,HP:0000238,hydrocephalus,53,HP:0000238,MONDO:0016349,MONDO:0001896,MONDO:0002045,EFO:1001065,1,True,True,True,1.0,mapped
+54,Visual disturbances,HP:0000505,Visual impairment,54,HP:0000504,HP:0000505,MONDO:0021084,MONDO:0024458,HP:0000572,2,False,True,True,0.5,mapped
+55,Unspecified dementia,HP:0000726,dementia,55,MONDO:0001627,MONDO:0002039,HP:0001268,EFO:0005772,,,False,False,False,0.0,mapped
+56,Unspecified haematuria,HP:0000790,hematuria,56,HP:0000790,HP:0012587,HP:0002907,,,1,True,True,True,1.0,mapped
+57,Cholecystitis,HP:0001082,Cholecystitis,57,HP:0001082,EFO:1001289,EFO:1000790,EFO:0007249,EFO:0003832,1,True,True,True,1.0,mapped
+58,Dystonia,HP:0001332,Dystonia,58,MONDO:0003441,HP:0001332,MONDO:0015494,MONDO:0000476,MONDO:0000477,2,False,True,True,0.5,mapped
+59,Ascites,HP:0001541,Ascites,59,HP:0001541,UBERON:0007795,HP:0003270,,,1,True,True,True,1.0,mapped
+60,Iron deficiency anaemia,HP:0001891,Iron deficiency anemia,60,HP:0001891,MONDO:0001639,HP:0010972,MONDO:0002280,,1,True,True,True,1.0,mapped
+61,Acute renal failure,HP:0001919,acute kidney injury,61,MONDO:0002492,EFO:1002048,EFO:1000794,EFO:0009955,HP:0000083,,False,False,False,0.0,mapped
+62,Nonspecific lymphadenitis,HP:0002840,lymphadenitis,62,MONDO:0002052,HP:0002840,MONDO:0004928,,,2,False,True,True,0.5,mapped
+63,Cachexia,HP:0004326,cachexia,63,HP:0004326,EFO:1001033,EFO:1000653,EFO:0009851,HP:0001824,1,True,True,True,1.0,mapped
+64,Disseminated intravascular coagulation,HP:0005521,Disseminated intravascular coagulation,64,HP:0005521,EFO:0009314,MONDO:0020599,MONDO:0003159,,1,True,True,True,1.0,mapped
+65,Senile cataract,HP:0011141,age-related cataract,65,MONDO:0004847,HP:0011141,MONDO:0001749,MONDO:0001847,MONDO:0005129,2,False,True,True,0.5,mapped
+66,Agranulocytosis,HP:0012234,Agranulocytosis,66,HP:0012234,HP:0012235,HP:0001913,,,1,True,True,True,1.0,mapped
+67,Helicobacter pylori,NCBITaxon:210,Helicobacter pylori,67,EFO:1000961,EFO:0009341,MONDO:0010853,,,,False,False,False,0.0,mapped
+68,Reduction defects of lower limb,Orphanet:2130,Hemimelia,68,MONDO:0019713,HP:0009816,HP:0002814,MONDO:0017438,,,False,False,False,0.0,mapped
+69,Congenital hydrocephalus,Orphanet:2185,Congenital hydrocephalus,69,MONDO:0016349,MONDO:0017116,MONDO:0017117,,,,False,False,False,0.0,mapped
+70,Immunodeficiency with predominantly antibody defects,Orphanet:331244,Other immunodeficiency syndrome with predominantly antibody defects,70,ORDO:331244,EFO:0700042,MONDO:0014260,,,,False,False,False,0.0,mapped
+71,Congenital malformations of oesophagus,Orphanet:88993,Esophageal malformation,71,HP:0002031,EFO:0009544,HP:0002032,HP:0002575,,,False,False,False,0.0,mapped
+72,Syndactyly,Orphanet:90025,Syndactyly,72,MONDO:0021002,MONDO:0019530,MONDO:0008512,HP:0001770,HP:0006101,,False,False,False,0.0,mapped
+73,Other congenital malformations of intestine,Orphanet:97945,Intestinal malformation,73,EFO:0700116,HP:0002242,HP:0012718,HP:0002250,EFO:0000405,,False,False,False,0.0,mapped
+74,Other disorders of peripheral nervous system,EFO:0009387,peripheral nervous system disease,74,EFO:0009387,EFO:0003100,EFO:0009562,EFO:0000618,,1,True,True,True,1.0,mapped
+75,Spondylosis,EFO:0000706,spondyloarthropathy,75,MONDO:0002253,EFO:0009610,EFO:0009477,,,,False,False,False,0.0,mapped
+76,Other retinal disorders,EFO:0003839,retinopathy,76,EFO:0003839,EFO:0003966,MONDO:0004580,MONDO:0002311,HP:0000479,1,True,True,True,1.0,mapped
+77,Arterial embolism and thrombosis,EFO:0004286,venous thromboembolism,77,HP:0001907,EFO:0010671,HP:0004420,MONDO:0000831,,,False,False,False,0.0,mapped
+78,Juvenile osteochondrosis of hip and pelvis,Orphanet:2380,Legg-Calvé-Perthes disease,78,MONDO:0007885,EFO:0008577,ORDO:2380,MONDO:0007726,EFO:1000648,,False,False,False,0.0,mapped
+79,Encephalitis myelitis and encephalomyelitis,EFO:0007364,meningoencephalitis,79,EFO:0001423,MONDO:0019956,EFO:0020926,EFO:0007364,MONDO:0020067,4,False,False,True,0.25,mapped
+80,Atrial fibrillation and flutter,EFO:0000275,atrial fibrillation,80,,,,,,,False,False,False,0.0,unmapped
+81,Dermatopolymyositis,EFO:0000398,dermatomyositis,81,MONDO:0600023,EFO:0000398,EFO:0003063,EFO:0000783,,2,False,True,True,0.5,mapped
+82,Lack of food,EFO:0008572,malnutrition,82,EFO:0022074,EFO:0008572,EFO:1001067,EFO:0001069,EFO:1001033,2,False,True,True,0.5,mapped
+83,Inflammatory diseases of prostate,EFO:0003830,prostatitis,83,EFO:0003830,EFO:0009602,UBERON:0002367,,,1,True,True,True,1.0,mapped
+84,Chronic renal failure,EFO:0003884,chronic kidney disease,84,EFO:0003884,EFO:0009909,EFO:1002048,HP:0000083,MONDO:0001343,1,True,True,True,1.0,mapped
+85,Postpolio syndrome,EFO:0007454,postpoliomyelitis syndrome,85,EFO:0007454,EFO:0007450,MONDO:0000341,EFO:0007186,,1,True,True,True,1.0,mapped
+86,Atopic dermatitis,EFO:0000274,atopic aczema,86,EFO:0000274,EFO:1000651,EFO:0002686,EFO:0007755,,1,True,True,True,1.0,mapped
+87,Cardiomyopathy,EFO:0000318,cardiomyopathy,87,EFO:0000318,EFO:0000407,EFO:0009881,EFO:0000538,EFO:0000767,1,True,True,True,1.0,mapped
+88,other disorders of circulatory system,EFO:0000319,cardiovascular disease,88,EFO:0000319,EFO:0004264,HP:0011028,,,1,True,True,True,1.0,mapped
+89,Crohn s disease,EFO:0000384,Crohn's disease,89,EFO:0000384,EFO:0005622,EFO:0003767,EFO:0005629,EFO:0005625,1,True,True,True,1.0,mapped
+90,Unspecified diabetes mellitus,EFO:0000400,diabetes mellitus,90,EFO:0000400,MONDO:0005148,MONDO:0005147,EFO:1001511,EFO:0004593,1,True,True,True,1.0,mapped
+91,Other specified diabetes mellitus,EFO:0000400,diabetes mellitus,91,EFO:0000400,EFO:1001511,EFO:0004593,MONDO:0016391,,1,True,True,True,1.0,mapped
+92,Epilepsy,EFO:0000474,epilepsy,92,EFO:0000474,MONDO:0015650,HP:0001250,EFO:0004263,EFO:0005917,1,True,True,True,1.0,mapped
+93,Glaucoma,EFO:0000516,glaucoma,93,MONDO:0005041,EFO:0004190,ORDO:156005,MONDO:0001744,MONDO:0020366,,False,False,False,0.0,mapped
+94,Irritable bowel syndrome,EFO:0000555,irritable bowel syndrome,94,EFO:0000555,EFO:0021536,MONDO:0021189,,,1,True,True,True,1.0,mapped
+95,Schizophrenia,EFO:0000692,schizophrenia,95,MONDO:0005090,MONDO:0100182,EFO:0007927,EFO:0005407,,,False,False,False,0.0,mapped
+96,Ulcerative colitis,EFO:0000729,ulcerative colitis,96,EFO:0000729,EFO:0005626,EFO:1001223,EFO:0003872,EFO:1000034,1,True,True,True,1.0,mapped
+97,Viral infection of unspecified site,EFO:0000763,viral disease,97,EFO:0000763,EFO:0005741,,,,1,True,True,True,1.0,mapped
+98,Myositis,EFO:0000783,myositis,98,MONDO:0600023,EFO:0003063,EFO:0007323,EFO:0000557,EFO:1001409,,False,False,False,0.0,mapped
+99,Other cataract,EFO:0001059,cataract,99,MONDO:0005129,ORDO:98643,HP:0000519,HP:0011141,ORDO:217049,,False,False,False,0.0,mapped
+100,Cytomegaloviral disease,EFO:0001062,cytomegalovirus infection,100,EFO:0001062,EFO:1001302,EFO:0020106,EFO:0007309,EFO:0007037,1,True,True,True,1.0,mapped
+101,Endometriosis,EFO:0001065,endometriosis,101,EFO:0001065,EFO:1000418,MONDO:0001285,MONDO:0001282,MONDO:0001288,1,True,True,True,1.0,mapped
+102,Obesity,EFO:0001073,obesity,102,EFO:0001073,EFO:0001074,EFO:0007041,EFO:0009382,HP:0025501,1,True,True,True,1.0,mapped
+103,Insulin dependent diabetes mellitus,EFO:0001359,type I diabetes mellitus,103,MONDO:0005147,EFO:0009757,EFO:0000400,,,,False,False,False,0.0,mapped
+104,Non insulin dependent diabetes mellitus,EFO:0001360,type II diabetes mellitus,104,MONDO:0005148,EFO:0010164,EFO:0000400,EFO:1001511,,,False,False,False,0.0,mapped
+105,Parkinson s disease,EFO:0002508,Parkinson's disease,105,MONDO:0005180,EFO:1001175,MONDO:0017279,MONDO:0008199,HP:0001300,,False,False,False,0.0,mapped
+106,Juvenile arthritis,EFO:0002609,chronic childhood arthritis,106,EFO:0002609,EFO:0009734,EFO:1001999,EFO:0009730,EFO:1002019,1,True,True,True,1.0,mapped
+107,Cellulitis,EFO:0003035,cellulitis,107,EFO:0003035,MONDO:0024414,EFO:0010692,,,1,True,True,True,1.0,mapped
+108,Cushing s syndrome,EFO:0003099,Cushing syndrome,108,EFO:0003099,EFO:1001110,MONDO:0020529,EFO:0009041,EFO:1001256,1,True,True,True,1.0,mapped
+109,Osteomyelitis,EFO:0003102,osteomyelitis,109,EFO:0003102,MONDO:0002614,EFO:0004260,,,1,True,True,True,1.0,mapped
+110,Spina bifida,EFO:0003105,spina bifida,110,EFO:0003105,MONDO:0019351,MONDO:0017069,MONDO:0017062,HP:0003298,1,True,True,True,1.0,mapped
+111,Heart failure,EFO:0003144,heart failure,111,EFO:0003144,EFO:0000373,EFO:0003146,EFO:0003149,EFO:1001207,1,True,True,True,1.0,mapped
+112,Vitamin D deficiency,EFO:0003762,vitamin D deficiency,112,EFO:0003762,EFO:0005583,MONDO:0017322,MONDO:0024299,,1,True,True,True,1.0,mapped
+113,Dental caries,EFO:0003819,dental caries,113,EFO:0003819,MONDO:0002233,EFO:0600095,EFO:0600096,EFO:1001163,1,True,True,True,1.0,mapped
+114,Migraine,EFO:0003821,migraine disorder,114,MONDO:0005277,MONDO:0100431,MONDO:0005475,EFO:0009550,MONDO:0100246,,False,False,False,0.0,mapped
+115,Pulmonary embolism,EFO:0003827,pulmonary embolism,115,EFO:0003827,EFO:0010671,HP:0001907,,,1,True,True,True,1.0,mapped
+116,Other peripheral vascular diseases,EFO:0003875,peripheral vascular disease,116,EFO:0003875,EFO:0004264,EFO:0004265,MONDO:0019293,,1,True,True,True,1.0,mapped
+117,Multiple sclerosis,EFO:0003885,multiple sclerosis,117,MONDO:0005301,EFO:0003840,EFO:0008520,EFO:0008522,EFO:0003929,,False,False,False,0.0,mapped
+118,Acne,EFO:0003894,acne,118,EFO:0003894,EFO:1000662,EFO:1000710,EFO:1000702,,1,True,True,True,1.0,mapped
+119,Ankylosing spondylitis,EFO:0003898,ankylosing spondylitis,119,EFO:0003898,EFO:0000706,MONDO:0001434,MONDO:0003937,,1,True,True,True,1.0,mapped
+120,Angina pectoris,EFO:0003913,angina pectoris,120,EFO:0003913,EFO:0020925,EFO:1000013,EFO:1000985,EFO:1001375,1,True,True,True,1.0,mapped
+121,Atherosclerosis,EFO:0003914,atherosclerosis,121,EFO:0003914,EFO:0009086,MONDO:0002277,HP:0031678,MONDO:0021661,1,True,True,True,1.0,mapped
+122,Gastro oesophageal reflux disease,EFO:0003948,gastroesophageal reflux disease,122,EFO:0003948,EFO:1001095,EFO:0700028,EFO:1001355,,1,True,True,True,1.0,mapped
+123,Sunburn,EFO:0003958,sunburn,123,EFO:0003958,EFO:1000753,EFO:0004795,EFO:1000752,,1,True,True,True,1.0,mapped
+124,Cleft lip,EFO:0003959,cleft lip,124,EFO:0003959,HP:0000204,MONDO:0016043,MONDO:0015420,MONDO:0016044,1,True,True,True,1.0,mapped
+125,Androgenic alopecia,EFO:0004191,androgenic alopecia,125,EFO:0004191,MONDO:0007184,MONDO:0000005,MONDO:0004907,,1,True,True,True,1.0,mapped
+126,Alopecia areata,EFO:0004192,alopecia areata,126,EFO:0004192,MONDO:0004907,MONDO:0019080,EFO:1002028,EFO:0004191,1,True,True,True,1.0,mapped
+127,Vitiligo,EFO:0004208,vitiligo,127,EFO:0004208,,,,,1,True,True,True,1.0,mapped
+128,Hypospadias,EFO:0004209,hypospadias,128,EFO:0004209,HP:0003244,,,,1,True,True,True,1.0,mapped
+129,Otosclerosis,EFO:0004213,otosclerosis,129,EFO:0004213,EFO:1001812,MONDO:0002933,EFO:0006951,,1,True,True,True,1.0,mapped
+130,Conduct disorders,EFO:0004216,conduct disorder,130,EFO:0004216,EFO:0000677,MONDO:0002025,MONDO:0002028,,1,True,True,True,1.0,mapped
+131,Male infertility,EFO:0004248,male infertility,131,EFO:0004248,EFO:0000545,ORDO:399771,ORDO:399775,EFO:0000279,1,True,True,True,1.0,mapped
+132,Meningococcal infection,EFO:0004249,meningococcal infection,132,EFO:0004249,EFO:1001040,EFO:1000831,EFO:1001377,,1,True,True,True,1.0,mapped
+133,Calculus of kidney and ureter,EFO:0004253,nephrolithiasis,133,MONDO:0024647,EFO:0004253,EFO:1001228,MONDO:0004828,,2,False,True,True,0.5,mapped
+134,Nephrotic syndrome,EFO:0004255,nephrotic syndrome,134,EFO:0004255,MONDO:0018170,MONDO:0002350,EFO:1001020,MONDO:0009732,1,True,True,True,1.0,mapped
+135,Osteonecrosis,EFO:0004259,osteonecrosis,135,EFO:0004259,MONDO:0018373,EFO:1001821,MONDO:0018383,EFO:0009426,1,True,True,True,1.0,mapped
+136,Paget s disease of bone,EFO:0004261,osteitis deformans,136,EFO:0004261,MONDO:0021165,MONDO:0009394,MONDO:0000507,,1,True,True,True,1.0,mapped
+137,Other anaemias,EFO:0004272,anemia,137,MONDO:0002280,EFO:0004272,MONDO:0001639,,,2,False,True,True,0.5,mapped
+138,Gout,EFO:0004274,gout,138,EFO:0004274,EFO:0021525,EFO:0000685,,,1,True,True,True,1.0,mapped
+139,Diabetes mellitus in pregnancy,EFO:0004593,gestational diabetes,139,EFO:0004593,HP:0009800,EFO:0000400,MONDO:0005148,MONDO:0005147,1,True,True,True,1.0,mapped
+140,Duodenal ulcer,EFO:0004607,duodenal ulcer,140,EFO:0004607,HP:0004398,MONDO:0004247,MONDO:0043839,,1,True,True,True,1.0,mapped
+141,Cholelithiasis,EFO:0004799,cholelithiasis,141,EFO:0004799,EFO:0004210,EFO:1000864,EFO:1000865,EFO:0003832,1,True,True,True,1.0,mapped
+142,Leishmaniasis,EFO:0005044,Leishmaniasis,142,EFO:0005044,EFO:0007379,EFO:0005046,EFO:0005045,EFO:1001784,1,True,True,True,1.0,mapped
+143,Eating disorders,EFO:0005203,eating disorder,143,EFO:0005203,HP:0100738,EFO:0005924,EFO:0001069,,1,True,True,True,1.0,mapped
+144,Hypotension,EFO:0005251,hypotension,144,EFO:0005251,EFO:0002497,EFO:0005252,EFO:1000993,EFO:0005254,1,True,True,True,1.0,mapped
+145,Unspecified contact dermatitis,EFO:0005319,contact dermatitis,145,EFO:0005319,EFO:1000668,EFO:1000718,MONDO:0002406,,1,True,True,True,1.0,mapped
+146,Schizoaffective disorders,EFO:0005411,schizoaffective disorder,146,EFO:0005411,EFO:0009965,EFO:0005407,MONDO:0005090,,1,True,True,True,1.0,mapped
+147,Urticaria,EFO:0005531,urticaria,147,EFO:0005531,EFO:1000754,EFO:1000669,MONDO:0044211,EFO:1001881,1,True,True,True,1.0,mapped
+148,Seborrhoeic keratosis,EFO:0005584,seborrheic keratosis,148,EFO:0005584,,,,,1,True,True,True,1.0,mapped
+149,Shigellosis,EFO:0005585,shingellosis,149,EFO:0005585,EFO:1001869,MONDO:0001673,MONDO:0000257,,1,True,True,True,1.0,mapped
+150,Other vitamin deficiencies,EFO:0005878,vitamin deficiency,150,EFO:0005878,MONDO:0024298,EFO:1001067,EFO:0005596,EFO:1001237,1,True,True,True,1.0,mapped
+151,Zoster,EFO:0006510,Herpes Zoster,151,EFO:0006510,EFO:0006509,EFO:0007403,EFO:0007281,EFO:1001453,1,True,True,True,1.0,mapped
+152,Pyoderma gangrenosum,EFO:0006835,pyoderma gangrenosum,152,EFO:0006835,EFO:0009009,ORDO:69126,MONDO:0011462,HP:0000999,1,True,True,True,1.0,mapped
+153,Decubitus ulcer,EFO:0007067,decubitus ulcer,153,EFO:0007067,EFO:0007066,HP:0200042,EFO:0007068,,1,True,True,True,1.0,mapped
+154,Actinomycosis,EFO:0007128,actinomycosis,154,EFO:0007128,EFO:1001122,,,,1,True,True,True,1.0,mapped
+155,Amoebiasis,EFO:0007144,amebiasis,155,EFO:0007144,MONDO:0024275,MONDO:0021747,MONDO:0001955,,1,True,True,True,1.0,mapped
+156,Unspecified appendicitis,EFO:0007149,appendicitis,156,EFO:0007149,EFO:0009542,,,,1,True,True,True,1.0,mapped
+157,Ascariasis,EFO:0007154,ascariasis,157,EFO:0007154,EFO:0007155,EFO:0007156,,,1,True,True,True,1.0,mapped
+158,Aspergillosis,EFO:0007157,aspergillosis,158,EFO:0007157,EFO:1001834,EFO:0007140,MONDO:0002041,EFO:0007278,1,True,True,True,1.0,mapped
+159,Varicella,EFO:0007204,chickenpox,159,EFO:0007204,EFO:0006509,EFO:0006510,EFO:1001310,,1,True,True,True,1.0,mapped
+160,Cryptococcosis,EFO:0007229,cryptococcosis,160,EFO:0007229,EFO:0007228,,,,1,True,True,True,1.0,mapped
+161,Echinococcosis,EFO:0007245,echinococcosis,161,EFO:0007245,MONDO:0042488,,,,1,True,True,True,1.0,mapped
+162,Enterobiasis,EFO:0007254,enterobiasis,162,EFO:0007254,EFO:0007391,,,,1,True,True,True,1.0,mapped
+163,Granuloma inguinale,EFO:0007291,granuloma inguinale,163,EFO:0007291,EFO:0007353,,,,1,True,True,True,1.0,mapped
+164,Histoplasmosis,EFO:0007310,histoplasmosis,164,EFO:0007310,,,,,1,True,True,True,1.0,mapped
+165,Infectious mononucleosis,EFO:0007326,infectious mononucleosis,165,EFO:0007326,,,,,1,True,True,True,1.0,mapped
+166,Leptospirosis,EFO:0007344,leptospirosis,166,EFO:0007344,EFO:0009567,,,,1,True,True,True,1.0,mapped
+167,Listeriosis,EFO:0007347,listeriosis,167,EFO:0007347,EFO:1001021,,,,1,True,True,True,1.0,mapped
+168,Miliary tuberculosis,EFO:0007368,miliary tuberculosis,168,EFO:0007368,MONDO:0018076,MONDO:0000368,EFO:1000049,,1,True,True,True,1.0,mapped
+169,Myiasis,EFO:0007389,myiasis,169,EFO:0007389,EFO:0001067,MONDO:0002875,,,1,True,True,True,1.0,mapped
+170,Optic neuritis,EFO:0007405,optic neuritis,170,EFO:0007405,EFO:1001074,MONDO:0044685,EFO:0004256,MONDO:0002135,1,True,True,True,1.0,mapped
+171,Placenta praevia,EFO:0007442,placenta praevia,171,EFO:0007442,EFO:0007440,EFO:1001754,,,1,True,True,True,1.0,mapped
+172,Plasmodium falciparum malaria,EFO:0007444,Plasmodium falciparum malaria,172,EFO:0007444,EFO:0001068,EFO:0007445,,,1,True,True,True,1.0,mapped
+173,Plasmodium vivax malaria,EFO:0007445,Plasmodium vivax malaria,173,EFO:0007445,EFO:0001068,EFO:0007444,EFO:0006857,EFO:0010970,1,True,True,True,1.0,mapped
+174,Acute poliomyelitis,EFO:0007450,poliomyelitis,174,EFO:0007450,MONDO:0024618,MONDO:0000341,EFO:0007186,MONDO:0024620,1,True,True,True,1.0,mapped
+175,Scarlet fever,EFO:0007477,scarlet fever,175,EFO:0007477,,,,,1,True,True,True,1.0,mapped
+176,Strongyloidiasis,EFO:0007501,strongyloidiasis,176,EFO:0007501,EFO:0007500,EFO:0007522,,,1,True,True,True,1.0,mapped
+177,Suppurative and unspecified otitis media,EFO:0007503,suppurative otitis media,177,EFO:0007503,EFO:0004992,MONDO:0021204,MONDO:0021666,,1,True,True,True,1.0,mapped
+178,other syphilis,EFO:0007504,syphilis,178,EFO:0007504,EFO:1001217,MONDO:0004497,,,1,True,True,True,1.0,mapped
+179,Toxoplasmosis,EFO:0007517,toxoplasmosis,179,EFO:0007517,EFO:0007200,EFO:0007220,EFO:0007399,EFO:0007047,1,True,True,True,1.0,mapped
+180,Yaws,EFO:0007548,yaws,180,EFO:0007548,,,,,1,True,True,True,1.0,mapped
+181,Status epilepticus,EFO:0008526,status epilepticus,181,EFO:0008526,HP:0032660,HP:0001250,EFO:0000474,,1,True,True,True,1.0,mapped
+182,Fracture of femur,EFO:0008553,femur fracture,182,EFO:0008553,EFO:1001792,EFO:0009960,EFO:0003964,EFO:0009512,1,True,True,True,1.0,mapped
+183,Diaphragmatic hernia,EFO:0008561,diaphragmatic hernia,183,EFO:0008561,EFO:0007216,EFO:1001861,MONDO:0012431,HP:0000775,1,True,True,True,1.0,mapped
+184,Niacin deficiency,EFO:0008570,vitamin B3 deficiency,184,EFO:0008570,MONDO:0042976,EFO:0008569,,,1,True,True,True,1.0,mapped
+185,Gangrene,EFO:0008574,gangrene,185,EFO:0008574,EFO:0007279,EFO:0009426,EFO:1001063,EFO:0006835,1,True,True,True,1.0,mapped
+186,Acute myocardial infarction,EFO:0008583,acute myocardial infarction,186,EFO:0008583,EFO:0000612,EFO:0005672,EFO:1000812,EFO:1000983,1,True,True,True,1.0,mapped
+187,Subsequent myocardial infarction,EFO:0008584,Subsequent ST elevation (STEMI) and non-ST elevation (NSTEMI) myocardian infarction,187,EFO:0008584,EFO:0000612,EFO:0008583,EFO:0009953,,1,True,True,True,1.0,mapped
+188,Peritonitis,EFO:0008588,peritonitis,188,EFO:0008588,EFO:0002623,MONDO:0043786,EFO:1001394,,1,True,True,True,1.0,mapped
+189,Diseases of spleen,EFO:0009002,splenic disease,189,EFO:0009002,EFO:0007491,MONDO:0036696,HP:0001744,MONDO:0010066,1,True,True,True,1.0,mapped
+190,Typhus fever,EFO:0009117,typhus,190,EFO:0009117,MONDO:0019362,EFO:0007480,EFO:0007182,,1,True,True,True,1.0,mapped
+191,Other diseases of intestine,EFO:0009431,intestinal disease,191,EFO:0009431,EFO:0000405,EFO:0010282,MONDO:0024634,MONDO:0024635,1,True,True,True,1.0,mapped
+192,Fibroblastic disorders,EFO:0009432,fibroblastic disorder,192,EFO:0009432,EFO:1000255,EFO:0000497,EFO:0002087,,1,True,True,True,1.0,mapped
+193,Unspecified acute lower respiratory infection,EFO:0009433,lower respiratory tract disease,193,MONDO:0024355,EFO:0009433,EFO:0009661,EFO:0003106,,2,False,True,True,0.5,mapped
+194,Other ill defined and unspecified causes of mortality,EFO:0009434,death by undetermined cause,194,EFO:0030051,EFO:0009434,EFO:0004352,EFO:0000480,,2,False,True,True,0.5,mapped
+195,Cystitis,EFO:1000025,cystitis,195,EFO:1000025,EFO:1000869,EFO:0008507,EFO:1000023,EFO:1001835,1,True,True,True,1.0,mapped
+196,Lactose intolerance,EFO:1000062,lactose intolerance,196,EFO:1000062,EFO:1000063,MONDO:0017621,MONDO:0009115,EFO:0010557,1,True,True,True,1.0,mapped
+197,Thyroiditis,EFO:1000627,thyroid disease,197,MONDO:0004126,EFO:1000627,EFO:1001431,EFO:1001194,EFO:0003779,2,False,True,True,0.5,mapped
+198,Acute pancreatitis,EFO:1000652,acute pancreatitis,198,EFO:1000652,EFO:0000278,EFO:0021524,MONDO:0015175,EFO:1002013,1,True,True,True,1.0,mapped
+199,Acanthosis nigricans,EFO:1000660,acanthosis nigricans,199,EFO:1000660,MONDO:0043003,EFO:1001503,MONDO:0008696,MONDO:0012520,1,True,True,True,1.0,mapped
+200,Allergic contact dermatitis,EFO:1000668,allergic contact dermatitis,200,EFO:1000668,EFO:0005319,EFO:1000744,EFO:1000718,EFO:0020984,1,True,True,True,1.0,mapped
+201,Cholesteatoma of middle ear,EFO:1000678,cholesteatoma of middle ear,201,EFO:1000678,EFO:1000675,EFO:1000676,,,1,True,True,True,1.0,mapped
+202,Erythema multiforme,EFO:1000694,erythema multiforme,202,EFO:1000694,MONDO:0044719,EFO:0004276,,,1,True,True,True,1.0,mapped
+203,Hyperhidrosis,EFO:1000712,hypohidrosis,203,HP:0000975,HP:0007410,EFO:1000940,,,,False,False,False,0.0,mapped
+204,Impetigo,EFO:1000714,impetigo,204,EFO:1000714,EFO:1000715,,,,1,True,True,True,1.0,mapped
+205,Irritant contact dermatitis,EFO:1000718,irritant dermatitis,205,EFO:1000718,EFO:0005319,EFO:1000668,EFO:1000744,,1,True,True,True,1.0,mapped
+206,Lichen planus,EFO:1000726,lichen planus,206,EFO:1000726,EFO:0008517,MONDO:0007902,EFO:0009856,,1,True,True,True,1.0,mapped
+207,Parapsoriasis,EFO:1000747,parapsoriasis,207,EFO:1000747,,,,,1,True,True,True,1.0,mapped
+208,Pemphigus,EFO:1000749,pemphigus,208,EFO:1000749,EFO:0004719,EFO:0008601,EFO:0008606,EFO:0008603,1,True,True,True,1.0,mapped
+209,Pityriasis rosea,EFO:1000756,pityriasis rosea,209,EFO:1000756,,,,,1,True,True,True,1.0,mapped
+210,Rosacea,EFO:1000760,rosacea,210,EFO:1000760,EFO:0009180,EFO:1000662,EFO:1000695,,1,True,True,True,1.0,mapped
+211,Seborrhoeic dermatitis,EFO:1000764,seborrheic dermatitis,211,EFO:1000764,EFO:1000765,MONDO:0012446,EFO:1000763,,1,True,True,True,1.0,mapped
+212,Atrophic disorders of skin,EFO:1000766,skin atrophy,212,EFO:1000766,EFO:1000096,EFO:1000665,HP:0001075,,1,True,True,True,1.0,mapped
+213,Coxarthrosis,EFO:1000786,"osteoarthritis, hip",213,EFO:1000786,MONDO:0005178,EFO:0004616,,,1,True,True,True,1.0,mapped
+214,Coalworker s pneumoconiosis,EFO:1000814,anthracosis,214,EFO:1000814,MONDO:0015926,MONDO:0022736,,,1,True,True,True,1.0,mapped
+215,Ascorbic acid deficiency,EFO:1000822,ascorbic acid deficiency,215,EFO:1000822,EFO:1001169,,,,1,True,True,True,1.0,mapped
+216,Bacterial meningitis,EFO:1000831,bacterial meningitis,216,EFO:1000831,EFO:0000584,MONDO:0021108,EFO:1001040,MONDO:0041825,1,True,True,True,1.0,mapped
+217,Dysplasia of cervix uteri,EFO:1000910,dysplasia of cervix,217,EFO:1000910,MONDO:0022394,MONDO:0004693,MONDO:0042487,EFO:1000168,1,True,True,True,1.0,mapped
+218,Habitual aborter,EFO:1000954,habitual abortion,218,EFO:1000954,EFO:1001255,HP:0005268,EFO:1001491,,1,True,True,True,1.0,mapped
+219,Other rickettsioses,EFO:1001162,rickettsiosis,219,EFO:1001162,EFO:1001128,,,,1,True,True,True,1.0,mapped
+220,Secondary parkinsonism,EFO:1001175,secondary Parkinson disease,220,EFO:1001175,HP:0001300,MONDO:0021095,EFO:1001402,,1,True,True,True,1.0,mapped
+221,Viral meningitis,EFO:1001236,viral meningitis,221,EFO:1001236,EFO:0000584,MONDO:0021108,EFO:1000823,,1,True,True,True,1.0,mapped
+222,Vitamin A deficiency,EFO:1001237,vitamin A deficiency,222,EFO:1001237,MONDO:0024298,EFO:0005878,,,1,True,True,True,1.0,mapped
+223,Spontaneous abortion,EFO:1001255,spontaneous abortion,223,EFO:1001255,HP:0005268,EFO:1001491,EFO:1000954,EFO:1001799,1,True,True,True,1.0,mapped
+224,Unspecified renal colic,EFO:1001412,renal colic,224,EFO:1001412,HP:0030157,HP:0011848,,,1,True,True,True,1.0,mapped
+225,Taeniasis,EFO:1001433,taeniasis,225,EFO:1001433,EFO:1001287,MONDO:0042488,,,1,True,True,True,1.0,mapped
+226,Synovitis and tenosynovitis,EFO:1001435,tenosynovitis,226,EFO:1001435,EFO:0008997,MONDO:0056799,,,1,True,True,True,1.0,mapped
+227,Schistosomiasis,EFO:1001475,schistosomiasis,227,EFO:1001475,EFO:0007530,EFO:1001420,EFO:1001419,EFO:1001342,1,True,True,True,1.0,mapped
+228,Unspecified abortion,EFO:1001491,abortion,228,EFO:1001491,HP:0005268,EFO:1001255,EFO:1001799,EFO:1000954,1,True,True,True,1.0,mapped
+229,Femoral hernia,EFO:1001791,femoral hernia,229,EFO:1001791,EFO:1001866,HP:0004299,HP:0000023,,1,True,True,True,1.0,mapped
+230,Ventral hernia,EFO:1001866,ventral hernia,230,EFO:1001866,HP:0004299,HP:0004872,HP:0001537,,1,True,True,True,1.0,mapped
+231,Amyloidosis,EFO:1001875,amyloidosis,231,EFO:1001875,MONDO:0017816,MONDO:0019438,MONDO:0018634,MONDO:0019439,1,True,True,True,1.0,mapped
+232,Cicatricial alopecia,EFO:1002028,cicatrical alopecia,232,EFO:1002028,HP:0004552,MONDO:0004907,HP:0002293,,1,True,True,True,1.0,mapped
+233,Other disorders of nervous system,EFO:0000618,nervous system disease,233,EFO:0000618,HP:0000707,EFO:0009387,EFO:0009386,EFO:0009490,1,True,True,True,1.0,mapped
+234,Polyuria,HP:0000103,polyuria,234,HP:0000103,HP:0012590,HP:0001959,,,1,True,True,True,1.0,mapped
+235,Pruritus,HP:0000989,prutitus,235,HP:0000989,MONDO:0021739,HP:0000964,EFO:0000274,,1,True,True,True,1.0,mapped
+236,Nausea and vomiting,HP:0002017,nausea and vomiting,236,HP:0002017,HP:0002018,HP:0002013,EFO:0006911,EFO:0004888,1,True,True,True,1.0,mapped
+237,Peptic ulcer site unspecified,HP:0004398,peptic ulcer,237,MONDO:0004247,HP:0004398,EFO:0009454,EFO:0004607,MONDO:0043839,2,False,True,True,0.5,mapped
+238,Erythema nodosum,HP:0012219,erythema nodosum,238,HP:0012219,EFO:1000742,MONDO:0018592,MONDO:0044719,,1,True,True,True,1.0,mapped
+239,Oesophagitis,HP:0100633,esophagitis,239,MONDO:0001409,HP:0100633,EFO:1001095,EFO:0004232,EFO:0009544,2,False,True,True,0.5,mapped
+240,Common variable immunodeficiency,Orphanet:1572,common variable immunodeficiency,240,MONDO:0015517,EFO:0020035,MONDO:0009413,MONDO:0013284,MONDO:0014260,,False,False,False,0.0,mapped
+241,Adrenogenital disorders,Orphanet:181412,adrenogenital syndrome,241,MONDO:0015898,MONDO:0018479,MONDO:0045023,EFO:0005539,MONDO:0002816,,False,False,False,0.0,mapped
+242,Sickle cell disorders,Orphanet:232,sickle cell anemia,242,EFO:0700066,MONDO:0011382,MONDO:0016668,ORDO:251365,MONDO:0016669,,False,False,False,0.0,mapped
+243,Congenital malformations of great veins,Orphanet:363189,congenital anomaly of the great veins,243,MONDO:0024287,MONDO:0020295,MONDO:0017705,HP:0002624,MONDO:0024239,,False,False,False,0.0,mapped
+244,Huntington s disease,Orphanet:399,Huntington disease,244,MONDO:0007739,MONDO:0000167,MONDO:0016621,MONDO:0015548,,,False,False,False,0.0,mapped
+245,Cystic fibrosis,Orphanet:586,cystic fibrosis,245,MONDO:0009061,EFO:0009797,EFO:0801077,,,,False,False,False,0.0,mapped
+246,Hypertrichosis,Orphanet:79365,Hypertrichosis,246,MONDO:0019280,MONDO:0016381,HP:0001007,MONDO:0007787,MONDO:0010614,,False,False,False,0.0,mapped
+247,Sarcoidosis,Orphanet:797,sarcoidosis,247,MONDO:0019338,DOID:13406,EFO:1000767,EFO:0010723,,,False,False,False,0.0,mapped
+248,Turner s syndrome,Orphanet:881,Turner syndrome,248,MONDO:0019499,MONDO:0020472,MONDO:0020467,,,,False,False,False,0.0,mapped
+249,Congenital malformations of great arteries,Orphanet:98724,congenital anomaly of the great arteries,249,MONDO:0020292,MONDO:0024239,EFO:0005207,EFO:0005269,EFO:0700124,,False,False,False,0.0,mapped
+250,Hereditary factor VIII deficiency,Orphanet:98878,hemophilia A,250,MONDO:0010602,MONDO:0015719,MONDO:0015721,MONDO:0018660,MONDO:0010604,,False,False,False,0.0,mapped
+251,Hereditary factor IX deficiency,Orphanet:98879,hemophilia B,251,MONDO:0010604,MONDO:0015715,MONDO:0015717,EFO:0009154,MONDO:0018660,,False,False,False,0.0,mapped
+252,Keratitis,EFO:0009449,keratitis,252,EFO:0009449,EFO:0009464,EFO:0005752,EFO:0007308,EFO:0007126,1,True,True,True,1.0,mapped
+253,Conjunctivitis,EFO:0009450,conjunctivitis,253,EFO:0009450,EFO:1000203,EFO:1000829,EFO:0007324,EFO:0007141,1,True,True,True,1.0,mapped
+254,Hypoparathyroidism,EFO:0009451,hypoparathyroidism,254,EFO:0009451,ORDO:181402,MONDO:0016165,MONDO:0016390,,1,True,True,True,1.0,mapped
+255,Hyperaldosteronism,EFO:0009452,hyperaldosteonism,255,EFO:0009452,HP:0011736,MONDO:0001422,MONDO:0016525,MONDO:0007080,1,True,True,True,1.0,mapped
+256,Hemiplegia,EFO:0009453,hemiplagia,256,EFO:0009453,HP:0004374,HP:0001269,HP:0011099,,1,True,True,True,1.0,mapped
+257,Gastric ulcer,EFO:0009454,gastric ulcer,257,EFO:0009454,HP:0004398,MONDO:0004247,MONDO:0043839,EFO:0004607,1,True,True,True,1.0,mapped
+258,Disorders of lacrimal system,EFO:0009455,lacrimal apparatus disease,258,EFO:0009455,MONDO:0024625,ORDO:98602,HP:0000632,EFO:0007125,1,True,True,True,1.0,mapped
+259,Exfoliative dermatitis,EFO:0009456,exfoliative dermatitis,259,EFO:0009456,MONDO:0017787,EFO:0007473,MONDO:0010033,MONDO:0019347,1,True,True,True,1.0,mapped
+260,Apocrine sweat disorders,EFO:1002046,apocrine sweat gland disease,260,EFO:1002046,EFO:1000772,EFO:1000703,EFO:1000712,EFO:1000967,1,True,True,True,1.0,mapped
+261,Spotted fever,EFO:1002047,spotted fever,261,EFO:1002047,EFO:1001162,EFO:0007179,EFO:1001128,,1,True,True,True,1.0,mapped
+262,Unspecified nephritic syndrome,EFO:1002050,nephritis,262,EFO:1002050,HP:0000112,EFO:0003086,MONDO:0001343,,1,True,True,True,1.0,mapped
+263,Facial nerve disorders,EFO:1002051,facial nerve disease,263,EFO:1002051,EFO:0007167,EFO:0009380,,,1,True,True,True,1.0,mapped
+264,Essential primary hypertension,EFO:1002032,primary hypertension,264,MONDO:0001134,MONDO:0007781,EFO:0000537,,,,False,False,False,0.0,mapped
+265,Unspecified jaundice,HP:0000952,jaundice,265,HP:0000952,HP:0002904,EFO:1000739,EFO:1001068,,1,True,True,True,1.0,mapped
+266,Iridocyclitis,HP:0001094,iridocyclitis,266,HP:0001094,EFO:1000811,EFO:1000997,EFO:1001231,MONDO:0017634,1,True,True,True,1.0,mapped
+267,Hepatic failure,HP:0001399,hepatic failure,267,MONDO:0100192,HP:0001399,MONDO:0019542,HP:0006554,HP:0001410,2,False,True,True,0.5,mapped
+268,Umbilical hernia,HP:0001537,umbilical hernia,268,HP:0001537,EFO:1001866,HP:0004299,,,1,True,True,True,1.0,mapped
+269,Polyhydramnios,HP:0001561,polyhydramnios,269,HP:0001561,,,,,1,True,True,True,1.0,mapped
+270,cardiac arrest,EFO:0009492,cardiac arrest,270,EFO:0009492,EFO:0004278,MONDO:0015281,EFO:0004269,,1,True,True,True,1.0,mapped
+271,Abnormality of red blood cells,HP:0001877,abnormal erythrocyte morphology,271,HP:0001877,MONDO:0044347,HP:0001871,HP:0011902,EFO:0005047,1,True,True,True,1.0,mapped
+272,Hypothermia,HP:0002045,hypothermia,272,HP:0002045,HP:0004370,EFO:0001702,GO:0009409,,1,True,True,True,1.0,mapped
+273,Lymphadenopathy,HP:0002716,lymphadenopathy,273,HP:0002716,MONDO:0004928,EFO:0007352,HP:0002840,MONDO:0002052,1,True,True,True,1.0,mapped
+274,Abnormal findings in cerebrospinal fluid,HP:0002921,abnormality of the cerebrospinal fluid,274,HP:0002921,EFO:0006794,UBERON:0001359,,,1,True,True,True,1.0,mapped
+275,Glycosuria,HP:0003076,glycosuria,275,HP:0003076,EFO:1001151,EFO:0020075,MONDO:0009297,ORDO:69076,1,True,True,True,1.0,mapped
+276,Abnormality of glycoprotein metabolism,HP:0004367,abnormality of glycoprotein metabolism,276,MONDO:0045010,MONDO:0024322,HP:0012358,MONDO:0017741,HP:0004371,,False,False,False,0.0,mapped
+277,Abnormality of glycosaminoglycan metabolism,HP:0004371,abnormality of glycosaminoglycan metabolism,277,HP:0004371,HP:0001939,EFO:0000589,MONDO:0024322,MONDO:0019214,1,True,True,True,1.0,mapped
+278,Congenital septal defect,HP:0001671,Abnormal cardiac septum morphology,278,MONDO:0002078,HP:0001671,MONDO:0002070,EFO:1000825,HP:0006695,2,False,True,True,0.5,mapped
+279,Paroxysmal tachycardia,EFO:0009493,paroxysmal tachycardia,279,EFO:0009493,HP:0004751,HP:0004763,EFO:0005308,EFO:1001432,1,True,True,True,1.0,mapped
+280,Congenital malformations of anterior segment of eye,HP:0007700,Anterior segment developmental abnormality,280,HP:0004328,HP:0007700,MONDO:0019503,EFO:0700118,ORDO:88632,2,False,True,True,0.5,mapped
+281,Gynecomastia,HP:0010313,breast hypertrophy,281,HP:0000771,EFO:0008492,HP:0010313,HP:0032408,,3,False,True,True,0.3333333333333333,mapped
+282,Polydactyly,Orphanet:2913,polydactyly,282,MONDO:0021003,MONDO:0011348,MONDO:0020927,MONDO:0008266,MONDO:0017456,,False,False,False,0.0,mapped
+283,Mixed and other personality disorders,HP:0012075,Personality disorder,283,MONDO:0002028,HP:0012075,MONDO:0001157,MONDO:0001163,HP:0012076,2,False,True,True,0.5,mapped
+284,Acquired pure red cell aplasia,HP:0012410,Pure red cell aplasia,284,MONDO:0001705,HP:0012410,EFO:0006926,,,2,False,True,True,0.5,mapped
+285,Chorioretinitis,HP:0012424,chorioretinitis,285,MONDO:0004674,HP:0012424,EFO:1001119,MONDO:0001280,MONDO:0004657,2,False,True,True,0.5,mapped
+286,Congenital malformations of larynx,HP:0025423,Abnormal larynx morphology,286,HP:0001600,HP:0025423,EFO:1000227,EFO:0009673,MONDO:0016060,2,False,True,True,0.5,mapped
+287,Portal vein thrombosis,HP:0030242,portal vein thrombosis,287,HP:0030242,EFO:1000966,EFO:0000666,,,1,True,True,True,1.0,mapped
+288,Other congenital malformations of ear,HP:0031703,Abnormal ear morphology,288,MONDO:0007500,HP:0000598,HP:0000356,HP:0008572,HP:0000359,,False,False,False,0.0,mapped
+289,Eclampsia,HP:0100601,eclampsia,289,HP:0100601,EFO:0000668,MONDO:0001641,MONDO:0045048,,1,True,True,True,1.0,mapped
+290,Other mosquito borne viral fevers,EFO:0009575,mosquito-borne hemorragic fever,290,EFO:1001269,MONDO:0100120,EFO:1001326,EFO:0007142,EFO:0007538,,False,False,False,0.0,mapped
+291,Fistulae involving female genital tract,EFO:0009524,female genital tract fistula,291,EFO:0009524,EFO:1001862,HP:0010447,,,1,True,True,True,1.0,mapped
+292,Multiple gestation,EFO:0009576,multiple gestation,292,EFO:0009576,EFO:0002950,EFO:0009439,EFO:0009438,,1,True,True,True,1.0,mapped
+293,Postpartum haemorrhage,EFO:0009579,postpartum hemorrhage,293,EFO:0009579,,,,,1,True,True,True,1.0,mapped
+294,Retained placenta and membranes without haemorrhage,EFO:0009578,placental retention,294,EFO:0009578,EFO:0007440,,,,1,True,True,True,1.0,mapped
+295,Faecal incontinence,EFO:0009523,fecal incontinence,295,EFO:0009523,,,,,1,True,True,True,1.0,mapped
+296,Disturbances of skin sensation,EFO:0009522,disturbance of skin sensation,296,EFO:0009522,HP:0003474,HP:0003401,HP:0007328,HP:0000763,1,True,True,True,1.0,mapped
+297,Injury of heart,EFO:0009506,heart injury,297,EFO:0009506,EFO:1001482,EFO:0000612,EFO:1001375,EFO:0002687,1,True,True,True,1.0,mapped
+298,Fractures involving multiple body regions,EFO:0009513,multiple bone fractures,298,EFO:0009513,EFO:0003931,HP:0002757,HP:0002756,,1,True,True,True,1.0,mapped
+299,Fracture of upper limb level unspecified,EFO:0009514,upper extremity fracture,299,EFO:0009514,EFO:0003931,EFO:0003943,EFO:0009621,EFO:0009515,1,True,True,True,1.0,mapped
+300,Fracture of lower limb level unspecified,EFO:0009512,lower extremity fracture,300,EFO:0009512,EFO:0003944,EFO:0008553,EFO:0009613,EFO:0009618,1,True,True,True,1.0,mapped
+301,Other injuries of lower limb level unspecified,EFO:0009508,leg injury,301,EFO:0009508,EFO:0009509,EFO:0009512,EFO:0009507,,1,True,True,True,1.0,mapped
+302,Foreign body in alimentary tract,EFO:0009526,foreign body in gastrointestinal tract,302,EFO:0009526,EFO:0009525,,,,1,True,True,True,1.0,mapped
+303,Burns classified according to extent of body surface involved,EFO:0009516,burn,303,EFO:0009516,EFO:0020910,EFO:1001788,,,1,True,True,True,1.0,mapped
+304,Routine general health check up of defined subpopulation,EFO:0009517,checkup,304,EFO:0009517,EFO:0010130,EFO:0001430,EFO:0004557,,1,True,True,True,1.0,mapped
+305,Contraceptive management,EFO:0009520,contraception,305,EFO:0009520,,,,,1,True,True,True,1.0,mapped
+306,Prophylactic surgery,EFO:0009580,prophylactic surgery,306,EFO:0009580,,,,,1,True,True,True,1.0,mapped
+307,Care involving use of rehabilitation procedures,EFO:0009581,rehabilitation,307,EFO:0009581,EFO:0010063,EFO:0002571,EFO:0007056,EFO:0000727,1,True,True,True,1.0,mapped
+308,Disorders of mineral metabolism,EFO:0009556,mineral metabolism disease,308,EFO:0009556,MONDO:0024301,MONDO:0017761,EFO:0005769,MONDO:0017322,1,True,True,True,1.0,mapped
+309,Other disorders of cornea,EFO:0009464,corneal disease,309,EFO:0009464,HP:0000481,EFO:0009449,MONDO:0001515,MONDO:0018102,1,True,True,True,1.0,mapped
+310,uremia,EFO:1002048,kidney failure,310,EFO:1001226,EFO:1002048,HP:0000083,HP:0003138,,2,False,True,True,0.5,mapped
+311,Oesophageal varices,EFO:0009545,esophageal varices,311,EFO:0009545,,,,,1,True,True,True,1.0,mapped
+312,Disorders of autonomic nervous system,EFO:0009532,autonomic nervous system disease,312,EFO:0009532,HP:0012332,MONDO:0001300,MONDO:0044993,MONDO:0044995,1,True,True,True,1.0,mapped
+313,marasmus,EFO:0009563,protein energy malnutrition,313,EFO:1001033,,,,,,False,False,False,0.0,mapped
+314,Inflammatory disease of uterus except cervix,EFO:0009572,uterine inflammatory disease,314,EFO:0009572,EFO:1001312,EFO:1001388,MONDO:0000931,,1,True,True,True,1.0,mapped
+315,Disorders of trigeminal nerve,EFO:0009569,trigeminal nerve disease,315,EFO:0009569,EFO:1001219,MONDO:0003569,MONDO:0015530,,1,True,True,True,1.0,mapped
+316,Pulmonary valve disorders,EFO:0009564,pulmonary valve disease,316,EFO:0009564,EFO:0009551,EFO:0009568,EFO:0009557,EFO:0009531,1,True,True,True,1.0,mapped
+317,Other disorders of tympanic membrane,EFO:0009570,tympanic membrane disease,317,EFO:0009570,,,,,1,True,True,True,1.0,mapped
+318,Other diseases of oesophagus,EFO:0009544,esophageal disease,318,EFO:0009544,EFO:0000405,EFO:0700028,MONDO:0044782,MONDO:0001409,1,True,True,True,1.0,mapped
+319,Other inflammation of eyelid,EFO:0009536,blepharitis,319,EFO:0009536,EFO:0009547,EFO:0007315,EFO:0005752,,1,True,True,True,1.0,mapped
+320,Otitis externa,EFO:0009560,otitis externa,320,EFO:0009560,,,,,1,True,True,True,1.0,mapped
+321,Other diseases of biliary tract,EFO:0009534,biliary tract disease,321,EFO:0009534,MONDO:0002887,EFO:0010284,EFO:0003832,,1,True,True,True,1.0,mapped
+322,Haemorrhoids,EFO:0009552,hemorrhoid,322,EFO:0009552,,,,,1,True,True,True,1.0,mapped
+323,HIV disease resulting in malignant neoplasms,EFO:0009553,HIV-associated cancer,323,EFO:0009553,EFO:1001365,EFO:1000491,EFO:1000077,EFO:0009528,1,True,True,True,1.0,mapped
+324,Anaemia due to enzyme disorders,EFO:0009529,anemia due to enzyme disorder,324,EFO:0009529,MONDO:0020585,ORDO:98369,ORDO:98372,,1,True,True,True,1.0,mapped
+325,Other disorders of peritoneum,EFO:0009541,disease of peritoneum,325,EFO:0009541,EFO:0008588,EFO:1001100,EFO:0000405,,1,True,True,True,1.0,mapped
+326,Other headache syndromes,EFO:0009550,headache disorder,326,EFO:0009550,HP:0002315,ORDO:183509,MONDO:0016374,,1,True,True,True,1.0,mapped
+327,Unspecified intestinal parasitism,EFO:0009561,parasitic intestinal disease,327,EFO:0009561,EFO:0001067,MONDO:0024271,EFO:1001342,MONDO:0002428,1,True,True,True,1.0,mapped
+328,Nerve root and plexus disorders,EFO:0009559,nerve plexus disease,328,MONDO:0002959,EFO:0009559,EFO:0009387,MONDO:0021765,MONDO:0001829,2,False,True,True,0.5,mapped
+329,Other diseases of appendix,EFO:0009542,disorder of appendix,329,EFO:0009542,EFO:0007149,EFO:0003880,EFO:0000405,,1,True,True,True,1.0,mapped
+330,Small kidney of unknown cause,EFO:0009471,small kidney,330,EFO:0009471,MONDO:0019637,ORDO:97362,MONDO:0019979,MONDO:0019980,1,True,True,True,1.0,mapped
+331,Perforation of tympanic membrane,EFO:0009472,tympanic membrane perforation,331,EFO:0009472,,,,,1,True,True,True,1.0,mapped
+332,Other spirochaetal infections,EFO:0009567,Spirochaetales Infections,332,EFO:0009567,EFO:1000842,EFO:0007344,EFO:1001217,EFO:0008510,1,True,True,True,1.0,mapped
+333,Disturbances of smell and taste,EFO:0009543,disturbances of sensation of smell and taste,333,EFO:0009543,HP:0004408,HP:0000223,EFO:1001758,,1,True,True,True,1.0,mapped
+334,Other diseases of jaws,EFO:0009468,jaw disease,334,EFO:0009468,MONDO:0023369,EFO:1001047,MONDO:0002635,,1,True,True,True,1.0,mapped
+335,Diseases of Bartholin s gland,EFO:0009469,Bartholin's gland disease,335,EFO:0009469,MONDO:0021114,MONDO:0004593,EFO:1000103,EFO:1002046,1,True,True,True,1.0,mapped
+336,Waist circumference,EFO:0004342,waist circumference,336,EFO:0004342,EFO:0007789,EFO:0005191,EFO:0004343,,1,True,True,True,1.0,mapped
+337,Hip circumference,EFO:0005093,hip circumference,337,EFO:0005093,EFO:0008039,EFO:0007769,EFO:0004342,,1,True,True,True,1.0,mapped
+338,Standing height,EFO:0004339,body height,338,EFO:0004339,EFO:0011011,EFO:0006785,EFO:0005201,,1,True,True,True,1.0,mapped
+339,Sleep duration,EFO:0005271,sleep duration,339,EFO:0005271,EFO:0005274,EFO:0004870,EFO:0000433,,1,True,True,True,1.0,mapped
+340,Morning/evening person (chronotype),EFO:0008328,chronotype measurement,340,EFO:0008328,EFO:0004354,EFO:0006876,MONDO:0015609,,1,True,True,True,1.0,mapped
+341,Sleeplessness / insomnia,EFO:0004698,insomnia,341,EFO:0004698,EFO:0004807,EFO:0008568,EFO:0007876,,1,True,True,True,1.0,mapped
+342,Snoring,EFO:0008341,snoring measurement,342,HP:0025267,EFO:0008341,EFO:0003918,EFO:0003877,,2,False,True,True,0.5,mapped
+343,Alcohol intake frequency.,EFO:0007878,alcohol consumption measurement,343,EFO:0004329,EFO:0007878,EFO:0009113,EFO:0007645,EFO:0004315,2,False,True,True,0.5,mapped
+344,Mood swings,HP:0000720,mood swings,344,HP:0000712,EFO:0008475,EFO:0009593,HP:0100851,EFO:0004247,,False,False,False,0.0,mapped
+345,Irritability,HP:0000737,irritability,345,HP:0000737,EFO:0009594,HP:0000713,HP:0000712,EFO:0008475,1,True,True,True,1.0,mapped
+346,"Loneliness, isolation",EFO:0007865,loneliness measurement,346,EFO:0007865,EFO:0009696,HP:0000735,EFO:0009725,,1,True,True,True,1.0,mapped
+347,Frequency of tiredness / lethargy in last 2 weeks,EFO:0007946,tiredness measurement,347,EFO:0007946,HP:0012378,EFO:0004540,,,1,True,True,True,1.0,mapped
+348,Hearing difficulty/problems with background noise,EFO:0004238,hearing loss,348,EFO:0004238,EFO:1001176,EFO:1001254,EFO:0009076,,1,True,True,True,1.0,mapped
+349,Chest pain or discomfort,HP:0100749,chest pain,349,HP:0100749,EFO:0003913,EFO:0007129,EFO:1001366,,1,True,True,True,1.0,mapped
+350,Relative age voice broke,EFO:0007888,age at voice drop,350,EFO:0007888,EFO:0004847,HP:0003674,,,1,True,True,True,1.0,mapped
+351,Age when periods started (menarche),EFO:0004703,age at menarche,351,EFO:0004703,EFO:0003930,EFO:0005677,EFO:0004847,,1,True,True,True,1.0,mapped
+352,Had menopause,EFO:0003922,menopause,352,EFO:0003922,EFO:0002721,EFO:0009005,EFO:0004704,,1,True,True,True,1.0,mapped
+353,Forced vital capacity (FVC),EFO:0004312,vital capacity,353,EFO:0004312,EFO:0010339,EFO:0600046,EFO:0004314,,1,True,True,True,1.0,mapped
+354,Length of menstrual cycle,EFO:0007786,menstrual cycle measurement,354,EFO:0007786,EFO:0000433,EFO:0010270,,,1,True,True,True,1.0,mapped
+355,Stomach/abdominal pain for 3+ months,EFO:0003766,pain in abdomen,355,HP:0002027,HP:0002574,HP:0012532,EFO:0000337,,,False,False,False,0.0,mapped
+356,Gestational diabetes only,EFO:0004593,gestational diabetes,356,EFO:0004593,HP:0009800,EFO:0000400,EFO:0002183,,1,True,True,True,1.0,mapped
+357,"Diastolic blood pressure, automated reading",EFO:0006336,diastolic blood pressure,357,EFO:0006336,EFO:0006945,HP:0005117,EFO:0005763,,1,True,True,True,1.0,mapped
+358,"Systolic blood pressure, automated reading",EFO:0006335,systolic blood pressure,358,EFO:0006335,EFO:0004325,EFO:0006944,HP:0004421,EFO:0005763,1,True,True,True,1.0,mapped
+359,Pulse rate,EFO:0004326,heart rate,359,EFO:0004326,EFO:0004351,EFO:0007928,EFO:0004831,,1,True,True,True,1.0,mapped
+360,Maximum heart rate during fitness test,EFO:0009184,heart rate response to exercise,360,EFO:0009184,EFO:0004326,EFO:0009823,,,1,True,True,True,1.0,mapped
+361,Fluid intelligence score,EFO:0004337,intelligence,361,EFO:0004337,EFO:0008394,EFO:0004875,,,1,True,True,True,1.0,mapped
+362,Birth weight,EFO:0004344,birth weight,362,EFO:0004344,EFO:0003965,EFO:0011045,EFO:0006921,EFO:0004338,1,True,True,True,1.0,mapped
+363,Bipolar disorder status,EFO:0000289,bipolar disorder,363,MONDO:0004985,EFO:0009964,EFO:0009963,EFO:0009965,EFO:0004247,,False,False,False,0.0,mapped
+364,Neuroticism score,EFO:0007660,neuroticism measurement,364,EFO:0007660,EFO:0007911,EFO:0004365,,,1,True,True,True,1.0,mapped
+365,"Forced vital capacity (FVC), Best measure",EFO:0004312,vital capacity,365,EFO:0004312,EFO:0010339,EFO:0004314,EFO:0600046,,1,True,True,True,1.0,mapped
+366,Body mass index (BMI),EFO:0004340,body mass index,366,EFO:0004340,EFO:0005851,EFO:0005937,EFO:0007041,EFO:0005935,1,True,True,True,1.0,mapped
+367,Weight,EFO:0004338,body weight,367,EFO:0004338,EFO:0004324,EFO:0004566,EFO:0005245,EFO:0004344,1,True,True,True,1.0,mapped
+368,Pulse wave Arterial Stiffness index,EFO:0004517,arterial stiffness measurement,368,EFO:0004517,EFO:0009804,EFO:0007718,EFO:0005763,EFO:0003912,1,True,True,True,1.0,mapped
+369,hayfever or allergic rhinitis,EFO:0003956,seasonal allergic rhinitis,369,EFO:0005854,EFO:1001417,EFO:0003956,EFO:0008521,MONDO:0000771,3,False,True,True,0.3333333333333333,mapped
+370,asthma,EFO:0000270,asthma,370,MONDO:0004979,MONDO:0004784,EFO:0010638,EFO:0008590,EFO:1002011,,False,False,False,0.0,mapped
+371,emphysema,EFO:0000464,emphysema,371,EFO:0000464,MONDO:0000923,MONDO:0000924,MONDO:0007536,MONDO:0017591,1,True,True,True,1.0,mapped
+372,chronic bronchitis,EFO:0006505,chronic bronchitis,372,EFO:0006505,EFO:0009661,EFO:0000341,EFO:0009910,,1,True,True,True,1.0,mapped
+373,COPD (chronic obstructive pulmonary disease),EFO:0000341,chronic obstructive pulmonary disease,373,EFO:0000341,EFO:0009910,MONDO:0100167,HP:0006536,,1,True,True,True,1.0,mapped
+374,sarcoidosis,Orphanet:797,sarcoidosis,374,MONDO:0019338,DOID:13406,EFO:1000767,EFO:0010723,,,False,False,False,0.0,mapped
+375,bronchiectasis,HP:0002110,bronchiectasis,375,MONDO:0004822,HP:0002110,MONDO:0018956,MONDO:0008887,,2,False,True,True,0.5,mapped
+376,idiopathic pulmonary fibrosis,EFO:0000768,idiopathic pulmonary fibrosis,376,EFO:0000768,EFO:0009448,MONDO:0002429,MONDO:0001438,,1,True,True,True,1.0,mapped
+377,tuberculosis,Orphanet:3389,tuberculosis,377,MONDO:0018076,EFO:1000049,EFO:0007368,EFO:1001443,EFO:0007350,,False,False,False,0.0,mapped
+378,Body fat percentage,EFO:0007800,body fat percentage,378,EFO:0007800,EFO:0020098,EFO:0005409,EFO:0004341,,1,True,True,True,1.0,mapped
+379,Whole body fat mass,EFO:0005409,fat body mass,379,EFO:0005409,EFO:0009890,EFO:0007800,EFO:0004341,,1,True,True,True,1.0,mapped
+380,Whole body fat-free mass,EFO:0004995,lean body mass,380,EFO:0004995,EFO:0009890,EFO:0005409,,,1,True,True,True,1.0,mapped
+381,Basal metabolic rate,EFO:0007777,base metabolic rate measurement,381,EFO:0007777,EFO:0008004,EFO:0005115,,,1,True,True,True,1.0,mapped
+382,Potassium in urine,HP:0012598,abnormal urine potassium concentration,382,EFO:0010952,EFO:0009882,HP:0012598,EFO:0009283,,3,False,True,True,0.3333333333333333,mapped
+383,Sodium in urine,HP:0012603,abnormal urine sodium concentration,383,EFO:0021522,EFO:0009883,EFO:0009884,EFO:0009282,HP:0012603,5,False,False,True,0.2,mapped
+384,Age at death,EFO:0005056,age at death,384,EFO:0005056,EFO:0009721,EFO:0000246,EFO:0004918,EFO:0004847,1,True,True,True,1.0,mapped
+385,cancer of lip/mouth/pharynx/oral cavity,EFO:0005570,oral cavity cancer,385,MONDO:0023644,MONDO:0044710,EFO:0005570,EFO:0005577,EFO:1001019,3,False,True,True,0.3333333333333333,mapped
+386,rectal cancer,EFO:1000657,rectal cancer,386,EFO:1000657,MONDO:0044937,EFO:0005631,MONDO:0002165,EFO:1001951,1,True,True,True,1.0,mapped
+387,lymphoma,EFO:0000574,lymphoma,387,EFO:0000574,EFO:0001642,EFO:0005952,EFO:1001938,EFO:0005287,1,True,True,True,1.0,mapped
+388,leukaemia,EFO:0000565,leukemia,388,EFO:0000565,MONDO:0004355,EFO:0004289,MONDO:0004643,EFO:1000068,1,True,True,True,1.0,mapped
+389,multiple myeloma,EFO:0001378,multiple myeloma,389,EFO:0001378,EFO:0000200,EFO:0003073,EFO:0006738,EFO:0006475,1,True,True,True,1.0,mapped
+390,hodgkins lymphoma / hodgkins disease,EFO:0000183,Hodgkins lymphoma,390,EFO:0000183,MONDO:0009348,EFO:0004708,EFO:1000548,EFO:0000574,1,True,True,True,1.0,mapped
+391,non-hodgkins lymphoma,EFO:0005952,non-Hodgkins lymphoma,391,EFO:0005952,EFO:0000574,EFO:1001938,,,1,True,True,True,1.0,mapped
+392,chronic lymphocytic,EFO:0000095,chronic lymphocytic leukemia,392,EFO:0000095,MONDO:0001014,EFO:0004289,,,1,True,True,True,1.0,mapped
+393,chronic myeloid,EFO:0000339,chronic myelogenous leukemia,393,EFO:0000339,MONDO:0004643,MONDO:0001014,EFO:0002428,,1,True,True,True,1.0,mapped
+394,malignant melanoma,EFO:0000756,melanoma,394,EFO:0000756,EFO:0000389,EFO:1000397,EFO:1001937,MONDO:0000544,1,True,True,True,1.0,mapped
+395,basal cell carcinoma,EFO:0004193,basal cell carcinoma,395,EFO:0004193,MONDO:0005341,EFO:1001763,EFO:0010176,,1,True,True,True,1.0,mapped
+396,squamous cell carcinoma,EFO:0000707,squamous cell carcinoma,396,EFO:0000707,MONDO:0002529,EFO:1001927,EFO:0000559,MONDO:0002532,1,True,True,True,1.0,mapped
+397,hypertension,EFO:0000537,hypertension,397,EFO:0000537,MONDO:0005044,MONDO:0001134,HP:0032263,EFO:1002034,1,True,True,True,1.0,mapped
+398,heart/cardiac problem,EFO:0003777,heart disease,398,EFO:0003777,EFO:0000319,HP:0001626,MONDO:0024643,EFO:0000318,1,True,True,True,1.0,mapped
+399,peripheral vascular disease,EFO:0003875,peripheral vascular disease,399,EFO:0003875,EFO:0004265,EFO:0004264,EFO:0000319,,1,True,True,True,1.0,mapped
+400,venous thromboembolic disease,HP:0004936,venous thrombosis,400,EFO:0004286,HP:0004936,HP:0001907,EFO:0003907,EFO:0003827,2,False,True,True,0.5,mapped
+401,essential hypertension,EFO:1002032,primary hypertension,401,MONDO:0001134,EFO:0000537,MONDO:0007781,MONDO:0005044,,,False,False,False,0.0,mapped
+402,gestational hypertension/pre-eclampsia,EFO:0000668,preeclampsia,402,MONDO:0024664,EFO:0000668,MONDO:0001641,MONDO:0045048,,2,False,True,True,0.5,mapped
+403,angina,EFO:0003913,angina pectoris,403,EFO:0003913,EFO:0020925,EFO:1000013,EFO:1000985,EFO:0004225,1,True,True,True,1.0,mapped
+404,heart attack/myocardial infarction,EFO:0000612,myocardial infarction,404,EFO:0000612,EFO:0008583,EFO:1000983,EFO:0009463,EFO:1001375,1,True,True,True,1.0,mapped
+405,heart failure/pulmonary odema,EFO:0003144,heart failure,405,EFO:0003144,EFO:1001134,EFO:0000373,EFO:0003146,,1,True,True,True,1.0,mapped
+406,heart arrhythmia,EFO:0004269,cardiac arrhythmia,406,EFO:0004269,MONDO:0007263,HP:0004308,MONDO:0000992,EFO:0009275,1,True,True,True,1.0,mapped
+407,cardiomyopathy,EFO:0000318,cardiomyopathy,407,EFO:0000318,EFO:0000407,EFO:0009881,EFO:0000538,EFO:0000767,1,True,True,True,1.0,mapped
+408,stroke,EFO:0000712,stroke,408,EFO:0000712,EFO:0003763,MONDO:0005098,HP:0002140,EFO:0006791,1,True,True,True,1.0,mapped
+409,transient ischaemic attack (tia),EFO:0003764,transient ischemic attack,409,EFO:0003764,,,,,1,True,True,True,1.0,mapped
+410,subdural haemorrhage/haematoma,HP:0100309,subdural hemorrhage,410,EFO:1001801,HP:0100309,EFO:1001847,EFO:0000551,,2,False,True,True,0.5,mapped
+411,subarachnoid haemorrhage,EFO:0000713,subarachnoid hemorrhage,411,EFO:0000713,EFO:0020921,EFO:0000551,EFO:0005669,,1,True,True,True,1.0,mapped
+412,leg claudication/ intermittent claudication,EFO:0003876,intermittent vascular claudication,412,EFO:0003876,HP:0012514,,,,1,True,True,True,1.0,mapped
+413,pulmonary embolism +/- dvt,EFO:0003827,pulmonary embolism,413,EFO:0003827,EFO:0004286,EFO:0003907,,,1,True,True,True,1.0,mapped
+414,deep venous thrombosis (dvt),EFO:0003907,deep vein thrombosis,414,EFO:0003907,EFO:0004286,HP:0004936,HP:0004418,,1,True,True,True,1.0,mapped
+415,chronic obstructive airways disease/copd,EFO:0000341,chronic obstructive pulmonary disease,415,EFO:0000341,MONDO:0100167,EFO:0009910,HP:0006536,,1,True,True,True,1.0,mapped
+416,emphysema/chronic bronchitis,EFO:0000464,emphysema,416,,,,,,,False,False,False,0.0,unmapped
+417,interstitial lung disease,EFO:0004244,interstitial lung disease,417,EFO:0004244,MONDO:0017026,MONDO:0017014,MONDO:0017019,ORDO:264992,1,True,True,True,1.0,mapped
+418,asbestosis,EFO:0007153,asbestosis,418,EFO:0007153,MONDO:0015926,EFO:0007485,EFO:0004806,,1,True,True,True,1.0,mapped
+419,pulmonary fibrosis,EFO:0009448,pulmonary fibrosis,419,EFO:0009448,EFO:0000768,MONDO:0001438,EFO:0006890,,1,True,True,True,1.0,mapped
+420,fibrosing alveolitis/unspecified alveolitis,EFO:0009624,pulmonary alveolitis,420,EFO:0009624,MONDO:0002429,EFO:0009448,EFO:1001991,,1,True,True,True,1.0,mapped
+421,sleep apnoea,EFO:0003877,sleep apnea,421,EFO:0003877,EFO:0003918,MONDO:0004731,MONDO:0024358,EFO:0007817,1,True,True,True,1.0,mapped
+422,pleurisy,EFO:1001825,pleurisy,422,EFO:1001825,MONDO:0002037,EFO:0009680,,,1,True,True,True,1.0,mapped
+423,spontaneous pneumothorax/recurrent pneumothorax,HP:0002108,spontaneous pneumothorax,423,HP:0002108,MONDO:0002076,HP:0002107,MONDO:0008259,,1,True,True,True,1.0,mapped
+424,gastro-oesophageal reflux (gord) / gastric reflux,EFO:0003948,gastroesophageal reflux disease,424,EFO:0003948,EFO:1001095,EFO:1001355,EFO:1000909,EFO:0700028,1,True,True,True,1.0,mapped
+425,gastric/stomach ulcers,HP:0004398,peptic ulcer,425,EFO:0009454,HP:0004398,MONDO:0004247,MONDO:0043839,EFO:0004607,2,False,True,True,0.5,mapped
+426,gastritis/gastric erosions,EFO:0000217,gastritis,426,EFO:0000217,EFO:0009454,EFO:0009608,EFO:0000337,,1,True,True,True,1.0,mapped
+427,irritable bowel syndrome,EFO:0000555,irritable bowel syndrome,427,EFO:0000555,EFO:0021536,MONDO:0021189,,,1,True,True,True,1.0,mapped
+428,hepatitis,HP:0012115,hepatitis,428,HP:0012115,EFO:0004196,HP:0200119,EFO:0008496,EFO:0004197,1,True,True,True,1.0,mapped
+429,infective/viral hepatitis,EFO:0004196,viral human hepatitis infection,429,EFO:0004196,HP:0012115,EFO:0007301,EFO:0007305,EFO:0003047,1,True,True,True,1.0,mapped
+430,liver failure/cirrhosis,EFO:0001422,cirrhosis of liver,430,MONDO:0100192,EFO:0001422,HP:0001399,EFO:0001421,,2,False,True,True,0.5,mapped
+431,gall bladder disease,EFO:0003832,gallbladder disease,431,EFO:0003832,EFO:0009534,HP:0005609,HP:0001082,EFO:0004606,1,True,True,True,1.0,mapped
+432,cholecystitis,HP:0001082,cholecystitis,432,HP:0001082,EFO:1001289,EFO:1000790,EFO:0007249,EFO:0003832,1,True,True,True,1.0,mapped
+433,pancreatitis,EFO:0000278,pancreatitis,433,EFO:0000278,EFO:1000652,EFO:0000342,EFO:0021524,MONDO:0015175,1,True,True,True,1.0,mapped
+434,peritonitis,EFO:0008588,peritonitis,434,EFO:0008588,EFO:0002623,MONDO:0043786,EFO:1001394,,1,True,True,True,1.0,mapped
+435,gastrointestinal bleeding,HP:0002239,gastrointestinal hemorrhage,435,HP:0002239,EFO:0009879,HP:0002573,HP:0002248,,1,True,True,True,1.0,mapped
+436,renal/kidney failure,EFO:1002048,kidney failure,436,EFO:1002048,EFO:0020912,MONDO:0001343,HP:0000083,EFO:0003884,1,True,True,True,1.0,mapped
+437,urinary tract infection/kidney infection,EFO:0003103,urinary tract infection,437,EFO:0003103,EFO:1001141,MONDO:0005247,EFO:1000025,EFO:1001140,1,True,True,True,1.0,mapped
+438,ureteric obstruction/hydronephrosis,EFO:0005562,hydronephrosis,438,EFO:0005562,HP:0006000,EFO:0009571,HP:0000072,,1,True,True,True,1.0,mapped
+439,urinary frequency / incontinence,EFO:0006865,urgency urinary incontinence,439,HP:0000020,EFO:0006865,HP:0010992,MONDO:0024290,,2,False,True,True,0.5,mapped
+440,diabetes,EFO:0000400,diabetes,440,EFO:0000400,MONDO:0005148,MONDO:0005147,EFO:1001511,MONDO:0016391,1,True,True,True,1.0,mapped
+441,gestational diabetes,EFO:0004593,gestational diabetes,441,EFO:0004593,HP:0009800,EFO:0000400,,,1,True,True,True,1.0,mapped
+442,type 1 diabetes,EFO:0001359,type i diabetes mellitus,442,MONDO:0005147,EFO:0009756,EFO:0009757,EFO:0000400,,,False,False,False,0.0,mapped
+443,type 2 diabetes,EFO:0001360,type ii diabetes mellitus,443,MONDO:0005148,EFO:0000400,EFO:0010164,EFO:1001511,,,False,False,False,0.0,mapped
+444,parathyroid hyperplasia/adenoma,EFO:1000457,parathyroid hyperplasia,444,EFO:0005754,EFO:1001087,EFO:1000457,MONDO:0021463,,3,False,True,True,0.3333333333333333,mapped
+445,pituitary adenoma/tumour,EFO:1000478,pituitary gland adenoma,445,EFO:1000478,MONDO:0017611,MONDO:0021439,EFO:0008516,MONDO:0003429,1,True,True,True,1.0,mapped
+446,encephalitis,EFO:0001423,encephalomyelitis,446,MONDO:0019956,EFO:0020926,MONDO:0020067,EFO:0007538,EFO:0007364,,False,False,False,0.0,mapped
+447,bell's palsy/facial nerve palsy,EFO:0007167,Bell's palsy,447,EFO:0007167,MONDO:0001835,EFO:0009489,MONDO:0007592,EFO:1002051,1,True,True,True,1.0,mapped
+448,peripheral neuropathy,EFO:0003100,peripheral neuropathy,448,EFO:0003100,EFO:0009387,EFO:0004149,EFO:0009562,EFO:0011058,1,True,True,True,1.0,mapped
+449,acute infective polyneuritis/guillain-barre syndrome,EFO:0007292,Guillain-Barre syndrome,449,EFO:0007292,MONDO:0021718,EFO:0007371,EFO:0009538,,1,True,True,True,1.0,mapped
+450,multiple sclerosis,EFO:0003885,multiple sclerosis,450,MONDO:0005301,EFO:0003840,EFO:0008520,EFO:0008522,EFO:0003929,,False,False,False,0.0,mapped
+451,parkinsons disease,EFO:0002508,Parkinson's disease,451,MONDO:0005180,HP:0001300,MONDO:0021095,EFO:1001175,MONDO:0017279,,False,False,False,0.0,mapped
+452,epilepsy,EFO:0000474,epilepsy,452,EFO:0000474,MONDO:0015650,HP:0001250,EFO:0004263,EFO:0005917,1,True,True,True,1.0,mapped
+453,migraine,EFO:0003821,migraine disorder,453,MONDO:0005277,MONDO:0100431,MONDO:0005475,EFO:0009550,,,False,False,False,0.0,mapped
+454,spinal injury,EFO:1001919,spinal cord injury,454,MONDO:0037747,EFO:1001919,EFO:0003902,EFO:0009490,EFO:0000546,2,False,True,True,0.5,mapped
+455,eye infection,EFO:1001888,eye infection,455,EFO:1001888,MONDO:0043885,MONDO:0020950,MONDO:0023865,MONDO:0020947,1,True,True,True,1.0,mapped
+456,retinal problem,EFO:0003839,retinopathy,456,EFO:0003839,HP:0000479,MONDO:0004580,MONDO:0002311,EFO:0003770,1,True,True,True,1.0,mapped
+457,glaucoma,EFO:0000516,glaucoma,457,MONDO:0005041,EFO:0004190,ORDO:156005,MONDO:0001744,EFO:1001022,,False,False,False,0.0,mapped
+458,cataract,EFO:0001059,cataract,458,MONDO:0005129,MONDO:0045051,HP:0000519,HP:0011141,MONDO:0045050,,False,False,False,0.0,mapped
+459,retinal detachment,EFO:0005773,retinal detachment,459,EFO:0005773,EFO:0005240,EFO:0010698,EFO:1001238,,1,True,True,True,1.0,mapped
+460,schizophrenia,EFO:0000692,schizophrenia,460,MONDO:0005090,MONDO:0100182,EFO:0005407,EFO:0005411,EFO:0000677,,False,False,False,0.0,mapped
+461,deliberate self-harm/suicide attempt,EFO:0004321,attempted suicide,461,EFO:0004321,HP:0100716,EFO:0007623,EFO:0007624,EFO:0020924,1,True,True,True,1.0,mapped
+462,mania/bipolar disorder/manic depression,EFO:0000289,bipolar disorder,462,MONDO:0004985,EFO:0009964,EFO:0009963,EFO:0007706,EFO:0009965,,False,False,False,0.0,mapped
+463,bone disorder,EFO:0004260,bone disease,463,EFO:0004260,MONDO:0000836,EFO:0002461,HP:0003330,EFO:0005541,1,True,True,True,1.0,mapped
+464,joint disorder,EFO:1000999,joint disease,464,EFO:1000999,HP:0003040,EFO:0005856,EFO:0002461,EFO:0005755,1,True,True,True,1.0,mapped
+465,osteomyelitis,EFO:0003102,osteomyelitis,465,EFO:0003102,,,,,1,True,True,True,1.0,mapped
+466,osteoporosis,EFO:0003882,osteoporosis,466,EFO:0003882,MONDO:0019409,EFO:0003854,EFO:0009877,HP:0004349,1,True,True,True,1.0,mapped
+467,ankylosing spondylitis,EFO:0003898,ankylosing spondylitis,467,EFO:0003898,EFO:0000706,MONDO:0001434,MONDO:0003937,EFO:0009477,1,True,True,True,1.0,mapped
+468,low platelets/platelet disorder,HP:0001873,thrombocytopenia,468,HP:0001873,MONDO:0002245,MONDO:0001198,MONDO:0004680,MONDO:0100241,1,True,True,True,1.0,mapped
+469,iron deficiency anaemia,HP:0001891,iron deficiency anemia,469,HP:0001891,MONDO:0001639,MONDO:0016625,MONDO:0001245,,1,True,True,True,1.0,mapped
+470,pernicious anaemia,EFO:0005576,pernicious anemia,470,EFO:0005576,ORDO:332,MONDO:0009852,MONDO:0002280,,1,True,True,True,1.0,mapped
+471,thalassaemia,EFO:1001996,thalassemia,471,EFO:1001996,ORDO:846,ORDO:848,MONDO:0011399,MONDO:0019402,1,True,True,True,1.0,mapped
+472,ovarian cyst or cysts,HP:0000138,ovarian cyst,472,HP:0000138,EFO:1001329,EFO:1000232,EFO:0002511,,1,True,True,True,1.0,mapped
+473,polycystic ovaries/polycystic ovarian syndrome,EFO:0000660,polycystic ovary syndrome,473,EFO:0000660,,,,,1,True,True,True,1.0,mapped
+474,uterine fibroids,EFO:0000731,uterine fibroid,474,EFO:0000731,HP:0000131,MONDO:0001572,EFO:0009410,,1,True,True,True,1.0,mapped
+475,vaginal prolapse/uterine prolapse,EFO:1001864,uterine prolapse,475,EFO:0004710,EFO:1001864,MONDO:0001592,EFO:1001837,EFO:1001446,2,False,True,True,0.5,mapped
+476,fibrocystic disease,EFO:0003014,breast fibrocystic disease,476,EFO:0003014,MONDO:0003724,EFO:1000145,,,1,True,True,True,1.0,mapped
+477,breast cysts,EFO:1000848,breast cyst,477,EFO:1000848,EFO:0003014,HP:0032408,,,1,True,True,True,1.0,mapped
+478,vasculitis,EFO:0006803,vasculitis,478,EFO:0006803,MONDO:0800113,EFO:1000974,HP:0005310,MONDO:0018640,1,True,True,True,1.0,mapped
+479,connective tissue disorder,EFO:1001986,connective tissue disease,479,EFO:1001986,MONDO:0023603,HP:0003549,MONDO:0004603,EFO:0005755,1,True,True,True,1.0,mapped
+480,giant cell/temporal arteritis,EFO:1001209,temporal arteritis,480,EFO:1001209,EFO:0009011,MONDO:0002341,EFO:1001857,,1,True,True,True,1.0,mapped
+481,polymyalgia rheumatica,EFO:0008518,polymyalgia rheumatica,481,EFO:0008518,EFO:1001209,EFO:0005755,EFO:0000685,,1,True,True,True,1.0,mapped
+482,wegners granulmatosis,EFO:0005297,granulomatosis with polyangiitis,482,EFO:0005297,MONDO:0002341,EFO:1000784,EFO:0007208,,1,True,True,True,1.0,mapped
+483,systemic lupus erythematosis/sle,EFO:0002690,systemic lupus erythematosus,483,MONDO:0007915,MONDO:0004670,EFO:0003834,MONDO:0015574,MONDO:0019558,,False,False,False,0.0,mapped
+484,sjogren's syndrome/sicca syndrome,EFO:0000699,Sjogren syndrome,484,EFO:0000699,,,,,1,True,True,True,1.0,mapped
+485,allergy or anaphylactic reaction to food,EFO:1001890,food allergy,485,EFO:1001890,EFO:0020918,MONDO:0100053,EFO:0007425,MONDO:0005271,1,True,True,True,1.0,mapped
+486,pneumonia,EFO:0003106,pneumonia,486,EFO:0003106,EFO:0007184,EFO:1001272,EFO:0007541,EFO:1001399,1,True,True,True,1.0,mapped
+487,peptic ulcer,HP:0004398,peptic ulcer,487,MONDO:0004247,HP:0004398,EFO:0009454,EFO:0004607,EFO:1001389,2,False,True,True,0.5,mapped
+488,endometriosis,EFO:0001065,endometriosis,488,EFO:0001065,EFO:1000418,MONDO:0001285,MONDO:0001282,MONDO:0001288,1,True,True,True,1.0,mapped
+489,female infertility,EFO:0008560,female infertility,489,EFO:0008560,EFO:0000545,ORDO:404469,ORDO:400008,EFO:0021795,1,True,True,True,1.0,mapped
+490,alcohol dependency,EFO:0003829,alcohol dependence,490,MONDO:0007079,MONDO:0002046,MONDO:0004938,EFO:0007835,EFO:0004777,,False,False,False,0.0,mapped
+491,nasal polyps,EFO:1000391,nasal cavity polyp,491,HP:0100582,EFO:1000391,EFO:0000662,EFO:1002029,MONDO:0008834,2,False,True,True,0.5,mapped
+492,otosclerosis,EFO:0004213,otosclerosis,492,EFO:0004213,EFO:1001812,MONDO:0002933,,,1,True,True,True,1.0,mapped
+493,meniere's disease,EFO:0006862,Meniere disease,493,EFO:0006862,,,,,1,True,True,True,1.0,mapped
+494,cerebral aneurysm,EFO:0003870,brain aneurysm,494,EFO:0003870,MONDO:0016483,EFO:0009659,HP:0002617,,1,True,True,True,1.0,mapped
+495,myocarditis,EFO:0009609,myocarditis,495,EFO:0009609,MONDO:0024636,MONDO:0004582,MONDO:0024643,,1,True,True,True,1.0,mapped
+496,polycystic kidney,EFO:0008620,polycystic kidney disease,496,EFO:0008620,EFO:1001496,MONDO:0009889,MONDO:0013131,MONDO:0010916,1,True,True,True,1.0,mapped
+497,thyroiditis,EFO:1000627,thyroid disease,497,MONDO:0004126,EFO:1000627,EFO:1001431,EFO:1001194,EFO:0003779,2,False,True,True,0.5,mapped
+498,hypopituitarism,EFO:0001380,hypopituitarism,498,EFO:0001380,MONDO:0015127,MONDO:0019591,MONDO:0019832,MONDO:0018762,1,True,True,True,1.0,mapped
+499,cerebral palsy,EFO:1000632,cerebral palsy,499,EFO:1000632,MONDO:0000396,MONDO:0016215,EFO:1000631,,1,True,True,True,1.0,mapped
+500,optic neuritis,EFO:0007405,optic neuritis,500,EFO:0007405,EFO:1001074,MONDO:0044685,MONDO:0002135,,1,True,True,True,1.0,mapped
+501,headaches (not migraine),HP:0002315,headache,501,HP:0002315,EFO:0009550,HP:0012228,HP:0012199,,1,True,True,True,1.0,mapped
+502,myasthenia gravis,EFO:0004991,myasthenia gravis,502,EFO:0004991,EFO:1001490,EFO:1001059,MONDO:0018940,,1,True,True,True,1.0,mapped
+503,polycythaemia vera,EFO:0002429,polycythemia vera,503,EFO:0002429,EFO:0005804,MONDO:0001115,MONDO:0002438,,1,True,True,True,1.0,mapped
+504,tuberculosis (tb),Orphanet:3389,tuberculosis,504,MONDO:0018076,EFO:1000049,EFO:0007368,EFO:1001443,EFO:0007350,,False,False,False,0.0,mapped
+505,malaria,EFO:0001068,malaria,505,EFO:0001068,EFO:0007444,EFO:0006857,EFO:0007445,EFO:0001067,1,True,True,True,1.0,mapped
+506,helicobacter pylori,NCBITaxon:210,Helicobacter pylori,506,EFO:1000961,EFO:0009341,EFO:0000217,EFO:0009454,,,False,False,False,0.0,mapped
+507,anaemia,EFO:0004272,anemia,507,MONDO:0002280,EFO:0004272,MONDO:0001639,EFO:0005576,MONDO:0012197,2,False,True,True,0.5,mapped
+508,eczema/dermatitis,HP:0000964,eczema,508,EFO:0000274,HP:0000964,MONDO:0002406,EFO:0005319,EFO:0000701,2,False,True,True,0.5,mapped
+509,psoriasis,EFO:0000676,psoriasis,509,EFO:0000676,EFO:1001494,MONDO:0023297,MONDO:0013626,EFO:0003778,1,True,True,True,1.0,mapped
+510,chronic skin ulcers,EFO:0007066,chronic ulcer of skin,510,EFO:0007066,HP:0200042,EFO:0007067,EFO:1001923,MONDO:0000327,1,True,True,True,1.0,mapped
+511,malabsorption/coeliac disease,EFO:0001060,celiac disease,511,EFO:0001060,EFO:0009554,HP:0002024,EFO:0009266,,1,True,True,True,1.0,mapped
+512,duodenal ulcer,EFO:0004607,duodenal ulcer,512,EFO:0004607,,,,,1,True,True,True,1.0,mapped
+513,diverticular disease/diverticulitis,EFO:1001460,diverticulitis,513,EFO:0009959,EFO:1001460,MONDO:0001674,EFO:1001296,EFO:1000930,2,False,True,True,0.5,mapped
+514,colitis/not crohns or ulcerative colitis,EFO:0003872,colitis,514,EFO:0003872,EFO:1000034,EFO:1001295,EFO:1000035,EFO:0005626,1,True,True,True,1.0,mapped
+515,rectal or colon adenoma/polyps,EFO:1000633,adenomatous colon polyp,515,EFO:0005406,MONDO:0000527,MONDO:0000530,MONDO:0021400,EFO:1000633,5,False,False,True,0.2,mapped
+516,inflammatory bowel disease,EFO:0003767,inflammatory bowel disease,516,EFO:0003767,EFO:0000384,EFO:0003872,EFO:0005622,HP:0002037,1,True,True,True,1.0,mapped
+517,crohns disease,EFO:0000384,Crohn's disease,517,EFO:0000384,EFO:0005622,MONDO:0000709,EFO:0003767,EFO:0005629,1,True,True,True,1.0,mapped
+518,ulcerative colitis,EFO:0000729,ulcerative colitis,518,EFO:0000729,EFO:0005626,EFO:1001223,EFO:0003872,EFO:1000034,1,True,True,True,1.0,mapped
+519,rheumatoid arthritis,EFO:0000685,rheumatoid arthritis,519,EFO:0000685,EFO:0009459,EFO:0002609,EFO:0009731,EFO:0007460,1,True,True,True,1.0,mapped
+520,osteoarthritis,EFO:0002506,osteoarthritis,520,MONDO:0005178,EFO:0005856,EFO:1000999,EFO:1000787,EFO:0004616,,False,False,False,0.0,mapped
+521,gout,EFO:0004274,gout,521,EFO:0004274,EFO:0021525,MONDO:0007319,,,1,True,True,True,1.0,mapped
+522,post-traumatic stress disorder,EFO:0001358,post-traumatic stress disorder,522,EFO:0001358,EFO:0010098,EFO:0005223,EFO:0008483,EFO:0008535,1,True,True,True,1.0,mapped
+523,atrial fibrillation,EFO:0000275,atrial fibrillation,523,EFO:0000275,EFO:0009952,MONDO:0018054,EFO:0003911,EFO:0004287,1,True,True,True,1.0,mapped
+524,high cholesterol,HP:0003124,hypercholesterolemia,524,HP:0003124,MONDO:0021187,HP:0003119,EFO:0004911,,1,True,True,True,1.0,mapped
+525,hiatus hernia,HP:0002036,hiatus hernia,525,HP:0002036,EFO:0008561,EFO:0007216,HP:0100790,,1,True,True,True,1.0,mapped
+526,sciatica,HP:0011868,sciatica,526,HP:0011868,EFO:1001166,MONDO:0001543,,,1,True,True,True,1.0,mapped
+527,psoriatic arthropathy,EFO:0003778,psoriatic arthritis,527,EFO:0003778,EFO:0009733,EFO:0000706,,,1,True,True,True,1.0,mapped
+528,rheumatic fever,EFO:1001160,rheumatic fever,528,EFO:1001160,EFO:1001161,EFO:0005755,,,1,True,True,True,1.0,mapped
+529,chronic fatigue syndrome,EFO:0004540,chronic fatigue syndrome,529,EFO:0004540,,,,,1,True,True,True,1.0,mapped
+530,irregular heart beat,EFO:0004269,cardiac arrhythmia,530,EFO:0004269,MONDO:0007263,HP:0031860,HP:0001962,,1,True,True,True,1.0,mapped
+531,brain haemorrhage,EFO:0000551,intracranial hemorrhage,531,EFO:0000551,EFO:0005669,EFO:0020921,EFO:0000713,EFO:0010178,1,True,True,True,1.0,mapped
+532,varicose veins,HP:0002619,varicose veins,532,HP:0002619,MONDO:0008638,MONDO:0004869,EFO:1001923,EFO:0009545,1,True,True,True,1.0,mapped
+533,lymphoedema,Orphanet:79383,lymphedema,533,MONDO:0019297,MONDO:0019175,EFO:0700107,ORDO:33001,MONDO:0007922,,False,False,False,0.0,mapped
+534,pneumothorax,HP:0002107,pneumothorax,534,MONDO:0002076,HP:0002107,HP:0002108,EFO:1000963,,2,False,True,True,0.5,mapped
+535,labyrinthitis,EFO:0009604,labyrinthitis,535,EFO:0009604,MONDO:0002812,EFO:0009672,EFO:0009691,EFO:0007537,1,True,True,True,1.0,mapped
+536,vertigo,HP:0002321,vertigo,536,HP:0002321,MONDO:0004900,MONDO:0002317,EFO:0009691,EFO:0009847,1,True,True,True,1.0,mapped
+537,pyloric stenosis,EFO:0009626,pyloric stenosis,537,EFO:0009626,EFO:0004707,MONDO:0001878,MONDO:0100239,EFO:1000947,1,True,True,True,1.0,mapped
+538,appendicitis,EFO:0007149,appendicitis,538,EFO:0007149,EFO:0009542,UBERON:0001154,,,1,True,True,True,1.0,mapped
+539,anal fissure,HP:0012390,anal fissure,539,HP:0012390,EFO:0009660,HP:0010447,EFO:0005628,,1,True,True,True,1.0,mapped
+540,haemorrhoids / piles,EFO:0009552,hemorrhoid,540,EFO:0009552,,,,,1,True,True,True,1.0,mapped
+541,jaundice (unknown cause),HP:0000952,jaundice,541,HP:0000952,EFO:1000739,EFO:1001068,HP:0002904,,1,True,True,True,1.0,mapped
+542,dyspepsia / indigestion,EFO:0008533,dyspepsia,542,EFO:0008533,HP:0002027,EFO:0000217,MONDO:0001318,,1,True,True,True,1.0,mapped
+543,abdominal hernia,HP:0004299,hernia of the abdominal wall,543,HP:0004299,EFO:1001866,HP:0100790,HP:0004872,HP:0001537,1,True,True,True,1.0,mapped
+544,umbilical hernia,HP:0001537,umbilical hernia,544,HP:0001537,EFO:1001866,HP:0004299,,,1,True,True,True,1.0,mapped
+545,inguinal hernia,HP:0000023,inguinal hernia,545,HP:0000023,HP:0100790,HP:0004299,EFO:1001791,EFO:1001866,1,True,True,True,1.0,mapped
+546,cystitis,EFO:1000025,cystitis,546,EFO:1000025,EFO:1000869,EFO:0008507,EFO:1000023,EFO:1001835,1,True,True,True,1.0,mapped
+547,bph / benign prostatic hypertrophy,EFO:0000284,benign prostatis hypertrophy,547,EFO:0000284,MONDO:0002450,MONDO:0021510,,,1,True,True,True,1.0,mapped
+548,prostatitis,EFO:0003830,prostatitis,548,EFO:0003830,EFO:0009602,UBERON:0002367,,,1,True,True,True,1.0,mapped
+549,erectile dysfunction / impotence,EFO:0004234,erectile dysfunction,549,EFO:0004234,HP:0000802,EFO:1001234,EFO:0004714,MONDO:0002134,1,True,True,True,1.0,mapped
+550,grave's disease,EFO:0004237,Graves disease,550,EFO:0004237,EFO:1001466,EFO:0009190,EFO:0009189,,1,True,True,True,1.0,mapped
+551,trigemminal neuralgia,EFO:1001219,trigeminal neuralgia,551,EFO:1001219,EFO:0009569,EFO:0009380,MONDO:0016374,EFO:0009430,1,True,True,True,1.0,mapped
+552,benign / essential tremor,EFO:0003108,essential tremor,552,EFO:0003108,MONDO:0030027,HP:0001337,HP:0002378,,1,True,True,True,1.0,mapped
+553,polio / poliomyelitis,EFO:0007450,poliomyelitis,553,EFO:0007450,MONDO:0024618,MONDO:0000341,EFO:0007186,EFO:0007454,1,True,True,True,1.0,mapped
+554,dry eyes,EFO:1000906,dry eye syndrome,554,EFO:1000906,,,,,1,True,True,True,1.0,mapped
+555,iritis,EFO:1000997,iritis,555,EFO:1000997,EFO:1000811,HP:0001094,EFO:1001231,MONDO:0017634,1,True,True,True,1.0,mapped
+556,post-natal depression,EFO:0007453,postpartum depression,556,EFO:0007453,EFO:0009683,EFO:0008562,,,1,True,True,True,1.0,mapped
+557,disc degeneration,EFO:0004994,lumbar disc degeneration,557,HP:0008419,EFO:0004994,EFO:0009537,EFO:0009477,EFO:1001800,2,False,True,True,0.5,mapped
+558,back pain,HP:0003418,back pain,558,HP:0003418,HP:0003419,,,,1,True,True,True,1.0,mapped
+559,scoliosis,EFO:0004273,scoliosis,559,EFO:0004273,HP:0002943,MONDO:0000726,HP:0002944,EFO:0005423,1,True,True,True,1.0,mapped
+560,spinal stenosis,EFO:0007490,spinal stenosis,560,EFO:0007490,EFO:1001845,EFO:0006818,,,1,True,True,True,1.0,mapped
+561,joint pain,HP:0002829,arthralgia,561,HP:0002829,EFO:0003843,EFO:0005856,HP:0003040,EFO:1000999,1,True,True,True,1.0,mapped
+562,arthritis (nos),EFO:0005856,arthritis,562,EFO:0005856,EFO:1000999,HP:0003040,EFO:0005755,,1,True,True,True,1.0,mapped
+563,plantar fascitis,EFO:1001909,plantar fasciitis,563,EFO:1001909,,,,,1,True,True,True,1.0,mapped
+564,carpal tunnel syndrome,EFO:0004143,carpal tunnel syndrome,564,EFO:0004143,EFO:0009487,EFO:1001301,EFO:1001208,,1,True,True,True,1.0,mapped
+565,fibromyalgia,EFO:0005687,fibromyalgia,565,EFO:0005687,EFO:0010099,EFO:1001054,,,1,True,True,True,1.0,mapped
+566,dupuytren's contracture,EFO:0004229,Dupuytren contracture,566,EFO:0004229,EFO:1000438,MONDO:0007476,,,1,True,True,True,1.0,mapped
+567,acne/acne vulgaris,EFO:0003894,acne,567,EFO:0003894,EFO:1000662,EFO:1000702,,,1,True,True,True,1.0,mapped
+568,lichen planus,EFO:1000726,lichen planus,568,EFO:1000726,EFO:0008517,MONDO:0007902,EFO:0009856,EFO:1000724,1,True,True,True,1.0,mapped
+569,cervical intra-epithelial neoplasia (cin) / precancerous cells cervix,EFO:1000910,dysplasia of cervix,569,MONDO:0022394,EFO:1000910,EFO:1000165,EFO:1000166,,2,False,True,True,0.5,mapped
+570,menorrhagia (unknown cause),HP:0000132,menorrhagia,570,HP:0000132,HP:0100608,HP:0400007,,,1,True,True,True,1.0,mapped
+571,ectopic pregnancy,HP:0031456,ectopic pregnancy,571,HP:0031456,,,,,1,True,True,True,1.0,mapped
+572,breast fibroadenoma,EFO:1000254,Fibroadenoma,572,EFO:1000254,MONDO:0014249,MONDO:0021046,MONDO:0002058,EFO:1000070,1,True,True,True,1.0,mapped
+573,raynaud's phenomenon/disease,EFO:1001145,Raynaud disease,573,EFO:1001145,,,,,1,True,True,True,1.0,mapped
+574,food intolerance,EFO:1001890,food allergy,574,,,,,,,False,False,False,0.0,unmapped
+575,urticaria,EFO:0005531,urticaria,575,EFO:0005531,EFO:1000754,EFO:1000669,EFO:1001881,,1,True,True,True,1.0,mapped
+576,measles / morbillivirus,EFO:1002025,measles,576,EFO:1002025,EFO:0007377,EFO:0009342,,,1,True,True,True,1.0,mapped
+577,mumps / epidemic parotitis,EFO:0007383,mumps infectious disease,577,EFO:0007383,EFO:0007423,EFO:0009343,,,1,True,True,True,1.0,mapped
+578,rubella / german measles,EFO:1002026,rubella,578,EFO:1002026,EFO:0007218,MONDO:0020648,EFO:0009344,,1,True,True,True,1.0,mapped
+579,chickenpox,EFO:0007204,chickenpox,579,EFO:0007204,EFO:0006509,EFO:0006510,EFO:1001310,,1,True,True,True,1.0,mapped
+580,whooping cough / pertussis,EFO:0000650,whooping cough,580,EFO:0000650,EFO:1001275,MONDO:0037872,,,1,True,True,True,1.0,mapped
+581,shingles,EFO:0006510,Herpes Zoster,581,EFO:0006510,EFO:0006509,EFO:0007403,EFO:0007281,EFO:1001453,1,True,True,True,1.0,mapped
+582,herpes simplex,EFO:1002022,herpes simplex infection,582,EFO:1002022,EFO:0007309,EFO:0007282,EFO:0007307,EFO:0007308,1,True,True,True,1.0,mapped
+583,hepatitis a,EFO:0007305,hepatitis a,583,EFO:0007305,EFO:0004196,HP:0012115,HP:0200119,,1,True,True,True,1.0,mapped
+584,hepatitis b,EFO:0004197,hepatitis b infection,584,EFO:0004197,EFO:0004239,EFO:0004196,,,1,True,True,True,1.0,mapped
+585,hepatitis c,EFO:0003047,hepatitis c infection,585,EFO:0003047,EFO:0004220,HP:0012115,EFO:0008496,,1,True,True,True,1.0,mapped
+586,aortic regurgitation / incompetence,EFO:0007148,aortic valve insufficiency,586,EFO:0007148,,,,,1,True,True,True,1.0,mapped
+587,hypertrophic cardiomyopathy (hcm / hocm),EFO:0000538,hypertrophic cardiomyopathy,587,EFO:0000538,MONDO:0024573,MONDO:0016330,MONDO:0007266,ORDO:99739,1,True,True,True,1.0,mapped
+588,pericarditis,EFO:0007427,pericarditis,588,EFO:0007427,EFO:1000878,MONDO:0024636,MONDO:0000474,,1,True,True,True,1.0,mapped
+589,tinnitus / tiniitis,HP:0000360,tinnitus,589,HP:0000360,,,,,1,True,True,True,1.0,mapped
+590,tonsiltis,HP:0011110,tonsillitis,590,MONDO:0001039,HP:0011110,UBERON:0002373,UBERON:0002372,HP:0031458,2,False,True,True,0.5,mapped
+591,constipation,HP:0002019,constipation,591,HP:0002019,HP:0012450,MONDO:0002203,MONDO:0004880,,1,True,True,True,1.0,mapped
+592,rectal prolapse,HP:0002035,rectal prolapse,592,HP:0002035,EFO:0004710,EFO:1001837,,,1,True,True,True,1.0,mapped
+593,femoral hernia,EFO:1001791,femoral hernia,593,EFO:1001791,,,,,1,True,True,True,1.0,mapped
+594,incisional hernia,HP:0004872,incisional hernia,594,HP:0004872,EFO:1001866,HP:0004299,HP:0100790,HP:0000023,1,True,True,True,1.0,mapped
+595,nephritis,EFO:1002050,nephritis,595,EFO:1002050,MONDO:0001085,MONDO:0002462,EFO:0003086,HP:0000112,1,True,True,True,1.0,mapped
+596,thyroid goitre,EFO:0004283,goiter,596,EFO:0004283,EFO:1001062,MONDO:0001658,EFO:1000916,EFO:1001198,1,True,True,True,1.0,mapped
+597,blepharitis / eyelid infection,EFO:0009536,blepharitis,597,EFO:0009536,EFO:0009547,EFO:0007315,,,1,True,True,True,1.0,mapped
+598,obsessive compulsive disorder (ocd),EFO:0004242,obsessive-compulsive disorder,598,EFO:0004242,HP:0008770,EFO:0007802,,,1,True,True,True,1.0,mapped
+599,insomnia,EFO:0004698,insomnia,599,EFO:0004698,EFO:0008568,EFO:0007876,MONDO:0003406,,1,True,True,True,1.0,mapped
+600,osteopenia,HP:0000938,osteopenia,600,HP:0000938,HP:0004349,EFO:0009877,EFO:0003882,,1,True,True,True,1.0,mapped
+601,bursitis,EFO:1000941,frozen shoulder,601,MONDO:0002471,MONDO:0056802,MONDO:0001747,MONDO:0001557,,,False,False,False,0.0,mapped
+602,tennis elbow / lateral epicondylitis,EFO:1001896,lateral epicondylitis,602,EFO:1001896,EFO:1001887,,,,1,True,True,True,1.0,mapped
+603,cellulitis,EFO:0003035,cellulitis,603,EFO:0003035,MONDO:0024414,EFO:0010692,EFO:0009903,,1,True,True,True,1.0,mapped
+604,fracture skull / head,EFO:1001425,skull fractures,604,EFO:1001425,EFO:0003931,,,,1,True,True,True,1.0,mapped
+605,fracture radius,EFO:0003957,radius fracture,605,EFO:0003957,EFO:0009515,EFO:0009514,EFO:0003931,,1,True,True,True,1.0,mapped
+606,fracture ulna,EFO:0003950,ulna fracture,606,EFO:0003950,EFO:1001811,EFO:0009514,,,1,True,True,True,1.0,mapped
+607,fracture tibia,EFO:0003944,tibia fracture,607,EFO:0003944,EFO:0009617,EFO:0009613,EFO:0009512,,1,True,True,True,1.0,mapped
+608,septicaemia / sepsis,HP:0100806,sepsis,608,HP:0100806,EFO:0006834,EFO:1001478,EFO:0003033,EFO:0005741,1,True,True,True,1.0,mapped
+609,meningioma / benign meningeal tumour,Orphanet:2495,meningioma,609,MONDO:0016642,EFO:0003851,EFO:1000107,EFO:1000372,,,False,False,False,0.0,mapped
+610,rosacea,EFO:1000760,rosacea,610,EFO:1000760,EFO:0009180,EFO:1000662,EFO:0003894,,1,True,True,True,1.0,mapped
+611,vitiligo,EFO:0004208,vitiligo,611,EFO:0004208,,,,,1,True,True,True,1.0,mapped
+612,cervical erosion,EFO:1000862,cervix erosion,612,HP:0030158,EFO:1000862,,,,2,False,True,True,0.5,mapped
+613,dysmenorrhoea / dysmenorrhea,HP:0100607,dysmenorrhea,613,HP:0100607,EFO:0007889,EFO:0010270,,,1,True,True,True,1.0,mapped
+614,menopausal symptoms / menopause,EFO:0003922,menopause,614,EFO:0003922,EFO:0010685,EFO:0009005,EFO:0002721,EFO:0004704,1,True,True,True,1.0,mapped
+615,alopecia / hair loss,Orphanet:79364,alopecia,615,MONDO:0004907,MONDO:0000005,HP:0002293,EFO:0004192,EFO:0004191,,False,False,False,0.0,mapped
+616,scarlet fever / scarlatina,EFO:0007477,scarlet fever,616,EFO:0007477,,,,,1,True,True,True,1.0,mapped
+617,undescended testicle,EFO:0004562,cryptorchidism,617,EFO:0004562,HP:0012646,HP:0000046,,,1,True,True,True,1.0,mapped
+618,Hearing difficulty/problems: Yes,EFO:0004238,hearing loss,618,EFO:0004238,MONDO:0021945,HP:0000364,EFO:1001176,EFO:0005782,1,True,True,True,1.0,mapped
+619,Overall health rating,EFO:0004778,self rated health,619,EFO:0004778,EFO:0009724,EFO:0011014,EFO:0007869,,1,True,True,True,1.0,mapped
+620,General pain for 3+ months,HP:0012532,Chronic pain,620,HP:0012532,MONDO:0024317,EFO:0022195,EFO:0010099,EFO:0010100,1,True,True,True,1.0,mapped
+621,Number of spontaneous miscarriages,EFO:1001255,spontaneous abortion,621,EFO:1001255,HP:0005268,EFO:1000954,EFO:0009438,,1,True,True,True,1.0,mapped
+622,Pulse wave reflection index,EFO:0009804,reflection wave amplitude,622,EFO:0009804,,,,,1,True,True,True,1.0,mapped
+623,Cough on most days,HP:0012735,cough,623,HP:0012735,EFO:0009661,EFO:0000650,EFO:0009824,,1,True,True,True,1.0,mapped
+624,Years of cough on most days,HP:0012735,cough,624,HP:0012735,EFO:0009661,EFO:0000341,EFO:0000650,,1,True,True,True,1.0,mapped
+625,head injury,EFO:0009505,head injury,625,EFO:0009505,MONDO:0043510,EFO:0009490,EFO:0000546,EFO:0011023,1,True,True,True,1.0,mapped
+626,gynaecological disorder (not cancer),EFO:0009549,female reproductive system disease,626,EFO:0009549,EFO:0000512,MONDO:0002654,EFO:0005771,EFO:0010270,1,True,True,True,1.0,mapped
+627,peripheral nerve injury,EFO:0009510,peripheral nerve injury,627,EFO:0009510,EFO:0009490,MONDO:0024334,EFO:0003100,,1,True,True,True,1.0,mapped
+628,fracture jaw,EFO:0009612,jaw fracture,628,EFO:0009612,,,,,1,True,True,True,1.0,mapped
+629,fracture nose,EFO:0009623,nose injury,629,EFO:0009623,EFO:1001425,,,,1,True,True,True,1.0,mapped
+630,fracture clavicle / collar bone,EFO:0009614,clavicle facture,630,EFO:0009614,MONDO:0007330,EFO:0009621,EFO:0009514,,1,True,True,True,1.0,mapped
+631,fracture shoulder / scapula,EFO:0009621,shoulder fracture,631,EFO:0009621,EFO:0009614,EFO:0003943,EFO:0009514,,1,True,True,True,1.0,mapped
+632,fracture forearm / wrist,EFO:0009515,wrist fracture,632,EFO:0009514,EFO:0009515,EFO:0003957,EFO:0003950,EFO:0003931,2,False,True,True,0.5,mapped
+633,fracture wrist / colles fracture,EFO:0009515,wrist fracture,633,EFO:0003957,EFO:0009515,EFO:0009514,,,2,False,True,True,0.5,mapped
+634,fracture hand,NCIT:C27161,hand fracture,634,HP:0004277,EFO:0009616,EFO:0009515,EFO:0009514,EFO:0003931,,False,False,False,0.0,mapped
+635,fracture finger,EFO:0009616,finger fracture,635,EFO:0009616,HP:0004277,EFO:0003931,,,1,True,True,True,1.0,mapped
+636,fracture rib,EFO:0009620,rib fracture,636,EFO:0009620,EFO:0003957,EFO:0003902,HP:0000902,,1,True,True,True,1.0,mapped
+637,fracture pelvis,EFO:0009622,facture of pelvis,637,EFO:0009622,,,,,1,True,True,True,1.0,mapped
+638,fracture patella / knee,EFO:0009617,knee fracture,638,EFO:0009617,EFO:0009665,,,,1,True,True,True,1.0,mapped
+639,fracture fibula,EFO:0009613,fibula fracture,639,EFO:0009613,EFO:0003944,EFO:0009615,EFO:0009618,EFO:0009512,1,True,True,True,1.0,mapped
+640,fracture foot,EFO:0009618,foot fracture,640,EFO:0009618,EFO:0009512,EFO:0009615,EFO:0003931,,1,True,True,True,1.0,mapped
+641,Hand grip strength (left),EFO:0006941,grip strength measurement,641,EFO:0006941,,,,,1,True,True,True,1.0,mapped
+642,Hand grip strength (right),EFO:0006941,grip strength measurement,642,EFO:0006941,,,,,1,True,True,True,1.0,mapped
+643,"Heel bone mineral density (BMD) T-score, automated",EFO:0009270,heel bone mineral density,643,EFO:0009270,EFO:0007772,EFO:0003923,EFO:0020095,,1,True,True,True,1.0,mapped
+644,Age completed full time education,EFO:0004784,self reported educational attainment,644,EFO:0011015,EFO:0004784,EFO:0000246,EFO:0008007,,2,False,True,True,0.5,mapped
+645,Worrier / anxious feelings,EFO:0005230,anxiety,645,EFO:0005230,EFO:0009589,EFO:1001877,EFO:0006788,,1,True,True,True,1.0,mapped
+646,Diabetes diagnosed by doctor,EFO:0000400,diabetes mellitus,646,EFO:0000400,MONDO:0005147,MONDO:0005148,EFO:0004593,EFO:1001511,1,True,True,True,1.0,mapped
+647,Cancer diagnosed by doctor,EFO:0000311,cancer,647,MONDO:0004992,EFO:0000616,MONDO:0023370,EFO:0000313,EFO:1000654,,False,False,False,0.0,mapped
+648,Fractured/broken bones in last 5 years,EFO:0003931,bone fracture,648,EFO:0003931,EFO:0009513,HP:0002757,HP:0002756,,1,True,True,True,1.0,mapped
+649,Ever used hormone-replacement therapy (HRT),EFO:0003961,hormone replacement therapy,649,EFO:0003961,EFO:0021780,,,,1,True,True,True,1.0,mapped
+650,Longest period of depression,EFO:0007704,depressive episode measurement,650,EFO:0007704,EFO:0000433,EFO:0007634,EFO:0003761,EFO:0008623,1,True,True,True,1.0,mapped
+651,Number of depression episodes,EFO:0007704,depressive episode measurement,651,EFO:0007704,EFO:0007634,MONDO:0002009,EFO:0003761,,1,True,True,True,1.0,mapped
+652,Creatinine (enzymatic) in urine,EFO:0007934,creatine clearance measurement,652,EFO:0004518,EFO:0007934,CHEBI:16737,,,2,False,True,True,0.5,mapped
+653,cin/pre-cancer cells cervix,EFO:1000910,dysplasia of cervix,653,MONDO:0022394,EFO:1000910,EFO:1000165,EFO:1000166,MONDO:0024474,2,False,True,True,0.5,mapped
+654,heart valve problem/heart murmur,EFO:0009551,heart valve disease,654,HP:0030148,EFO:0009551,,,,2,False,True,True,0.5,mapped
+655,pericardial problem,EFO:0007427,pericarditis,655,MONDO:0000474,EFO:0003777,EFO:0000319,EFO:0007427,MONDO:0001370,4,False,False,True,0.25,mapped
+656,other respiratory problems,EFO:0000684,respiratory system disease,656,EFO:0000684,EFO:0003818,EFO:0000408,HP:0002093,,1,True,True,True,1.0,mapped
+657,oesophageal disorder,EFO:0009544,esophageal disease,657,EFO:0009544,HP:0025270,HP:0002031,EFO:0700028,EFO:1001785,1,True,True,True,1.0,mapped
+658,stomach disorder,EFO:0009608,stomach disease,658,EFO:0009608,MONDO:0001318,EFO:0000217,EFO:0010282,EFO:0000405,1,True,True,True,1.0,mapped
+659,parathyroid gland problem (not cancer),EFO:0005754,parathyroid disease,659,EFO:0005754,EFO:0008506,EFO:1000457,EFO:0008519,EFO:1001173,1,True,True,True,1.0,mapped
+660,chronic/degenerative neurological problem,EFO:0005772,neurodegenerative disease,660,EFO:0005772,HP:0002180,HP:0002344,EFO:0000618,,1,True,True,True,1.0,mapped
+661,muscle/soft tissue problem,EFO:0009470,soft tissue disease,661,EFO:0002970,EFO:0009470,MONDO:0003939,MONDO:0020120,EFO:0004145,2,False,True,True,0.5,mapped
+662,other renal/kidney problem,EFO:0003086,kidney disease,662,EFO:0003086,HP:0000112,MONDO:0001343,EFO:0009690,HP:0012211,1,True,True,True,1.0,mapped
+663,other joint disorder,EFO:1000999,joint disease,663,EFO:1000999,HP:0003040,EFO:0002461,EFO:0005856,,1,True,True,True,1.0,mapped
+664,diabetic neuropathy/ulcers,EFO:1000783,diabetic neuropathy,664,EFO:1000783,EFO:1001459,MONDO:0001583,EFO:0004149,EFO:0003100,1,True,True,True,1.0,mapped
+665,cervical spondylosis,EFO:0009610,"spondylosis, cervical",665,EFO:0009610,MONDO:0002253,EFO:0009477,EFO:0000706,,1,True,True,True,1.0,mapped
+666,svt / supraventricular tachycardia,HP:0004755,supraventricular tachycardia,666,HP:0004755,HP:0004763,EFO:0005308,HP:0006699,,1,True,True,True,1.0,mapped
+667,anal problem,HP:0004378,abnormality of the anus,667,EFO:0009660,HP:0004378,EFO:0009685,EFO:0010689,UBERON:0001353,2,False,True,True,0.5,mapped
+668,macular degeneration,EFO:0009606,macular degeneration,668,EFO:0009606,EFO:0001365,EFO:1001492,EFO:0004683,EFO:0009201,1,True,True,True,1.0,mapped
+669,bowel / intestinal obstruction,HP:0004796,gastrointestinal obstruction,669,MONDO:0004565,HP:0004796,MONDO:0004567,EFO:1000988,MONDO:0001045,2,False,True,True,0.5,mapped
+670,benign neuroma,EFO:0009619,neuroma,670,EFO:0009619,EFO:0002431,MONDO:0000648,EFO:0000693,MONDO:0016752,1,True,True,True,1.0,mapped
+671,Hearing difficulty/problems: I am completely deaf,EFO:0001063,deafness,671,EFO:0001063,HP:0011476,EFO:0004238,EFO:1001176,EFO:0009076,1,True,True,True,1.0,mapped
+672,Which eye(s) are affected by cataract: Right eye,EFO:0001059,cataract,672,MONDO:0005129,MONDO:0045050,MONDO:0011430,HP:0000519,ORDO:98993,,False,False,False,0.0,mapped
+673,Which eye(s) are affected by cataract: Left eye,EFO:0001059,cataract,673,MONDO:0005129,MONDO:0045050,MONDO:0045051,MONDO:0001847,,,False,False,False,0.0,mapped
+674,Number of self-reported cancers,EFO:0009800,cancer,674,EFO:0009800,,,,,1,True,True,True,1.0,mapped
+675,Number of self-reported non-cancer illnesses,EFO:0009801,disease,675,EFO:0009801,,,,,1,True,True,True,1.0,mapped
+676,"Number of operations, self-reported",EFO:0009802,medical prodecure,676,EFO:0009802,,,,,1,True,True,True,1.0,mapped
+677,Number of treatments/medications taken,EFO:0009803,treatment,677,EFO:0009803,EFO:0000727,EFO:0000627,EFO:0004368,,1,True,True,True,1.0,mapped
+678,Nap during day,EFO:0009818,Need to sleep during day,678,EFO:0009818,,,,,1,True,True,True,1.0,mapped
+679,Comparative body size at age 10,EFO:0009819,body height,679,EFO:0009819,,,,,1,True,True,True,1.0,mapped
+680,Father's age at death,EFO:0009712,age at death,680,EFO:0009712,EFO:0005056,EFO:0007796,EFO:0009721,,1,True,True,True,1.0,mapped
+681,Suffer from 'nerves',NCIT:C74532,nervousness,681,EFO:0005230,EFO:0006788,EFO:0009597,EFO:1001917,EFO:1001877,,False,False,False,0.0,mapped
+682,"Seen doctor (GP) for nerves, anxiety, tension or depression",EFO:0009820,mental or behavioural disorder,682,EFO:0009820,,,,,1,True,True,True,1.0,mapped
+683,"Seen a psychiatrist for nerves, anxiety, tension or depression",EFO:0009821,mental or behavioural disorder,683,EFO:0009821,EFO:0009820,EFO:0007795,EFO:0006788,MONDO:0041086,1,True,True,True,1.0,mapped
+684,Relative age of first facial hair,EFO:0009716,puberty onset measurement,684,EFO:0009716,EFO:0004847,EFO:0007823,,,1,True,True,True,1.0,mapped
+685,Number of children fathered,EFO:0009814,number of children ever born measurement,685,EFO:0009814,EFO:0009102,EFO:0009438,,,1,True,True,True,1.0,mapped
+686,Age at first live birth,EFO:0009101,age at first birth measurement,686,EFO:0009101,,,,,1,True,True,True,1.0,mapped
+687,Bilateral oophorectomy (both ovaries removed),EFO:0009717,bilateral oophorectomy,687,EFO:0009717,EFO:0010173,,,,1,True,True,True,1.0,mapped
+688,Peak expiratory flow (PEF),EFO:0009718,peak expiratory flow,688,EFO:0009718,EFO:0004313,EFO:0004314,EFO:0004418,,1,True,True,True,1.0,mapped
+689,Pace-maker,EFO:0009719,cardiac pacemaker,689,EFO:0009719,,,,,1,True,True,True,1.0,mapped
+690,Mother's age at death,EFO:0009721,age at death,690,EFO:0009721,EFO:0005056,EFO:0009712,,,1,True,True,True,1.0,mapped
+691,Age of primiparous women at birth of child,EFO:0009101,age at first birth measurement,691,EFO:0009101,,,,,1,True,True,True,1.0,mapped
+692,Work/job satisfaction,EFO:0009723,job satisfaction,692,EFO:0009723,EFO:0007881,EFO:0005241,EFO:0009726,,1,True,True,True,1.0,mapped
+693,Health satisfaction,EFO:0009724,satisfaction,693,EFO:0009724,EFO:0004778,EFO:0011014,EFO:0007869,,1,True,True,True,1.0,mapped
+694,Friendships satisfaction,EFO:0009725,satisfaction,694,EFO:0009725,EFO:0009723,EFO:0007865,EFO:0008538,,1,True,True,True,1.0,mapped
+695,Financial situation satisfaction,EFO:0009726,satisfied with current financial situation,695,EFO:0009726,,,,,1,True,True,True,1.0,mapped
+696,Ever manic/hyper for 2 days,EFO:0007705,manic episode measurement,696,EFO:0007706,EFO:0007705,MONDO:0004985,,,2,False,True,True,0.5,mapped
+697,Ever highly irritable/argumentative for 2 days,EFO:0009594,irritability measurement,697,EFO:0009594,EFO:0003015,HP:0000713,HP:0000712,HP:0006919,1,True,True,True,1.0,mapped
+698,Cochlear implant,EFO:0009728,cochlear implants,698,EFO:0009728,,,,,1,True,True,True,1.0,mapped
+699,Able to walk or cycle unaided for 10 minutes,EFO:0009822,physical activity,699,EFO:0009822,,,,,1,True,True,True,1.0,mapped
+700,Target heart rate achieved,EFO:0009823,heart rate,700,EFO:0009823,EFO:0009184,EFO:0009185,EFO:0004326,,1,True,True,True,1.0,mapped
+701,Sitting height,EFO:0007118,sitting height ratio,701,EFO:0011011,EFO:0007118,EFO:0004339,,,2,False,True,True,0.5,mapped
+702,Cascot confidence score,EFO:0009815,quantitative confidence value,702,EFO:0009815,OBI:0000071,,,,1,True,True,True,1.0,mapped
+703,Whole body water mass,EFO:0009805,body weight,703,EFO:0009805,,,,,1,True,True,True,1.0,mapped
+704,Reported occurrences of cancer,EFO:0000311,cancer,704,MONDO:0004992,EFO:0000616,MONDO:0023370,MONDO:0045054,EFO:1000654,,False,False,False,0.0,mapped
+705,oesophageal stricture,HP:0002043,esophageal stricture,705,HP:0002043,HP:0010450,EFO:0006818,HP:0002031,,1,True,True,True,1.0,mapped
+706,bladder problem (not cancer),EFO:1000018,bladder disease,706,EFO:1000018,HP:0000014,HP:0000009,EFO:0009690,,1,True,True,True,1.0,mapped
+707,prostate problem (not cancer),EFO:0009602,prostate disease,707,EFO:0009602,EFO:0000284,EFO:0003830,MONDO:0021510,MONDO:0002450,1,True,True,True,1.0,mapped
+708,testicular problems (not cancer),EFO:0009601,testicular disease,708,EFO:0009601,EFO:0009555,MONDO:0002259,HP:0000035,HP:0000029,1,True,True,True,1.0,mapped
+709,thyroid problem (not cancer),EFO:1000627,thyroid disease,709,EFO:1000627,HP:0000820,HP:0002926,EFO:0001379,EFO:0004705,1,True,True,True,1.0,mapped
+710,thyroid radioablation therapy,EFO:0009600,thyroid radioablation therapy,710,EFO:0009600,,,,,1,True,True,True,1.0,mapped
+711,adrenocortical insufficiency/addison's disease,EFO:0009491,adrenocortical insufficiency,711,EFO:0009491,MONDO:0015129,MONDO:0015128,MONDO:0019801,EFO:1001979,1,True,True,True,1.0,mapped
+712,neurological injury/trauma,EFO:0009490,nervous system injury,712,EFO:0009490,EFO:0009510,EFO:1001919,EFO:0009505,EFO:0000546,1,True,True,True,1.0,mapped
+713,cranial nerve problem/palsy,EFO:0009489,cranial nerve palsy,713,EFO:0009489,MONDO:0003569,MONDO:0001309,MONDO:0003546,EFO:0009569,1,True,True,True,1.0,mapped
+714,spinal cord disorder,EFO:0009488,spinal cord disease,714,EFO:0009488,HP:0002196,EFO:1001210,EFO:1001472,EFO:1001919,1,True,True,True,1.0,mapped
+715,peripheral nerve disorder,EFO:0009387,peripheral nervous system disease,715,EFO:0003100,EFO:0009387,EFO:0004149,EFO:0009562,,2,False,True,True,0.5,mapped
+716,trapped nerve/compressed nerve,EFO:0009487,nerve compression syndrome,716,EFO:0009487,EFO:1001845,MONDO:0003569,HP:0007141,,1,True,True,True,1.0,mapped
+717,diabetic eye disease,EFO:0009486,diabetic eye disease,717,EFO:0009486,EFO:0003770,EFO:0010133,EFO:0003966,,1,True,True,True,1.0,mapped
+718,eye trauma,EFO:0009485,eye injury,718,EFO:0009485,EFO:1001323,EFO:1001788,EFO:0000546,,1,True,True,True,1.0,mapped
+719,back problem,HP:0003418,back pain,719,MONDO:0000812,MONDO:0045002,HP:0003418,EFO:0009676,,3,False,True,True,0.3333333333333333,mapped
+720,uterine polyps,EFO:0009484,uterine polyp,720,EFO:0009484,EFO:1000237,EFO:0008622,,,1,True,True,True,1.0,mapped
+721,allergy or anaphylactic reaction to drug,EFO:0009482,drug allergy,721,EFO:0009482,MONDO:0100053,EFO:1002004,EFO:1002003,,1,True,True,True,1.0,mapped
+722,enlarged prostate,EFO:0000284,benign prostatic hyperplasia,722,EFO:0000284,MONDO:0002450,MONDO:0021510,EFO:0009602,,1,True,True,True,1.0,mapped
+723,burns,EFO:0009516,burn,723,EFO:0009516,EFO:0020910,EFO:0009503,EFO:1001788,EFO:0000546,1,True,True,True,1.0,mapped
+724,nasal/sinus disorder,EFO:0009481,paranasal sinus disease,724,EFO:0009481,MONDO:0002436,MONDO:0002232,MONDO:0024623,,1,True,True,True,1.0,mapped
+725,throat or larynx disorder,EFO:0009479,throat disease,725,EFO:0009479,EFO:0009673,MONDO:0020592,MONDO:0024623,EFO:0009692,1,True,True,True,1.0,mapped
+726,vocal cord polyp,EFO:0009478,vocal cord polyp,726,EFO:0009478,,,,,1,True,True,True,1.0,mapped
+727,other neurological problem,EFO:0000618,nervous system disease,727,EFO:0000618,HP:0000707,EFO:0009386,EFO:0009387,EFO:1001902,1,True,True,True,1.0,mapped
+728,clotting disorder/excessive bleeding,EFO:0009314,blood coagulation disease,728,EFO:0009314,MONDO:0002243,HP:0001928,HP:0001892,MONDO:0021181,1,True,True,True,1.0,mapped
+729,disc problem,EFO:0009477,vertebral joint disease,729,HP:0008419,EFO:0004994,EFO:1001800,EFO:0009477,,4,False,False,True,0.25,mapped
+730,cervical polyps,EFO:0009475,cervical polyp,730,EFO:0009475,EFO:0009484,EFO:0008622,EFO:0000662,,1,True,True,True,1.0,mapped
+731,abnormal smear (cervix),EFO:0009511,abnormal PAP smear,731,EFO:0009511,EFO:1000910,MONDO:0022394,EFO:0010677,,1,True,True,True,1.0,mapped
+732,benign breast lump,EFO:0003014,breast fibrocystic disease,732,HP:0032408,MONDO:0000620,EFO:0003014,MONDO:0002058,EFO:1000848,3,False,True,True,0.3333333333333333,mapped
+733,Perineal_laceration_during_delivery,EFO:0009816,first degree perineal laceration,733,EFO:0009816,,,,,1,True,True,True,1.0,mapped
+734,Intrauterine_hypoxia,EFO:1001793,hypoxia,734,EFO:1001793,EFO:1000824,EFO:0009444,EFO:0007443,EFO:1001766,1,True,True,True,1.0,mapped
+735,Abnormal_serum_enzyme_levels,EFO:0009826,liver enzyme measurement,735,EFO:0009826,HP:0002910,EFO:0004582,,,1,True,True,True,1.0,mapped
+736,Injury_of_other_intrathoracic_organs,EFO:0009887,injury,736,EFO:0009887,EFO:0009888,EFO:0009506,,,1,True,True,True,1.0,mapped
+737,Other_fluke_infections,EFO:1001342,infectious disease,737,EFO:1001438,EFO:1001342,EFO:0007418,EFO:0001067,,2,False,True,True,0.5,mapped
+738,Hereditary_ataxia,EFO:0009671,hereditary ataxia,738,EFO:0009671,MONDO:0100310,ORDO:183518,MONDO:0020380,MONDO:0015244,1,True,True,True,1.0,mapped
+739,Mycetoma,EFO:0007265,eumycotic mycetoma,739,EFO:0007265,EFO:0007128,MONDO:0002041,,,1,True,True,True,1.0,mapped
+740,Viral_warts,EFO:0009662,warts,740,EFO:0009662,EFO:1002023,EFO:0007147,EFO:0001668,MONDO:0002363,1,True,True,True,1.0,mapped
+741,Convalescence,EFO:0009630,caonvalescence,741,EFO:0009630,EFO:0009581,EFO:0009951,EFO:0009785,,1,True,True,True,1.0,mapped
+742,Other_disorders_of_nervous_system,EFO:0000618,nervous system disease,742,EFO:0000618,EFO:0009387,EFO:0009386,,,1,True,True,True,1.0,mapped
+743,Hypertensive_renal_disease,EFO:1002039,renal hypertension,743,MONDO:0024633,EFO:1002039,MONDO:0000959,EFO:1001153,EFO:0000537,2,False,True,True,0.5,mapped
+744,Headache,HP:0002315,Headache,744,HP:0002315,EFO:0009550,MONDO:0005277,HP:0012228,HP:0012199,1,True,True,True,1.0,mapped
+745,Fever of unknown origin,EFO:0003952,fever of unknown origin,745,EFO:0003952,HP:0001945,,,,1,True,True,True,1.0,mapped
+746,Dysphagia,HP:0002015,Dysphagia,746,HP:0002015,HP:0002068,HP:0030195,HP:0011968,,1,True,True,True,1.0,mapped
+747,Cough,HP:0012735,Cough,747,HP:0012735,EFO:0000650,,,,1,True,True,True,1.0,mapped
+748,Other arthritis,EFO:0005856,arthritis,748,EFO:0005856,HP:0003040,EFO:1000999,EFO:0000706,,1,True,True,True,1.0,mapped
+749,Systemic lupus erythematosus,EFO:0002690,systemic lupus erythematosus,749,MONDO:0007915,MONDO:0004670,EFO:0003834,MONDO:0015574,MONDO:0019558,,False,False,False,0.0,mapped
+750,Systemic sclerosis,EFO:0000717,systemic scleroderma,750,EFO:0000717,EFO:1001993,EFO:0000404,MONDO:0016358,EFO:1001017,1,True,True,True,1.0,mapped
+751,Psoriasis,EFO:0000676,psoriasis,751,EFO:0000676,EFO:1001494,MONDO:0023297,MONDO:0013626,,1,True,True,True,1.0,mapped
+752,Other disorders of pigmentation,EFO:1000755,pigmentation disease,752,EFO:1000755,MONDO:0019288,MONDO:0018134,ORDO:183463,ORDO:98700,1,True,True,True,1.0,mapped
+753,"Ulcer of lower limb, not elsewhere classified",EFO:0007068,ulcer of lower limb,753,EFO:0007068,EFO:0007067,EFO:1000723,EFO:0009508,,1,True,True,True,1.0,mapped
+754,Dyspepsia,EFO:0008533,dyspepsia,754,EFO:0008533,HP:0002027,MONDO:0001318,EFO:0000217,EFO:1000948,1,True,True,True,1.0,mapped
+755,Inguinal hernia,HP:0000023,inguinal hernia,755,HP:0000023,HP:0004299,HP:0100790,EFO:1001791,EFO:1001866,1,True,True,True,1.0,mapped
+756,"Bacterial pneumonia, not elsewhere classified",EFO:1001272,bacterial pneumonia,756,EFO:1001272,EFO:0003106,MONDO:0041850,EFO:0007184,,1,True,True,True,1.0,mapped
+757,"Pneumonia, organism unspecified",EFO:0003106,pneumonia,757,EFO:0003106,EFO:1001272,EFO:0007184,EFO:0007541,EFO:1001399,1,True,True,True,1.0,mapped
+758,Nasal polyp,EFO:1000391,nasal cavity polyp,758,EFO:1000391,HP:0100582,EFO:1002029,EFO:0000662,,1,True,True,True,1.0,mapped
+759,Peritonsillar abscess,EFO:0007429,peritonsillar abscess,759,EFO:0007429,,,,,1,True,True,True,1.0,mapped
+760,Emphysema,EFO:0000464,emphysema,760,EFO:0000464,MONDO:0000923,MONDO:0000924,MONDO:0007536,MONDO:0017591,1,True,True,True,1.0,mapped
+761,Other chronic obstructive pulmonary disease,EFO:0000341,chronic obstructive pulmonary disease,761,EFO:0000341,EFO:0000684,HP:0006536,EFO:0000408,,1,True,True,True,1.0,mapped
+762,Asthma,EFO:0000270,asthma,762,MONDO:0004979,MONDO:0004784,EFO:0010638,EFO:0008590,EFO:1002011,,False,False,False,0.0,mapped
+763,Bronchiectasis,HP:0002110,Bronchiectasis,763,MONDO:0004822,HP:0002110,MONDO:0018956,MONDO:0008887,,2,False,True,True,0.5,mapped
+764,Other interstitial pulmonary diseases,EFO:0004244,interstitial lung disease,764,EFO:0004244,EFO:0000684,MONDO:0017026,MONDO:0017014,HP:0006515,1,True,True,True,1.0,mapped
+765,Other respiratory disorders,EFO:0000684,respiratory system disease,765,EFO:0000684,EFO:0003818,EFO:0000408,,,1,True,True,True,1.0,mapped
+766,Bipolar affective disorder,EFO:0000289,bipolar disorder,766,MONDO:0004985,EFO:0009963,EFO:0009964,EFO:0004247,,,False,False,False,0.0,mapped
+767,"Sexual dysfunction, not caused by organic disorder or disease",EFO:0004714,sexual dysfunction,767,MONDO:0002134,EFO:0004714,EFO:0004234,,,2,False,True,True,0.5,mapped
+768,Other hypothyroidism,EFO:0004705,hypothyroidism,768,EFO:0004705,EFO:0700040,MONDO:0016412,MONDO:0016410,,1,True,True,True,1.0,mapped
+769,Melanoma in situ,EFO:0004957,Clark level I melanoma,769,MONDO:0004641,EFO:0000756,EFO:0000389,MONDO:0004647,MONDO:0021143,,False,False,False,0.0,mapped
+770,Benign neoplasm of ovary,EFO:1000116,benign ovarian neoplasm,770,EFO:1000116,EFO:0002507,EFO:0003893,MONDO:0000624,EFO:0002511,1,True,True,True,1.0,mapped
+771,Benign neoplasm of thyroid gland,EFO:1000122,benign thyroid gland neoplasm,771,EFO:1000122,EFO:0003841,UBERON:0002046,,,1,True,True,True,1.0,mapped
+772,Polycythaemia vera,EFO:0002429,Polycythaemia vera,772,EFO:0002429,EFO:0005804,MONDO:0002438,MONDO:0001115,,1,True,True,True,1.0,mapped
+773,Myelodysplastic syndromes,EFO:0000198,myelodysplastic syndrome,773,EFO:0000198,EFO:0008801,MONDO:0019453,EFO:1000388,EFO:0003811,1,True,True,True,1.0,mapped
+774,Malignant neoplasm of colon,EFO:1001950,colon carcinoma,774,EFO:1001950,MONDO:0021063,MONDO:0005575,EFO:1001951,,1,True,True,True,1.0,mapped
+775,Malignant neoplasm of larynx,EFO:1000354,Malignant Laryngeal Neoplasm,775,EFO:1000354,MONDO:0002358,EFO:0003817,EFO:0006352,MONDO:0001724,1,True,True,True,1.0,mapped
+776,Mesothelioma,EFO:0000588,mesothelioma,776,EFO:0000588,EFO:1000355,EFO:1001044,EFO:1000485,EFO:1000467,1,True,True,True,1.0,mapped
+777,Hodgkin's disease,EFO:0000183,Hodgkins lymphoma,777,EFO:0000183,MONDO:0009348,EFO:0004708,EFO:1000548,EFO:0000574,1,True,True,True,1.0,mapped
+778,Lymphoid leukaemia,EFO:0004289,lymphoid leukemia,778,EFO:0004289,EFO:0000220,EFO:0000095,EFO:0009119,EFO:0001642,1,True,True,True,1.0,mapped
+779,Myeloid leukaemia,EFO:0000222,acute myeloid leukemia,779,MONDO:0004643,EFO:0002427,EFO:0000222,EFO:0000339,EFO:0000565,3,False,True,True,0.3333333333333333,mapped
+780,Other disorders of bladder,EFO:1000018,bladder disease,780,EFO:1000018,HP:0000014,HP:0000009,EFO:0009690,EFO:1000025,1,True,True,True,1.0,mapped
+781,Other inflammation of vagina and vulva,EFO:0005757,vaginal inflammation,781,EFO:1001240,EFO:0005757,EFO:1001239,MONDO:0002234,,2,False,True,True,0.5,mapped
+782,Other rheumatoid arthritis,EFO:0000685,rheumatoid arthritis,782,EFO:0000685,,,,,1,True,True,True,1.0,mapped
+783,"Other joint disorders, not elsewhere classified",EFO:1000999,joint disease,783,EFO:1000999,HP:0003040,EFO:0005856,EFO:0002461,,1,True,True,True,1.0,mapped
+784,"Other disorders of skin and subcutaneous tissue, not elsewhere classified",EFO:0000701,skin disease,784,EFO:0010285,EFO:0000701,MONDO:0019296,MONDO:0021154,,2,False,True,True,0.5,mapped
+785,Other aneurysm,EFO:0009659,aneurysm,785,EFO:0009659,HP:0002617,EFO:0003870,EFO:0001666,EFO:1000959,1,True,True,True,1.0,mapped
+786,Other hearing loss,EFO:0004238,hearing loss,786,EFO:0004238,EFO:0001063,EFO:1001176,HP:0000407,EFO:0009076,1,True,True,True,1.0,mapped
+787,Acute and transient psychotic disorders,EFO:0005940,General psycotic symptoms term,787,EFO:0005407,HP:0000725,EFO:0000677,EFO:0005940,EFO:1000902,4,False,False,True,0.25,mapped
+788,Other anxiety disorders,EFO:0006788,General anxiety disorder,788,EFO:0006788,EFO:1001892,EFO:1001917,EFO:1001903,,1,True,True,True,1.0,mapped
+789,Other disorders of thyroid,EFO:1000627,General throid disorder term,789,EFO:1000627,HP:0000820,HP:0002926,EFO:0001379,,1,True,True,True,1.0,mapped
+790,Neoplasm of uncertain or unknown behaviour of female genital organs,EFO:1001331,"Genital neoplasm, female",790,EFO:1001331,MONDO:0021148,MONDO:0000624,,,1,True,True,True,1.0,mapped
+791,Neoplasm of uncertain or unknown behaviour of endocrine glands,EFO:0003769,endocrine neoplasm,791,EFO:0003769,MONDO:0000627,MONDO:0021069,MONDO:0021119,,1,True,True,True,1.0,mapped
+792,Malignant neoplasm of tonsil,EFO:1001214,tonsil cancer,792,EFO:1001214,MONDO:0021337,MONDO:0021250,EFO:1000597,MONDO:0000535,1,True,True,True,1.0,mapped
+793,Malignant neoplasm of rectum,EFO:1000657,rectum cancer,793,EFO:1000657,MONDO:0044937,MONDO:0002165,EFO:1001951,EFO:0005631,1,True,True,True,1.0,mapped
+794,Malignant melanoma of skin,EFO:0000389,cutaneous melanoma,794,EFO:0000389,EFO:0000756,MONDO:0021583,MONDO:0023619,MONDO:0003865,1,True,True,True,1.0,mapped
+795,Other septicaemia,HP:0100806,sepsis,795,HP:0100806,EFO:0003033,EFO:0006834,EFO:1001478,,1,True,True,True,1.0,mapped
+796,Family history of malignant neoplasm,EFO:0009640,"There is only family history of breast or lung cancer, could use a parent term like family history of cancer?",796,EFO:0009640,EFO:0000493,EFO:0005606,EFO:0006953,EFO:0008346,1,True,True,True,1.0,mapped
+797,Abnormal findings on diagnostic imaging of other body structures,EFO:0009827,abnormal finding,797,EFO:0009827,EFO:0009628,HP:0000118,PATO:0000460,,1,True,True,True,1.0,mapped
+798,Symptoms and signs concerning food and fluid intake,EFO:0009825,sign or symptom,798,EFO:0009825,EFO:0007829,EFO:0005203,EFO:0010818,,1,True,True,True,1.0,mapped
+799,Pregnancy examination and test,EFO:0009643,pregnancy test,799,EFO:0009643,EFO:0008156,EFO:0007964,EFO:0002950,,1,True,True,True,1.0,mapped
+800,"Adverse effects, not elsewhere classified",EFO:0009658,No general adverse effects term,800,EFO:0009658,EFO:0006346,EFO:1001893,MONDO:0100369,,1,True,True,True,1.0,mapped
+801,Injury of unspecified body region,EFO:0000546,injury,801,EFO:0000546,EFO:0009509,EFO:0009490,EFO:0005756,,1,True,True,True,1.0,mapped
+802,"Dislocation, sprain and strain of joints and ligaments at neck level",EFO:0009476,neck injury,802,EFO:0009582,,,,,,False,False,False,0.0,mapped
+803,Other general symptoms and signs,EFO:0003765,sign or symptom,803,EFO:0003765,HP:0025142,EFO:0009813,,,1,True,True,True,1.0,mapped
+804,"Oedema, not elsewhere classified",EFO:0009373,edema,804,EFO:0009373,EFO:1001134,EFO:1000845,EFO:1001771,MONDO:0019297,1,True,True,True,1.0,mapped
+805,Syncope and collapse,HP:0001279,syncope,805,HP:0001279,HP:0012668,HP:0007185,EFO:0009847,,1,True,True,True,1.0,mapped
+806,Malaise and fatigue,HP:0012378 | EFO:0009641,fatigue||malaise,806,EFO:0009641,HP:0012378,EFO:0007946,EFO:0004540,,,False,False,False,0.0,mapped
+807,Voice disturbances,EFO:0009692,voice disturbance,807,EFO:0009692,HP:0002167,HP:0031801,MONDO:0004730,,1,True,True,True,1.0,mapped
+808,Other symptoms and signs involving the urinary system,HP:0000079,abnormality of the urinary system,808,HP:0011277,HP:0000079,EFO:0008008,HP:0003110,,2,False,True,True,0.5,mapped
+809,Other skin changes,HP:0000951,abnormality of the skin,809,HP:0000951,HP:0011121,HP:0001574,HP:0011122,HP:0011123,1,True,True,True,1.0,mapped
+810,Flatulence and related conditions,EFO:0009669,flatulence,810,EFO:0009669,,,,,1,True,True,True,1.0,mapped
+811,Ectopic pregnancy,HP:0031456,ectopic pregnancy,811,HP:0031456,,,,,1,True,True,True,1.0,mapped
+812,Other disorders of amniotic fluid and membranes,HP:0001560,abnormality of the amniotic fluid,812,EFO:0009950,HP:0001560,EFO:0009948,,,2,False,True,True,0.5,mapped
+813,"Antepartum haemorrhage, not elsewhere classified",HP:0025328,antepartum hemorrhage,813,HP:0025328,HP:0007023,EFO:0009579,HP:0100608,,1,True,True,True,1.0,mapped
+814,False labour,EFO:0009639,Braxton-Hicks contraction,814,EFO:0009639,,,,,1,True,True,True,1.0,mapped
+815,Prolonged pregnancy,EFO:0009681,post term pregnancy,815,EFO:0009681,,,,,1,True,True,True,1.0,mapped
+816,Single spontaneous delivery,EFO:0009638,spontaneous labor and birth,816,EFO:0009638,EFO:0006917,,,,1,True,True,True,1.0,mapped
+817,"Complications of the puerperium, not elsewhere classified",EFO:0009683,puerperal disorder,817,EFO:0009683,EFO:1001407,EFO:0009579,EFO:0007453,EFO:0009682,1,True,True,True,1.0,mapped
+818,"Other maternal diseases classifiable elsewhere but complicating pregnancy, childbirth and the puerperium",EFO:0009682,pregnancy disorder,818,EFO:0009682,MONDO:0700003,EFO:0009683,EFO:0010238,,1,True,True,True,1.0,mapped
+819,Calculus of lower urinary tract,EFO:1001228,ureterolithiasis,819,MONDO:0004828,EFO:1000839,MONDO:0024647,EFO:0004253,EFO:1001228,5,False,False,True,0.2,mapped
+820,"Neuromuscular dysfunction of bladder, not elsewhere classified",HP:0000011,neurogenic bladder,820,HP:0000011,HP:0000009,MONDO:0008630,EFO:1000018,,1,True,True,True,1.0,mapped
+821,Other disorders of urethra,EFO:0009689,urethral disease,821,EFO:0009689,EFO:0003878,MONDO:0001730,EFO:0003846,EFO:0009690,1,True,True,True,1.0,mapped
+822,Other disorders of urinary system,EFO:0009690,urinary system disease,822,EFO:0009690,EFO:0009663,HP:0000079,HP:0011277,EFO:0009571,1,True,True,True,1.0,mapped
+823,Hyperplasia of prostate,EFO:0000284,benign prostatic hyperplasia,823,EFO:0000284,MONDO:0002450,MONDO:0021510,EFO:0009602,,1,True,True,True,1.0,mapped
+824,Other disorders of prostate,EFO:0009602,prostate disease,824,EFO:0009602,EFO:0003830,EFO:0000284,MONDO:0021259,MONDO:0008315,1,True,True,True,1.0,mapped
+825,Other disorders of breast,EFO:0009483,breast disease,825,EFO:0009483,HP:0000769,EFO:1001034,EFO:0003014,EFO:0003869,1,True,True,True,1.0,mapped
+826,Erosion and ectropion of cervix uteri,EFO:1000862,cervix erosion,826,HP:0030158,EFO:1000862,,,,2,False,True,True,0.5,mapped
+827,Other abnormal uterine and vaginal bleeding,HP:0100608,metrorrhagia,827,HP:0001892,HP:0100608,EFO:0010270,HP:0000132,,2,False,True,True,0.5,mapped
+828,Other arthrosis,EFO:0002506,osteoarthritis,828,MONDO:0005178,EFO:1000999,EFO:0005856,EFO:0002461,,,False,False,False,0.0,mapped
+829,Other acquired deformities of limbs,Orphanet:294944,congenital deformities of limbs,829,HP:0040064,HP:0002814,HP:0002817,HP:0001760,HP:0005656,,False,False,False,0.0,mapped
+830,Disorders of patella,EFO:0009665,abnormality of the patella,830,EFO:0009665,EFO:1001092,HP:0002999,HP:0003065,MONDO:0017471,1,True,True,True,1.0,mapped
+831,Other disorders of muscle,EFO:0002970,muscular disease,831,MONDO:0003939,EFO:0002970,MONDO:0020120,EFO:1001902,EFO:0004145,2,False,True,True,0.5,mapped
+832,Other disorders of synovium and tendon,EFO:1001435,tenosynovitis,832,MONDO:0056799,EFO:1001434,MONDO:0024876,EFO:0008997,EFO:1001435,5,False,False,True,0.2,mapped
+833,Other enthesopathies,EFO:0009666,enthesopathy,833,EFO:0009666,MONDO:0024419,EFO:0005755,EFO:1001434,,1,True,True,True,1.0,mapped
+834,"Other soft tissue disorders, not elsewhere classified",EFO:0009470,soft tissue disease,834,EFO:0009470,MONDO:0019296,MONDO:0021154,EFO:1000541,MONDO:0044334,1,True,True,True,1.0,mapped
+835,Other disorders of bone,EFO:0004260,bone disease,835,EFO:0004260,MONDO:0000836,EFO:0002461,MONDO:0800486,,1,True,True,True,1.0,mapped
+836,Other disorders of cartilage,EFO:0005802,cartilage disease,836,EFO:0005802,MONDO:0003816,EFO:0005571,EFO:0002461,EFO:1000999,1,True,True,True,1.0,mapped
+837,Other acquired deformities of musculoskeletal system and connective tissue,EFO:0009676 | EFO:1001986,musculoskeletal system disease | connective tissue disease,837,HP:0000924,HP:0003549,HP:0011842,HP:0003011,EFO:1001986,,False,False,False,0.0,mapped
+838,Other epidermal thickening,HP:0011368,epidermal thickening,838,HP:0011368,HP:0001072,EFO:1000720,MONDO:0002093,,1,True,True,True,1.0,mapped
+839,Embedded and impacted teeth,HP:0011079,impacted tooth,839,HP:0011079,MONDO:0007434,MONDO:0008007,ORDO:1077,HP:0000678,1,True,True,True,1.0,mapped
+840,Other disorders of teeth and supporting structures,EFO:1001216,tooth disease,840,EFO:0010693,EFO:1001216,MONDO:0002635,MONDO:0002220,EFO:0010688,2,False,True,True,0.5,mapped
+841,Stomatitis and related lesions,EFO:0009688,stomatitis,841,EFO:0009688,EFO:1001904,EFO:1001047,MONDO:0044992,MONDO:0004848,1,True,True,True,1.0,mapped
+842,Other diseases of anus and rectum,EFO:0009660 | EFO:0009685,anus disease||rectal disease,842,EFO:0000405,EFO:0009660,EFO:0009685,,,,False,False,False,0.0,mapped
+843,Other diseases of pancreas,EFO:0009605,pancreas disease,843,EFO:0009605,EFO:0000405,MONDO:0001933,ORDO:165661,EFO:0003860,1,True,True,True,1.0,mapped
+844,Other diseases of digestive system,EFO:0000405,digestive system disease,844,EFO:0000405,EFO:0010282,HP:0011024,MONDO:0043424,,1,True,True,True,1.0,mapped
+845,Acute pharyngitis,EFO:0009657,pharyngitis,845,EFO:0009657,MONDO:0002258,EFO:1002024,MONDO:0001039,,1,True,True,True,1.0,mapped
+846,"Diseases of vocal cords and larynx, not elsewhere classified",EFO:0009673,laryngeal disease,846,EFO:0009673,EFO:0009692,HP:0031801,EFO:0009479,MONDO:0001369,1,True,True,True,1.0,mapped
+847,"Bronchitis, not specified as acute or chronic",EFO:0009661,bronchitis,847,EFO:0009661,EFO:0006505,HP:0012388,MONDO:0021925,EFO:1002018,1,True,True,True,1.0,mapped
+848,Pyothorax,EFO:0009680,pleural empyema,848,EFO:0009680,EFO:0003097,EFO:0007528,EFO:0009637,,1,True,True,True,1.0,mapped
+849,"Pleural effusion, not elsewhere classified",EFO:0009637,pleural effusion,849,EFO:0009637,EFO:1001780,EFO:0009680,EFO:1000963,MONDO:0002037,1,True,True,True,1.0,mapped
+850,"Respiratory failure, not elsewhere classified",EFO:0009686,respiratory failure,850,EFO:0009686,MONDO:0001208,HP:0002093,HP:0004887,,1,True,True,True,1.0,mapped
+851,Other diseases of pericardium,EFO:0007427,pericarditis,851,MONDO:0000474,EFO:0007427,EFO:0000319,MONDO:0021381,,2,False,True,True,0.5,mapped
+852,Other conduction disorders,EFO:0005137,conduction system disease,852,MONDO:0000992,EFO:0005137,EFO:1001497,EFO:0005304,EFO:0005305,2,False,True,True,0.5,mapped
+853,Other cardiac arrhythmias,EFO:0004269,cardiac arrythmia,853,EFO:0004269,MONDO:0007263,EFO:0005137,HP:0004308,,1,True,True,True,1.0,mapped
+854,"Occlusion and stenosis of precerebral arteries, not resulting in cerebral infarction",EFO:0009677,occlusion precerebral artery,854,EFO:0009677,MONDO:0004450,EFO:1001495,,,1,True,True,True,1.0,mapped
+855,Other venous embolism and thrombosis,EFO:0004286,venous thromboembolism,855,EFO:0004286,HP:0001907,HP:0004936,MONDO:0000831,EFO:0003907,1,True,True,True,1.0,mapped
+856,Other non-infective disorders of lymphatic vessels and lymph nodes,EFO:0007352,lymphatic system disease,856,EFO:0007352,MONDO:0004928,MONDO:0044986,HP:0100763,,1,True,True,True,1.0,mapped
+857,Other disorders of eyelid,EFO:0009547,eyelid disease,857,EFO:0009547,ORDO:98560,ORDO:98561,EFO:0003966,,1,True,True,True,1.0,mapped
+858,Disorders of orbit,EFO:0009664,disease of orbital region,858,EFO:0009664,MONDO:0004751,EFO:0009546,EFO:0003966,,1,True,True,True,1.0,mapped
+859,Other disorders of conjunctiva,EFO:1000203,conjunctival disorder,859,EFO:1000203,EFO:0009450,MONDO:0001174,MONDO:0020204,,1,True,True,True,1.0,mapped
+860,Other disorders of lens,EFO:0009674,lens disease,860,EFO:0009674,HP:0000517,EFO:0003966,MONDO:0015998,,1,True,True,True,1.0,mapped
+861,Paralytic strabismus,EFO:0009678,paralytic strabismus,861,EFO:0009678,HP:0000486,MONDO:0003425,,,1,True,True,True,1.0,mapped
+862,Other strabismus,HP:0000486,strabismus,862,HP:0000486,MONDO:0020252,HP:0025069,EFO:0009678,,1,True,True,True,1.0,mapped
+863,Other disorders of eye and adnexa,EFO:0009546,eye adnexa disease,863,EFO:0009546,EFO:0003966,EFO:0009664,MONDO:0004751,,1,True,True,True,1.0,mapped
+864,Other disorders of external ear,EFO:0009668,external ear disease,864,EFO:0009668,MONDO:0021205,HP:0000356,EFO:0009560,HP:0008572,1,True,True,True,1.0,mapped
+865,Other disorders of Eustachian tube,EFO:0009667,eustachian tube disease,865,EFO:0009667,HP:0040269,,,,1,True,True,True,1.0,mapped
+866,Disorders of vestibular function,EFO:0009691,vestibular disease,866,EFO:0009691,EFO:0009672,MONDO:0001563,MONDO:0004900,EFO:0007537,1,True,True,True,1.0,mapped
+867,Other diseases of inner ear,EFO:0009672,inner ear disease,867,EFO:0009672,EFO:0009604,MONDO:0002812,MONDO:0024320,EFO:1001455,1,True,True,True,1.0,mapped
+868,Otalgia and effusion of ear,HP:0030766 | EFO:0007415,ear pain||otitis media with effusion,868,EFO:0004992,HP:0030766,EFO:0009560,,,,False,False,False,0.0,mapped
+869,"Other disorders of ear, not elsewhere classified",EFO:1001455,auditory system disease,869,MONDO:0021205,EFO:1001455,EFO:0009668,EFO:0009672,MONDO:0003276,2,False,True,True,0.5,mapped
+870,Other mononeuropathies,EFO:0009558,mononeuropathy,870,EFO:0009558,EFO:0004149,EFO:0003100,EFO:0009387,,1,True,True,True,1.0,mapped
+871,Other polyneuropathies,EFO:0009562,polyneuropathy,871,EFO:0009562,EFO:0003100,EFO:0009387,MONDO:0003335,,1,True,True,True,1.0,mapped
+872,Paraplegia and tetraplegia,EFO:0009679 | EFO:0009684,paraplegia,872,,,,,,,False,False,False,0.0,unmapped
+873,Other disorders of brain,EFO:0005774,brain disease,873,EFO:0005774,EFO:0009386,EFO:0000618,HP:0002011,,1,True,True,True,1.0,mapped
+874,Other diseases of spinal cord,EFO:0009488,spinal cord disease,874,EFO:0009488,HP:0002196,EFO:1001472,EFO:1001919,EFO:0009386,1,True,True,True,1.0,mapped
+875,Somatoform disorders,EFO:0009687,somatoform disorder,875,EFO:0009687,EFO:0004257,EFO:0000677,EFO:0010098,,1,True,True,True,1.0,mapped
+876,Thyrotoxicosis [hyperthyroidism],EFO:0009189,hyperthyroidism,876,EFO:0009190,EFO:0009189,EFO:1001212,EFO:0004237,EFO:0009191,2,False,True,True,0.5,mapped
+877,"Other disorders of fluid, electrolyte and acid-base balance",HP:0001939,abnormality of metabolism/homeostasis,877,MONDO:0041261,HP:0003111,EFO:1000014,HP:0011105,HP:0010931,,False,False,False,0.0,mapped
+878,Benign lipomatous neoplasm,EFO:0000759,lipoma,878,MONDO:0044983,EFO:0000759,MONDO:0021354,MONDO:0021496,,2,False,True,True,0.5,mapped
+879,Melanocytic naevi,EFO:0009675,Melanocytic nevus,879,EFO:0009675,MONDO:0044794,EFO:0000625,,,1,True,True,True,1.0,mapped
+880,Benign neoplasm of other and unspecified endocrine glands,EFO:0003769,endocrine neoplasm,880,MONDO:0000627,EFO:0003769,MONDO:0021439,EFO:0001379,,2,False,True,True,0.5,mapped
+881,Benign neoplasm of other and unspecified sites,EFO:0002422,benign neoplasm,881,EFO:0002422,EFO:0000616,MONDO:0045024,,,1,True,True,True,1.0,mapped
+882,Neoplasm of uncertain or unknown behaviour of oral cavity and digestive organs,EFO:0008549,digestive system neoplasm,882,EFO:0003868,EFO:0005570,EFO:0003871,MONDO:0021445,EFO:0007321,,False,False,False,0.0,mapped
+883,Other aplastic anaemias,HP:0001915,aplastic anemia,883,MONDO:0015909,EFO:0006926,MONDO:0012197,HP:0001915,MONDO:0001713,4,False,False,True,0.25,mapped
+884,Other diseases of blood and blood-forming organs,EFO:0005803,hematologic disease,884,EFO:0005803,EFO:0010283,HP:0001871,MONDO:0009332,EFO:0009314,1,True,True,True,1.0,mapped
+885,"Other disorders involving the immune mechanism, not elsewhere classified",EFO:0000540,immune system disease,885,EFO:0000540,MONDO:0024572,MONDO:0009453,HP:0002715,,1,True,True,True,1.0,mapped
+886,Other and unspecified types of non-Hodgkin's lymphoma,EFO:0005952,non-Hodgkins lymphoma,886,EFO:0005952,EFO:0000574,EFO:1001938,,,1,True,True,True,1.0,mapped
+887,Other disorders of adrenal gland,EFO:0005539,adrenal gland disease,887,EFO:0005539,HP:0000834,MONDO:0002816,EFO:1000797,EFO:0001379,1,True,True,True,1.0,mapped
