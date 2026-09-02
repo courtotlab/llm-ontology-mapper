@@ -1,0 +1,2 @@
+mode,calibration_n,n_correct,n_incorrect,roc_auc,roc_auc_status,brier_score,ece,rank_sum_test_name,rank_sum_statistic,rank_sum_p_value,mean_confidence_correct,mean_confidence_incorrect,sd_confidence_correct,sd_confidence_incorrect,cohens_d,separation_status,separation_note
+disabled,157,101,56,0.7196782178217822,OK,0.2388095541401274,0.18414012738853505,scipy.stats.ranksums (Wilcoxon rank-sum test),4.553064226029176,5.287012336044019e-06,0.8421782178217821,0.7669642857142858,0.11406668190489315,0.11561565862581294,0.6562098707692138,OK,

@@ -494,6 +494,247 @@ def test_result_serializes_cleanly() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 14. Ranked alternatives (Scenario 2 disabled retrieval-mode ablation)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _json_with_alternatives(alternatives_json: str, *, selected_confidence: float = 0.65) -> str:
+    return f"""{{
+      "target_code": "LOINC:8480-6",
+      "target_term": "Systolic blood pressure",
+      "ontology": "LOINC",
+      "confidence": {selected_confidence},
+      "notes": "LLM-only mapping; retrieval disabled.",
+      "alternatives": [{alternatives_json}]
+    }}"""
+
+
+_ALT_1 = (
+    '{"code": "LOINC:8459-0", "term": "Systolic BP--sitting", '
+    '"ontology": "LOINC", "confidence": 0.4}'
+)
+_ALT_2 = (
+    '{"code": "LOINC:8460-8", "term": "Systolic BP--standing", '
+    '"ontology": "LOINC", "confidence": 0.3}'
+)
+_ALT_3 = (
+    '{"code": "LOINC:8461-6", "term": "Systolic BP--supine", '
+    '"ontology": "LOINC", "confidence": 0.2}'
+)
+_ALT_4 = (
+    '{"code": "LOINC:8478-0", "term": "Mean blood pressure", '
+    '"ontology": "LOINC", "confidence": 0.1}'
+)
+
+
+def test_selected_plus_zero_alternatives() -> None:
+    runner, _ = _runner(_json_with_alternatives(""))
+    result = runner.map(_disabled_plan())
+    assert result.target_code == "LOINC:8480-6"
+    assert result.alternatives == []
+
+
+def test_selected_plus_one_alternative() -> None:
+    runner, _ = _runner(_json_with_alternatives(_ALT_1))
+    result = runner.map(_disabled_plan())
+    assert len(result.alternatives) == 1
+    assert result.alternatives[0].code == "LOINC:8459-0"
+    assert result.alternatives[0].source == "llm"
+
+
+def test_selected_plus_four_alternatives() -> None:
+    alts = ", ".join([_ALT_1, _ALT_2, _ALT_3, _ALT_4])
+    runner, _ = _runner(_json_with_alternatives(alts))
+    result = runner.map(_disabled_plan(), max_alternatives=4)
+    assert len(result.alternatives) == 4
+    codes = {a.code for a in result.alternatives}
+    assert codes == {"LOINC:8459-0", "LOINC:8460-8", "LOINC:8461-6", "LOINC:8478-0"}
+
+
+def test_alternatives_cannot_exceed_max_alternatives() -> None:
+    alts = ", ".join([_ALT_1, _ALT_2, _ALT_3, _ALT_4])
+    runner, _ = _runner(_json_with_alternatives(alts))
+    result = runner.map(_disabled_plan(), max_alternatives=2)
+    assert len(result.alternatives) == 2
+
+
+def test_max_alternatives_zero_returns_no_alternatives() -> None:
+    alts = ", ".join([_ALT_1, _ALT_2])
+    runner, _ = _runner(_json_with_alternatives(alts))
+    result = runner.map(_disabled_plan(), max_alternatives=0)
+    assert result.alternatives == []
+
+
+def test_max_alternatives_two_caps_at_two() -> None:
+    alts = ", ".join([_ALT_1, _ALT_2, _ALT_3])
+    runner, _ = _runner(_json_with_alternatives(alts))
+    result = runner.map(_disabled_plan(), max_alternatives=2)
+    assert len(result.alternatives) == 2
+
+
+def test_selected_code_removed_from_alternatives_if_duplicated() -> None:
+    dup_selected = (
+        '{"code": "LOINC:8480-6", "term": "Systolic blood pressure", '
+        '"ontology": "LOINC", "confidence": 0.5}'
+    )
+    alts = ", ".join([dup_selected, _ALT_1])
+    runner, _ = _runner(_json_with_alternatives(alts))
+    result = runner.map(_disabled_plan(), max_alternatives=4)
+    codes = [a.code for a in result.alternatives]
+    assert "LOINC:8480-6" not in codes
+    assert "LOINC:8459-0" in codes
+
+
+def test_duplicate_alternative_curies_deduplicated() -> None:
+    duplicate_of_alt1 = (
+        '{"code": "LOINC:8459-0", "term": "Systolic BP--sitting (dup)", '
+        '"ontology": "LOINC", "confidence": 0.35}'
+    )
+    alts = ", ".join([_ALT_1, duplicate_of_alt1, _ALT_2])
+    runner, _ = _runner(_json_with_alternatives(alts))
+    result = runner.map(_disabled_plan(), max_alternatives=4)
+    codes = [a.code for a in result.alternatives]
+    assert codes.count("LOINC:8459-0") == 1
+    # First occurrence wins: confidence 0.4, not the duplicate's 0.35.
+    kept = next(a for a in result.alternatives if a.code == "LOINC:8459-0")
+    assert kept.confidence == 0.4
+
+
+def test_alternatives_preserve_llm_rank_order() -> None:
+    alts = ", ".join([_ALT_1, _ALT_2, _ALT_3])
+    runner, _ = _runner(_json_with_alternatives(alts))
+    result = runner.map(_disabled_plan(), max_alternatives=4)
+    assert [a.code for a in result.alternatives] == [
+        "LOINC:8459-0",
+        "LOINC:8460-8",
+        "LOINC:8461-6",
+    ]
+
+
+def test_alternative_confidence_preserved() -> None:
+    runner, _ = _runner(_json_with_alternatives(_ALT_1))
+    result = runner.map(_disabled_plan(), max_alternatives=4)
+    assert result.alternatives[0].confidence == 0.4
+    # Selected confidence is untouched by alternative confidences.
+    assert result.confidence == 0.65
+
+
+def test_target_hpo_constrains_selected_and_alternatives() -> None:
+    hpo_json = """{
+      "target_code": "HP:0012735",
+      "target_term": "Cough",
+      "ontology": "HPO",
+      "confidence": 0.8,
+      "notes": "HPO mapping.",
+      "alternatives": [
+        {"code": "HP:0025267", "term": "Wet cough", "ontology": "HPO", "confidence": 0.3}
+      ]
+    }"""
+    runner, _ = _runner(hpo_json)
+    result = runner.map(_disabled_plan(target_ontology_constraint="HPO"), max_alternatives=4)
+    assert result.ontology == "HPO"
+    assert len(result.alternatives) == 1
+    assert result.alternatives[0].ontology == "HPO"
+
+
+def test_target_mondo_constrains_selected_and_alternatives() -> None:
+    mondo_json = """{
+      "target_code": "MONDO:0005148",
+      "target_term": "Type 2 diabetes mellitus",
+      "ontology": "MONDO",
+      "confidence": 0.8,
+      "notes": "MONDO mapping.",
+      "alternatives": [
+        {"code": "MONDO:0005147", "term": "Type 1 diabetes mellitus", "ontology": "MONDO", "confidence": 0.3}
+      ]
+    }"""
+    runner, _ = _runner(mondo_json)
+    result = runner.map(_disabled_plan(target_ontology_constraint="MONDO"), max_alternatives=4)
+    assert result.ontology == "MONDO"
+    assert len(result.alternatives) == 1
+    assert result.alternatives[0].ontology == "MONDO"
+
+
+def test_target_loinc_constrains_selected_and_alternatives() -> None:
+    runner, _ = _runner(_json_with_alternatives(_ALT_1))
+    result = runner.map(_disabled_plan(target_ontology_constraint="LOINC"), max_alternatives=4)
+    assert result.ontology == "LOINC"
+    assert len(result.alternatives) == 1
+    assert result.alternatives[0].ontology == "LOINC"
+
+
+def test_violating_alternative_is_dropped() -> None:
+    hpo_alt = (
+        '{"code": "HP:0012735", "term": "Cough", "ontology": "HPO", "confidence": 0.3}'
+    )
+    alts = ", ".join([_ALT_1, hpo_alt])
+    runner, _ = _runner(_json_with_alternatives(alts))
+    result = runner.map(_disabled_plan(target_ontology_constraint="LOINC"), max_alternatives=4)
+    codes = [a.code for a in result.alternatives]
+    assert "LOINC:8459-0" in codes
+    assert not any(a.ontology == "HPO" for a in result.alternatives)
+
+
+def test_valid_selected_survives_bad_alternative() -> None:
+    """A malformed alternative (out-of-range confidence) is dropped, not fatal."""
+    bad_alt = (
+        '{"code": "LOINC:8459-0", "term": "Systolic BP--sitting", '
+        '"ontology": "LOINC", "confidence": 1.7}'
+    )
+    runner, _ = _runner(_json_with_alternatives(bad_alt))
+    result = runner.map(_disabled_plan(), max_alternatives=4)
+    assert result.target_code == "LOINC:8480-6"
+    assert result.confidence == 0.65
+    assert result.alternatives == []
+
+
+def test_unmapped_result_has_no_alternatives_even_if_llm_includes_them() -> None:
+    unmapped_with_alts_json = """{
+      "target_code": "UNKNOWN:UNMAPPED",
+      "target_term": "UNMAPPED",
+      "ontology": "UNKNOWN",
+      "confidence": 0.0,
+      "notes": "Could not map confidently.",
+      "alternatives": [
+        {"code": "LOINC:8459-0", "term": "Systolic BP--sitting", "ontology": "LOINC", "confidence": 0.3}
+      ]
+    }"""
+    runner, _ = _runner(unmapped_with_alts_json)
+    result = runner.map(_disabled_plan(), max_alternatives=4)
+    assert result.target_code == "UNKNOWN:UNMAPPED"
+    assert result.alternatives == []
+
+
+def test_disabled_with_alternatives_still_retrieval_skipped_true() -> None:
+    runner, _ = _runner(_json_with_alternatives(_ALT_1))
+    result = runner.map(_disabled_plan(), max_alternatives=4)
+    assert _meta(result)["retrieval_skipped"] is True
+
+
+def test_disabled_with_alternatives_still_is_grounded_false() -> None:
+    runner, _ = _runner(_json_with_alternatives(_ALT_1))
+    result = runner.map(_disabled_plan(), max_alternatives=4)
+    assert _meta(result)["is_grounded"] is False
+
+
+def test_disabled_alternatives_have_no_retrieval_provenance() -> None:
+    """Alternatives are LLM-only; no NormalizedCandidate/provenance fields exist."""
+    runner, _ = _runner(_json_with_alternatives(_ALT_1))
+    result = runner.map(_disabled_plan(), max_alternatives=4)
+    alt = result.alternatives[0]
+    assert alt.source == "llm"
+    assert not hasattr(alt, "raw_score")
+    assert not hasattr(alt, "provenance")
+    assert _meta(result)["candidate_count"] == 0
+
+
+def test_negative_max_alternatives_raises() -> None:
+    runner, _ = _runner()
+    with pytest.raises(DisabledMappingError, match="max_alternatives"):
+        runner.map(_disabled_plan(), max_alternatives=-1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 12. Public package surface
 # ─────────────────────────────────────────────────────────────────────────────
 

@@ -433,16 +433,19 @@ class _DisabledRunner:
         self.calls = calls
         self.last_plan: QueryPlan | None = None
         self.last_source_type: str | None = None
+        self.last_max_alternatives: int | None = None
 
     def map(
         self,
         query_plan: QueryPlan,
         *,
         source_type: str | None = None,
+        max_alternatives: int = 5,
     ) -> MappingResult:
         self.calls.append("disabled")
         self.last_plan = query_plan
         self.last_source_type = source_type
+        self.last_max_alternatives = max_alternatives
         return _disabled_result(query_plan, source_type=source_type)
 
 
@@ -1166,6 +1169,14 @@ def test_max_alternatives_passed_to_mapping_result_builder() -> None:
     pipeline.map_term("sys_bp", max_alternatives=4)
 
     assert parts["builder"].last_kwargs["max_alternatives"] == 4
+
+
+def test_max_alternatives_passed_to_disabled_mapping_runner() -> None:
+    pipeline, parts = _pipeline()
+
+    pipeline.map_term("sys_bp", retrieval_mode=RetrievalMode.DISABLED, max_alternatives=4)
+
+    assert parts["disabled"].last_max_alternatives == 4
 
 
 def test_public_mapping_result_has_grounded_metadata() -> None:

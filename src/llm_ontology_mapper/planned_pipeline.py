@@ -177,7 +177,11 @@ class PlannedPipeline:
             )
 
             if mode == RetrievalMode.DISABLED:
-                return self._map_disabled(query_plan, source_type=source_type)
+                return self._map_disabled(
+                    query_plan,
+                    source_type=source_type,
+                    max_alternatives=max_alternatives,
+                )
 
             raw_candidates = _time_stage(
                 timings,
@@ -311,11 +315,13 @@ class PlannedPipeline:
         query_plan: QueryPlan,
         *,
         source_type: str | None,
+        max_alternatives: int,
     ) -> MappingResult:
         try:
             return self._disabled_mapping_runner.map(
                 query_plan,
                 source_type=source_type,
+                max_alternatives=max_alternatives,
             )
         except Exception as exc:
             raise PlannedPipelineError(
