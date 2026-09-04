@@ -96,13 +96,13 @@ class OntologyMapper:
         # ── RAG parameters ────────────────────────────────────────────────────
         use_rag: bool = False,
         ontology_retriever: Any | None = None,  # OntologyRetriever
-        rag_top_k: int = 5,
+        rag_top_k: int = 15,
         rag_auto_accept_threshold: float = 0.0,
         # ── Planned pipeline opt-in ──────────────────────────────────────────
         use_planned_pipeline: bool = False,
         retrieval_mode: RetrievalMode | str = RetrievalMode.PUBLIC,
         planned_pipeline: Any | None = None,
-        max_candidates: int | None = 10,
+        max_candidates: int | None = 20,
         max_alternatives: int = 5,
         # ── Legacy compat flags ───────────────────────────────────────────────
         use_ontogpt: bool = False,  # deprecated no-op

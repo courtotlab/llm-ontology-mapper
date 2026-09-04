@@ -240,7 +240,7 @@ class LocalSemanticRetriever:
         query_plan: QueryPlan,
         *,
         route_plan: RetrievalRoutePlan | None = None,
-        max_results_per_query: int = 10,
+        max_results_per_query: int = 15,
         route_calls: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
         """

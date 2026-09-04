@@ -17,6 +17,8 @@ from llm_ontology_mapper.benchmarking.scenario1_dataset import (
     build_canonical_queries,
     expand_to_mapping_pairs,
     load_raw_dataset,
+    parse_gold_codes,
+    parse_gold_labels,
 )
 
 pytestmark = pytest.mark.unit
@@ -145,6 +147,181 @@ def test_audit_gold_count_distribution(tmp_path: Path) -> None:
     audit = audit_dataset(df)
     assert audit.gold_count_distribution == {1: 1, 2: 1}
     assert audit.max_gold_codes_per_query == 2
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4b. multi-gold codes encoded in a single ref_match_id cell (UKBB gold-
+# parsing-bug fix) -- "CODE:A | CODE:B" must behave like two raw rows for
+# scoring purposes, per the confirmed audit finding on UKBB query_id 872.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_parse_gold_codes_single_code_unchanged() -> None:
+    assert parse_gold_codes("EFO:0000001") == ["EFO:0000001"]
+
+
+def test_parse_gold_codes_splits_compound_cell_and_trims_whitespace() -> None:
+    assert parse_gold_codes("EFO:0009679 | EFO:0009684") == ["EFO:0009679", "EFO:0009684"]
+    assert parse_gold_codes("EFO:0009679|EFO:0009684") != ["EFO:0009679", "EFO:0009684"]  # no bare "|" delimiter
+
+
+def test_parse_gold_codes_never_splits_on_colon() -> None:
+    codes = parse_gold_codes("EFO:0009679 | EFO:0009684")
+    assert all(":" in c for c in codes)
+    assert codes == ["EFO:0009679", "EFO:0009684"]
+
+
+def test_parse_gold_codes_drops_blank_pieces() -> None:
+    assert parse_gold_codes("EFO:0000001 |  | EFO:0000002") == ["EFO:0000001", "EFO:0000002"]
+    assert parse_gold_codes("   ") == []
+    assert parse_gold_codes(None) == []
+
+
+def test_parse_gold_labels_symmetric_double_pipe_pairs_positionally() -> None:
+    assert parse_gold_labels("fatigue||malaise", code_count=2) == ["fatigue", "malaise"]
+
+
+def test_parse_gold_labels_symmetric_spaced_pipe_pairs_positionally() -> None:
+    assert parse_gold_labels(
+        "musculoskeletal system disease | connective tissue disease", code_count=2
+    ) == ["musculoskeletal system disease", "connective tissue disease"]
+
+
+def test_parse_gold_labels_asymmetric_count_never_invents_pairing() -> None:
+    # UKBB query 872: one label ("paraplegia") for two codes -- must not
+    # arbitrarily attribute the single label to either code.
+    assert parse_gold_labels("paraplegia", code_count=2) == [None, None]
+
+
+def test_parse_gold_labels_single_code_no_delimiter_unchanged() -> None:
+    assert parse_gold_labels("atrial fibrillation", code_count=1) == ["atrial fibrillation"]
+
+
+def test_build_canonical_queries_query_872_style_fixture_yields_two_codes_and_missing_labels(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "q872.csv"
+    _write_csv(
+        path,
+        [{"query": "Paraplegia and tetraplegia", "ref_match": "paraplegia", "ref_match_id": "EFO:0009679 | EFO:0009684"}],
+    )
+    df = load_raw_dataset(path)
+    cqs = build_canonical_queries(df)
+    assert len(cqs) == 1
+    cq = cqs[0]
+    assert cq.gold_codes == ["EFO:0009679", "EFO:0009684"]
+    assert cq.gold_labels == [None, None]
+    assert cq.gold_count == 2
+
+
+def test_build_canonical_queries_deduplicates_split_codes_across_rows(tmp_path: Path) -> None:
+    """One raw row encoding "CODE:A | CODE:B" plus a second raw row for the
+    same query repeating CODE:A must still contribute exactly {CODE:A,
+    CODE:B} -- dedup happens at the individual-code level after splitting,
+    not at the whole-cell level."""
+    path = tmp_path / "dedup.csv"
+    _write_csv(
+        path,
+        [
+            {"query": "q", "ref_match": "a||b", "ref_match_id": "EFO:0000001 | EFO:0000002"},
+            {"query": "q", "ref_match": "a again", "ref_match_id": "EFO:0000001"},
+        ],
+    )
+    df = load_raw_dataset(path)
+    cqs = build_canonical_queries(df)
+    assert len(cqs) == 1
+    assert cqs[0].gold_codes == ["EFO:0000001", "EFO:0000002"]
+    assert cqs[0].gold_count == 2
+
+
+def test_first_gold_rank_recognizes_either_split_gold_code() -> None:
+    from llm_ontology_mapper.benchmarking.scenario1_metrics import first_gold_rank
+
+    ranks = (None, "EFO:0009679", "EFO:0009684", "HP:0003470", "HP:0002385")
+    gold_codes = ("EFO:0009679", "EFO:0009684")
+    assert first_gold_rank(ranks, gold_codes) == 2  # first rank slot containing ANY acceptable gold code
+
+
+def test_query_872_expected_topk_mrr_recall_after_gold_correction() -> None:
+    """The real (already-completed) UKBB targeted rerun for query_id 872
+    produced rank_1=blank, rank_2=EFO:0009679, rank_3=EFO:0009684 -- verify
+    the canonical scorer, given the CORRECTED two-code gold set, reproduces
+    exactly the audit's derived expected metrics."""
+    from llm_ontology_mapper.benchmarking.scenario1_metrics import PredictionRecord, score_prediction
+
+    record = PredictionRecord(
+        query_id=872,
+        query="Paraplegia and tetraplegia",
+        gold_codes=("EFO:0009679", "EFO:0009684"),
+        status="unmapped",
+        ranks=(None, "EFO:0009679", "EFO:0009684", "HP:0003470", "HP:0002385"),
+    )
+    row_metrics = score_prediction(record)
+    assert row_metrics.gold_rank == 2
+    assert row_metrics.top1_hit is False
+    assert row_metrics.top3_hit is True
+    assert row_metrics.top5_hit is True
+    assert row_metrics.reciprocal_rank == 0.5
+    assert row_metrics.recall_at_gt == 0.5
+
+
+def test_audit_dataset_counts_multi_code_cells_correctly(tmp_path: Path) -> None:
+    path = tmp_path / "multi_code.csv"
+    _write_csv(
+        path,
+        [
+            {"query": "q1", "ref_match": "a||b", "ref_match_id": "EFO:0000001 | EFO:0000002"},
+            {"query": "q2", "ref_match": "c", "ref_match_id": "EFO:0000003"},
+        ],
+    )
+    df = load_raw_dataset(path)
+    audit = audit_dataset(df)
+    assert audit.unique_mapping_pair_count == 3  # 2 (split) + 1
+    assert audit.unique_query_count == 2
+
+
+def test_audit_dataset_max_gold_codes_per_query_reflects_split_count(tmp_path: Path) -> None:
+    path = tmp_path / "max_gold.csv"
+    _write_csv(
+        path,
+        [{"query": "q", "ref_match": "a||b", "ref_match_id": "EFO:0000001 | EFO:0000002"}],
+    )
+    df = load_raw_dataset(path)
+    audit = audit_dataset(df)
+    assert audit.max_gold_codes_per_query == 2
+    assert audit.gold_count_distribution == {2: 1}
+
+
+def test_ols_style_single_code_dataset_unaffected_by_gold_parsing_fix(tmp_path: Path) -> None:
+    """OLS-EFO_full.csv never encodes multiple codes in one cell -- the fix
+    must be a complete no-op for it."""
+    path = tmp_path / "ols_style.csv"
+    _write_csv(
+        path,
+        [
+            {"query": "progressive supranuclear palsy", "ref_match": "obsolete_supranuclear palsy, progressive", "ref_match_id": "EFO:0002512"},
+            {"query": "osteoarthritis, knee", "ref_match": "osteoarthritis, knee", "ref_match_id": "EFO:0004616"},
+        ],
+    )
+    df = load_raw_dataset(path)
+    cqs = build_canonical_queries(df)
+    audit = audit_dataset(df)
+    assert [cq.gold_codes for cq in cqs] == [["EFO:0002512"], ["EFO:0004616"]]
+    assert audit.gold_count_distribution == {1: 2}
+    assert audit.max_gold_codes_per_query == 1
+
+
+def test_biomappings_style_single_code_dataset_unaffected_by_gold_parsing_fix(tmp_path: Path) -> None:
+    path = tmp_path / "biomappings_style.csv"
+    _write_csv(
+        path,
+        [{"query": "type 2 diabetes mellitus", "ref_match": "type 2 diabetes mellitus", "ref_match_id": "EFO:0001360"}],
+    )
+    df = load_raw_dataset(path)
+    cqs = build_canonical_queries(df)
+    audit = audit_dataset(df)
+    assert cqs[0].gold_codes == ["EFO:0001360"]
+    assert audit.max_gold_codes_per_query == 1
 
 
 # ─────────────────────────────────────────────────────────────────────────────

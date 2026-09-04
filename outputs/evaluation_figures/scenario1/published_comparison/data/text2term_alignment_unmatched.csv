@@ -1,0 +1,159 @@
+benchmark,side,source,gold,reason
+UKBB-EFO,t2t,Abnormal results of function studies,EFO:0009628,no exact identity match in our single-gold subset
+UKBB-EFO,t2t,Unspecified fall,EFO:0009631,no exact identity match in our single-gold subset
+UKBB-EFO,t2t,Getting up in morning,EFO:0009817,no exact identity match in our single-gold subset
+UKBB-EFO,t2t,Number of stillbirths,EFO:0009722,no exact identity match in our single-gold subset
+UKBB-EFO,t2t,Bring up phlegm/sputum/mucus on most days,EFO:0009824,no exact identity match in our single-gold subset
+UKBB-EFO,t2t,Volume_depletion,HP0011106,no exact identity match in our single-gold subset
+Biomappings-EFO,ours,RD,EFO:0002315,no exact identity match
+OLS-EFO (full),ours,?瘡,EFO:0003894,no exact identity match
+OLS-EFO (full),ours,A血型,EFO:0600060,no exact identity match
+OLS-EFO (full),t2t,B-Cell Non-Hodgkin Lymphoma,EFO:0000096,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,B cell,EFO:0000097,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Ewing sarcoma,EFO:0000173,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Askin's tumor,EFO:0000174,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Askin Tumor,EFO:0000174,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,invasive ductal carcinoma,EFO:0000186,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,malignant peripheral nerve sheath tumor,EFO:0000194,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,obsolete precursor lymphoblastic lymphoma/leukemia,EFO:0000219,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,lymphoid leukemia,EFO:0000220,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,malignant astrocytoma,EFO:0000271,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,bladder,EFO:0000290,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,central nervous system,EFO:0000302,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,pharyngeal nervous system,EFO:0000302,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,limb-girdle muscular dystrophy,EFO:0000310,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Central Nervous System Neoplasm,EFO:0000326,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,cerebral cortex,EFO:0000328,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,chronic myeloid leukemia,EFO:0000339,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Mesonephric Adenocarcinoma,EFO:0000348,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,clear cell renal cell carcinoma,EFO:0000349,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,posterior intestine,EFO:0000361,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,colon adenocarcinoma,EFO:0000362,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,colon carcinoma,EFO:0000363,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,dilated cardiomyopathy,EFO:0000372,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,diabetic autonomic neuropathy,EFO:0000401,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,intestinal disease,EFO:0000405,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,gastrointestinal system disease,EFO:0000405,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,dilated cardiomyopathy,EFO:0000407,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,thyroid adenoma,EFO:0000499,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,embryonal cancer,EFO:0000514,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,invasive lobular carcinoma,EFO:0000553,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,lung adenocarcinoma,EFO:0000571,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,mixed oligodendroglioma-astrocytoma,EFO:0000630,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,disease of mental health,EFO:0000677,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,psychotic disorder,EFO:0000677,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Renal Cell Carcinoma,EFO:0000681,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Myofibroma,EFO:0000731,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,well-differentiated liposarcoma,EFO:0000736,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Well Differentiated Liposarcoma,EFO:0000736,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,viral infectious disease,EFO:0000763,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,cranium,EFO:0000792,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,head,EFO:0000792,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,olfactory system,EFO:0000828,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,cranium,EFO:0000831,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Skeletal system of head,EFO:0000831,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,intestine,EFO:0000834,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Rectum,EFO:0000841,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,pancreatic islet,EFO:0000856,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,pancreatic islet,EFO:0000857,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Lymph node,EFO:0000870,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,lymph node,EFO:0000870,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,lymph node,EFO:0000872,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,ganglion,EFO:0000890,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,peripheral nervous system,EFO:0000891,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,peripheral nervous system,EFO:0000893,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,ganglion,EFO:0000899,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,ganglion,EFO:0000900,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,central nervous system,EFO:0000908,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,kidney,EFO:0000928,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,kidney,EFO:0000929,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,excretory duct,EFO:0000930,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,axial skeleton,EFO:0000942,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,postcranial axial skeleton,EFO:0000942,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,head,EFO:0000964,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,ZFA_0009008,EFO:0000972,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,leaf,EFO:0000993,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,SUM1315MO2 cell,EFO:0001239,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,gastrulating embryo Ce,EFO:0001296,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Hatching:Long-pec,EFO:0001298,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,larva Ce,EFO:0001303,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,macular degeneration,EFO:0001365,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,embryo Ce,EFO:0001367,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,hypopharynx,EFO:0001388,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,olfactory system,EFO:0001973,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,HL-60 cell,EFO:0002058,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,blood-lymph,EFO:0002300,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,RCH-ACV cell,EFO:0002314,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,myeloproliferative neoplasm,EFO:0002428,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,myeloproliferative disorder,EFO:0002428,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Myeloproliferative Neoplasm,EFO:0002428,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,multiple system atrophy,EFO:0002505,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,juvenile rheumatoid arthritis,EFO:0002609,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Waldenstrom Macroglobulinemia,EFO:0002616,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,pituitary adenoma,EFO:0002619,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,primary hyperparathyroidism,EFO:0002620,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Hiperparatiroidismo primario,EFO:0002620,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,JURKAT cell,EFO:0002796,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,neurofibromatosis,EFO:0003092,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,neuropathy,EFO:0003100,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Spina Bifida,EFO:0003105,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,atypical autism,EFO:0003756,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,obsolete melancholia,EFO:0003761,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,autoimmune thyroiditis,EFO:0003779,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,larynx cancer,EFO:0003817,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,lung disease,EFO:0003818,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,bone cancer,EFO:0003820,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,secondary progressive multiple sclerosis,EFO:0003840,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,primary progressive multiple sclerosis,EFO:0003840,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,pancreatic cancer,EFO:0003860,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,multiple sclerosis,EFO:0003885,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,congenital myopathy 1A,EFO:0004146,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,viral hepatitis,EFO:0004196,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Creutzfeldt-Jakob Disease,EFO:0004226,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,endometrial carcinoma,EFO:0004230,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,testicular cancer,EFO:0004281,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,testicular germ cell cancer,EFO:0004281,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,lymphoid leukemia,EFO:0004289,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,blood granulocyte count,EFO:0005090,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Binge Eating,EFO:0005204,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Endometrial Endometrioid Adenocarcinoma,EFO:0005232,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,psychotic disorder,EFO:0005407,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,peritoneal mesothelioma,EFO:0005567,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,penis carcinoma,EFO:0005575,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,embryonic stage,EFO:0005857,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,embryonic stage,EFO:0005859,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,lung mucoepidermoid carcinoma,EFO:0006740,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,cecal benign neoplasm,EFO:0007197,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,islet cell tumor,EFO:0007331,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,mixed cell type cancer,EFO:0007373,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,embryonic stage,EFO:0007725,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,chronic interstitial cystitis,EFO:0008507,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,primary hyperparathyroidism,EFO:0008519,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,bullous skin disease,EFO:0008598,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,gastric outlet obstruction,EFO:0009626,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,enthesitis-related juvenile idiopathic arthritis,EFO:0009732,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,"CAUCHETEUR, Déborah",EFO:0010716,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,"Baudis, Michael",EFO:0010937,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,"Nejad, Parisa",EFO:0010945,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Blood group,EFO:0600058,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Birt-Hogg-Dube syndrome,EFO:0700020,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,multiple sclerosis,EFO:0803536,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Askin Tumor,EFO:1000095,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,well-differentiated liposarcoma,EFO:1000099,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Central Nervous System Neoplasm,EFO:1000158,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Endometrial Endometrioid Adenocarcinoma,EFO:1000233,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Myofibroma,EFO:1000389,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,peritoneal mesothelioma,EFO:1000467,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,photoallergic dermatitis,EFO:1000751,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,obsolete ascorbic acid deficiency,EFO:1000822,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Klatskin's tumor,EFO:1001005,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,scleroderma,EFO:1001361,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,endometrial carcinoma,EFO:1001512,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,Klatskin's tumor,EFO:1001959,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,scleroderma,EFO:1001993,no exact identity match in our single-gold subset
+OLS-EFO (full),t2t,gastritis,EFO:0000217,ambiguous duplicate on t2t side
+OLS-EFO (full),t2t,gastritis,EFO:0000217,ambiguous duplicate on t2t side
+OLS-EFO (full),t2t,angiomyoma,EFO:1000084,ambiguous duplicate on t2t side
+OLS-EFO (full),t2t,angiomyoma,EFO:1000084,ambiguous duplicate on t2t side
+OLS-EFO (full),t2t,subependymal glioma,EFO:1000553,ambiguous duplicate on t2t side
+OLS-EFO (full),t2t,subependymal glioma,EFO:1000553,ambiguous duplicate on t2t side

@@ -122,7 +122,7 @@ class PlannedPipeline:
         target_ontology: str | None = None,
         allowed_target_ontologies: list[str] | None = None,
         retrieval_mode: RetrievalMode | str = RetrievalMode.PUBLIC,
-        max_results_per_query: int = 10,
+        max_results_per_query: int = 15,
         max_candidates: int | None = None,
         max_alternatives: int = 5,
         *,

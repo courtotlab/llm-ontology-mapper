@@ -855,7 +855,7 @@ def test_snomed_alias_from_planner_routes_through_public_snomed() -> None:
     assert planner.last_kwargs["target_ontology"] == "SNOMED"
     assert planner.last_kwargs["allowed_target_ontologies"] == ["SNOMED"]
     assert search_tools.calls == [
-        {"query": "inhaled nitric oxide", "ontology": "SNOMED", "top_k": 10}
+        {"query": "inhaled nitric oxide", "ontology": "SNOMED", "top_k": 15}
     ]
     assert result.target_code == "SNOMEDCT:123456"
     assert result.ontology == "SNOMED-CT"
@@ -1153,6 +1153,16 @@ def test_max_results_per_query_passed_to_retriever() -> None:
     pipeline.map_term("sys_bp", max_results_per_query=7)
 
     assert parts["public"].last_max_results_per_query == 7
+
+
+def test_max_results_per_query_default_is_15() -> None:
+    """Recall-increase change: PlannedPipeline.map_term's own per-query
+    default rose from 10 to 15; explicit overrides (above) still win."""
+    pipeline, parts = _pipeline()
+
+    pipeline.map_term("sys_bp")
+
+    assert parts["public"].last_max_results_per_query == 15
 
 
 def test_max_candidates_passed_to_candidate_merger() -> None:

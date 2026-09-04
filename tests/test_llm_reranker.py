@@ -122,6 +122,7 @@ def _make_candidate(
     normalized_score: float | None = 0.9,
     definition: str | None = None,
     retrieved_from_ontologies: list[str] | None = None,
+    common_test_rank: int | None = None,
 ) -> NormalizedCandidate:
     return NormalizedCandidate(
         code=code,
@@ -134,6 +135,7 @@ def _make_candidate(
         normalized_score=normalized_score,
         definition=definition,
         retrieved_from_ontologies=retrieved_from_ontologies or [],
+        common_test_rank=common_test_rank,
     )
 
 
@@ -401,6 +403,175 @@ def test_unmapped_response_is_unmapped() -> None:
     assert result.selected_candidate_id is None
     assert result.is_grounded is False
     assert result.grounding_source == GroundingSource.NONE
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test 8b: UNMAPPED responses can still carry ranked candidate evaluations
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _unmapped_response_with_alternatives(
+    alternatives: list[dict[str, Any]],
+    *,
+    reasoning: str = "No candidate is sufficiently correct.",
+) -> str:
+    return json.dumps(
+        {
+            "selected_candidate_id": None,
+            "selected_code": None,
+            "is_unmapped": True,
+            "confidence": 0.0,
+            "reasoning": reasoning,
+            "alternatives": alternatives,
+            "alternative_codes": [],
+        }
+    )
+
+
+@pytest.mark.unit
+def test_unmapped_response_preserves_ranked_alternatives() -> None:
+    """The reranker can express UNMAPPED as the final decision while still
+    returning ranked evaluations of the candidates it rejected."""
+    c1 = _make_candidate(code="LOINC:1000-1", ontology="LOINC")
+    c2 = _make_candidate(code="LOINC:1000-2", ontology="LOINC")
+    response = _unmapped_response_with_alternatives(
+        [
+            {
+                "candidate_id": "C1",
+                "code": "LOINC:1000-1",
+                "confidence": 0.24,
+                "explanation": "Related glucose measurement, but requires a "
+                "specimen not specified by the source.",
+            },
+            {
+                "candidate_id": "C2",
+                "code": "LOINC:1000-2",
+                "confidence": 0.12,
+                "explanation": "Related concept, but represents a timed "
+                "post-dose measurement.",
+            },
+        ]
+    )
+    reranker = LLMReranker(_StubProvider(response))
+
+    result = reranker.rerank(_make_plan(target_ontology_constraint="LOINC"), [c1, c2])
+
+    assert result.is_unmapped is True
+    assert result.selected_code is None
+    assert result.selected_candidate_id is None
+    assert result.confidence == 0.0
+    assert [alt.code for alt in result.alternatives] == ["LOINC:1000-1", "LOINC:1000-2"]
+    assert [alt.confidence for alt in result.alternatives] == [0.24, 0.12]
+    assert result.alternative_codes == ["LOINC:1000-1", "LOINC:1000-2"]
+
+
+@pytest.mark.unit
+def test_unmapped_alternative_confidence_may_exceed_zero_decision_confidence() -> None:
+    """Unlike the selected path, UNMAPPED alternatives are not capped by the
+    decision's own confidence (which stays 0.0)."""
+    c1 = _make_candidate(code="LOINC:1000-1", ontology="LOINC")
+    response = _unmapped_response_with_alternatives(
+        [
+            {
+                "candidate_id": "C1",
+                "code": "LOINC:1000-1",
+                "confidence": 0.6,
+                "explanation": "Close but insufficient.",
+            },
+        ]
+    )
+    reranker = LLMReranker(_StubProvider(response))
+
+    result = reranker.rerank(_make_plan(target_ontology_constraint="LOINC"), [c1])
+
+    assert result.confidence == 0.0
+    assert result.alternatives[0].confidence == 0.6
+
+
+@pytest.mark.unit
+def test_unmapped_alternatives_ordered_by_descending_confidence() -> None:
+    c1 = _make_candidate(code="LOINC:1000-1", ontology="LOINC")
+    c2 = _make_candidate(code="LOINC:1000-2", ontology="LOINC")
+    c3 = _make_candidate(code="LOINC:1000-3", ontology="LOINC")
+    response = _unmapped_response_with_alternatives(
+        [
+            {"candidate_id": "C1", "code": "LOINC:1000-1", "confidence": 0.10, "explanation": "low"},
+            {"candidate_id": "C2", "code": "LOINC:1000-2", "confidence": 0.35, "explanation": "high"},
+            {"candidate_id": "C3", "code": "LOINC:1000-3", "confidence": 0.20, "explanation": "mid"},
+        ]
+    )
+    reranker = LLMReranker(_StubProvider(response))
+
+    result = reranker.rerank(_make_plan(target_ontology_constraint="LOINC"), [c1, c2, c3])
+
+    assert [alt.confidence for alt in result.alternatives] == [0.35, 0.20, 0.10]
+
+
+@pytest.mark.unit
+def test_unmapped_alternatives_respect_max_alternatives_default() -> None:
+    codes = [f"LOINC:2000-{i}" for i in range(7)]
+    candidates = [_make_candidate(code=code, ontology="LOINC") for code in codes]
+    response = _unmapped_response_with_alternatives(
+        [
+            {
+                "candidate_id": f"C{i + 1}",
+                "code": codes[i],
+                "confidence": 0.5 - i * 0.01,
+                "explanation": f"Alternative {i}.",
+            }
+            for i in range(7)
+        ]
+    )
+    reranker = LLMReranker(_StubProvider(response))
+
+    result = reranker.rerank(_make_plan(target_ontology_constraint="LOINC"), candidates)
+
+    assert len(result.alternatives) == 5
+
+
+@pytest.mark.unit
+def test_unmapped_alternatives_reject_fabricated_candidate() -> None:
+    """A hallucinated candidate_id/code not in the candidate map must never
+    surface as an alternative -- grounding still applies to UNMAPPED."""
+    c1 = _make_candidate(code="LOINC:1000-1", ontology="LOINC")
+    response = _unmapped_response_with_alternatives(
+        [
+            {
+                "candidate_id": "C1",
+                "code": "LOINC:1000-1",
+                "confidence": 0.24,
+                "explanation": "Retrieved, kept.",
+            },
+            {
+                "candidate_id": "C99",
+                "code": "LOINC:9999-9",
+                "confidence": 0.90,
+                "explanation": "Invented candidate id -- must be dropped.",
+            },
+        ]
+    )
+    reranker = LLMReranker(_StubProvider(response))
+
+    result = reranker.rerank(_make_plan(target_ontology_constraint="LOINC"), [c1])
+
+    assert [alt.code for alt in result.alternatives] == ["LOINC:1000-1"]
+    assert all(alt.code != "LOINC:9999-9" for alt in result.alternatives)
+
+
+@pytest.mark.unit
+def test_unmapped_response_without_alternatives_still_has_empty_alternatives() -> None:
+    """If candidates were retrieved but the reranker's UNMAPPED response
+    carries no valid alternatives, the decision must still have
+    alternatives=[] -- no alternatives are invented."""
+    candidate = _make_candidate()
+    provider = _StubProvider(_UNMAPPED_RESPONSE)
+    reranker = LLMReranker(provider)
+
+    result = reranker.rerank(_make_plan(), [candidate])
+
+    assert result.is_unmapped is True
+    assert result.alternatives == []
+    assert result.alternative_codes == []
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1640,6 +1811,28 @@ def test_multiple_candidates_get_sequential_ids() -> None:
 
 
 @pytest.mark.unit
+def test_reranker_does_not_hide_truncate_a_twenty_candidate_pool() -> None:
+    """Recall-increase change: the merged-candidate cap that feeds the
+    reranker rose from 10 to 20. LLMReranker itself must not reintroduce a
+    hidden count-based truncation -- all 20 candidates must reach the
+    provider prompt and remain selectable, including the 20th."""
+    candidates = [_make_candidate(code=f"HP:{i:07d}", term=f"Term {i}") for i in range(20)]
+    twentieth_code = "HP:0000019"
+    resp = _response(selected_cid="C20", selected_code=twentieth_code)
+    provider = _StubProvider(resp)
+    reranker = LLMReranker(provider)
+
+    result = reranker.rerank(_make_plan(), candidates)
+
+    assert result.selected_candidate_id == "C20"
+    assert result.selected_code == twentieth_code
+
+    sent_prompt = provider.calls[0][-1].content
+    for i in range(20):
+        assert f"C{i + 1}:" in sent_prompt, f"candidate C{i + 1} missing from reranker prompt"
+
+
+@pytest.mark.unit
 def test_unmapped_from_llm_has_grounding_source_none() -> None:
     candidate = _make_candidate()
     provider = _StubProvider(_UNMAPPED_RESPONSE)
@@ -1735,6 +1928,176 @@ def test_scores_appear_in_candidate_list() -> None:
     user_message = provider.calls[0][1].content
     assert "0.8700" in user_message
     assert "0.9100" in user_message
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LOINC common_test_rank exposure to the reranker
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_ranked_loinc_candidate_exposes_common_test_rank_in_prompt() -> None:
+    candidate = _make_candidate(
+        code="LOINC:8480-6",
+        term="Systolic blood pressure",
+        ontology="LOINC",
+        source="LOINC-Search-API",
+        common_test_rank=3,
+    )
+    provider = _StubProvider(_response(selected_code="LOINC:8480-6"))
+    reranker = LLMReranker(provider)
+
+    reranker.rerank(_make_plan(target_ontology_constraint="LOINC"), [candidate])
+
+    user_message = provider.calls[0][1].content
+    assert "common_test_rank=3" in user_message
+
+
+@pytest.mark.unit
+def test_unranked_loinc_candidate_omits_common_test_rank_from_prompt() -> None:
+    candidate = _make_candidate(
+        code="LOINC:8480-6",
+        term="Systolic blood pressure",
+        ontology="LOINC",
+        source="LOINC-Search-API",
+        common_test_rank=None,
+    )
+    provider = _StubProvider(_response(selected_code="LOINC:8480-6"))
+    reranker = LLMReranker(provider)
+
+    reranker.rerank(_make_plan(target_ontology_constraint="LOINC"), [candidate])
+
+    # The static policy section always mentions "common_test_rank" as
+    # instructional text; what must be absent is the per-candidate assignment
+    # (the "## Retrieved candidates" line for this candidate).
+    candidate_list = llm_reranker_module._build_candidate_list(
+        {"C1": candidate}
+    )
+    assert "common_test_rank=" not in candidate_list
+
+
+@pytest.mark.unit
+def test_non_loinc_candidate_never_shows_common_test_rank_in_prompt() -> None:
+    candidate = _make_candidate(code="HP:0012735", ontology="HPO")
+    provider = _StubProvider(_response())
+    reranker = LLMReranker(provider)
+
+    reranker.rerank(_make_plan(), [candidate])
+
+    candidate_list = llm_reranker_module._build_candidate_list({"C1": candidate})
+    assert "common_test_rank=" not in candidate_list
+
+
+@pytest.mark.unit
+def test_common_test_rank_zero_is_structurally_rejected_by_candidate_model() -> None:
+    """The live Search API's unranked sentinel (0) must never reach the
+    reranker as rank zero -- enforced at the NormalizedCandidate boundary
+    itself (gt=0), not only by SearchTools' own parsing."""
+    with pytest.raises(ValidationError):
+        NormalizedCandidate(
+            code="LOINC:8480-6",
+            term="Systolic blood pressure",
+            ontology="LOINC",
+            source="LOINC-Search-API",
+            matched_query="systolic blood pressure",
+            retrieval_mode=RetrievalMode.PUBLIC,
+            common_test_rank=0,
+        )
+
+
+@pytest.mark.unit
+def test_reranker_prompt_states_semantic_correctness_overrides_common_test_rank() -> None:
+    candidate = _make_candidate()
+    provider = _StubProvider(_response())
+    reranker = LLMReranker(provider)
+
+    reranker.rerank(_make_plan(), [candidate])
+
+    user_message = provider.calls[0][1].content.lower()
+    assert "common_test_rank" in user_message
+    assert "semantic compatibility always takes priority" in user_message
+
+
+@pytest.mark.unit
+def test_reranker_prompt_states_lower_positive_rank_is_more_common() -> None:
+    candidate = _make_candidate()
+    provider = _StubProvider(_response())
+    reranker = LLMReranker(provider)
+
+    reranker.rerank(_make_plan(), [candidate])
+
+    user_message = provider.calls[0][1].content.lower()
+    assert "lower positive values mean more commonly used" in user_message
+
+
+@pytest.mark.unit
+def test_reranker_prompt_states_missing_rank_is_not_disqualifying() -> None:
+    candidate = _make_candidate()
+    provider = _StubProvider(_response())
+    reranker = LLMReranker(provider)
+
+    reranker.rerank(_make_plan(), [candidate])
+
+    user_message = provider.calls[0][1].content.lower()
+    assert "missing rank is neutral, not evidence of incorrectness" in user_message
+
+
+@pytest.mark.unit
+def test_reranker_prompt_states_rank_must_not_affect_confidence() -> None:
+    candidate = _make_candidate()
+    provider = _StubProvider(_response())
+    reranker = LLMReranker(provider)
+
+    reranker.rerank(_make_plan(), [candidate])
+
+    user_message = provider.calls[0][1].content.lower()
+    assert "do not raise or lower confidence merely because a code is common or uncommon" in (
+        user_message
+    )
+
+
+@pytest.mark.unit
+def test_reranker_may_prefer_lower_common_test_rank_between_comparable_candidates() -> None:
+    """Mocked tie-breaker demonstration: when the (stubbed) LLM response
+    selects the lower-common_test_rank candidate between two otherwise
+    comparable LOINC candidates, that selection flows through unchanged.
+    This does not assert real LLM behavior -- only that rank metadata reaches
+    the prompt and a rank-informed selection is not blocked by any pipeline
+    invariant."""
+    common = _make_candidate(
+        code="LOINC:1000-1",
+        term="Common generic test",
+        ontology="LOINC",
+        common_test_rank=25,
+    )
+    rare = _make_candidate(
+        code="LOINC:1000-2",
+        term="Equally appropriate rare test",
+        ontology="LOINC",
+        common_test_rank=4000,
+    )
+    response = _structured_response(
+        selected_cid="C1",
+        selected_code="LOINC:1000-1",
+        alternatives=[
+            {
+                "candidate_id": "C2",
+                "code": "LOINC:1000-2",
+                "confidence": 0.70,
+                "explanation": "Equally appropriate but far less commonly used.",
+            }
+        ],
+    )
+    reranker = LLMReranker(_StubProvider(response))
+
+    result = reranker.rerank(
+        _make_plan(target_ontology_constraint="LOINC"), [common, rare]
+    )
+
+    assert result.selected_code == "LOINC:1000-1"
+    assert result.confidence == pytest.approx(0.95)  # from _structured_response default
+    assert result.alternatives[0].code == "LOINC:1000-2"
+    assert result.alternatives[0].confidence == pytest.approx(0.70)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

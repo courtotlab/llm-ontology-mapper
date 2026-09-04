@@ -32,6 +32,7 @@ def _c(
     definition: str | None = None,
     provenance: dict | None = None,
     retrieved_from_ontologies: list[str] | None = None,
+    common_test_rank: int | None = None,
 ) -> NormalizedCandidate:
     return NormalizedCandidate(
         code=code,
@@ -45,6 +46,7 @@ def _c(
         definition=definition,
         provenance=provenance,
         retrieved_from_ontologies=retrieved_from_ontologies or [],
+        common_test_rank=common_test_rank,
     )
 
 
@@ -613,6 +615,26 @@ def test_max_candidates_limits_result(merger: CandidateMerger) -> None:
     assert result[2].normalized_score == pytest.approx(0.8)
 
 
+@pytest.mark.unit
+def test_pool_of_more_than_twenty_eligible_candidates_truncates_to_20(
+    merger: CandidateMerger,
+) -> None:
+    """Recall-increase change: the merged-candidate cap used by
+    OntologyMapper/PlannedPipeline callers rose from 10 to 20. CandidateMerger
+    itself stays cap-agnostic (max_candidates is caller-supplied), so this
+    proves a 25-candidate eligible/unique pool truncates correctly at 20."""
+    candidates = [
+        _c(code=f"HP:{i:07d}", term=f"Term {i}", normalized_score=1.0 - (i * 0.01))
+        for i in range(25)
+    ]
+
+    result = merger.merge(candidates, max_candidates=20)
+
+    assert len(result) == 20
+    assert result[0].normalized_score == pytest.approx(1.0)
+    assert result[-1].normalized_score == pytest.approx(1.0 - (19 * 0.01))
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Test 20: empty input returns empty list
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1107,3 +1129,115 @@ def test_strict_multi_target_keeps_native_members_rejects_imported(
     )
 
     assert {c.code for c in result} == {"EFO:0000408", "HP:0012735"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# common_test_rank preservation across duplicate merging
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_single_candidate_retains_common_test_rank(merger: CandidateMerger) -> None:
+    candidate = _c(code="LOINC:96608-5", ontology="LOINC", common_test_rank=3)
+    result = merger.merge([candidate])
+    assert result[0].common_test_rank == 3
+
+
+@pytest.mark.unit
+def test_duplicate_same_code_same_rank_retained(merger: CandidateMerger) -> None:
+    """LOINC:8480-6 retrieved from two planned queries (e.g. 'systolic blood
+    pressure' and 'systolic BP') with the same code-level rank must merge to
+    that rank, not drop it."""
+    a = _c(
+        code="LOINC:8480-6",
+        ontology="LOINC",
+        matched_query="systolic blood pressure",
+        normalized_score=0.9,
+        common_test_rank=3,
+    )
+    b = _c(
+        code="LOINC:8480-6",
+        ontology="LOINC",
+        matched_query="systolic BP",
+        normalized_score=0.9,
+        common_test_rank=3,
+    )
+    result = merger.merge([a, b])
+    assert len(result) == 1
+    assert result[0].common_test_rank == 3
+
+
+@pytest.mark.unit
+def test_duplicate_one_none_one_ranked_retains_positive_rank(
+    merger: CandidateMerger,
+) -> None:
+    unranked_occurrence = _c(
+        code="LOINC:8480-6",
+        ontology="LOINC",
+        matched_query="systolic blood pressure",
+        normalized_score=0.95,  # scores higher, so this becomes the winner
+        common_test_rank=None,
+    )
+    ranked_occurrence = _c(
+        code="LOINC:8480-6",
+        ontology="LOINC",
+        matched_query="systolic BP",
+        normalized_score=0.80,
+        common_test_rank=3,
+    )
+    result = merger.merge([unranked_occurrence, ranked_occurrence])
+    assert len(result) == 1
+    # The winner (higher score) has no rank of its own, so the merge falls
+    # back to the other duplicate's positive rank rather than discarding it.
+    assert result[0].common_test_rank == 3
+
+
+@pytest.mark.unit
+def test_duplicate_conflicting_ranks_does_not_break_merge_or_affect_score(
+    merger: CandidateMerger,
+) -> None:
+    """A genuine rank conflict for the same LOINC code must not crash merging
+    or invent a confidence effect -- it resolves deterministically to the
+    winner's own rank."""
+    winner = _c(
+        code="LOINC:8480-6",
+        ontology="LOINC",
+        matched_query="systolic blood pressure",
+        normalized_score=0.95,
+        common_test_rank=3,
+    )
+    other = _c(
+        code="LOINC:8480-6",
+        ontology="LOINC",
+        matched_query="systolic BP",
+        normalized_score=0.80,
+        common_test_rank=500,
+    )
+    result = merger.merge([winner, other])
+    assert len(result) == 1
+    assert result[0].common_test_rank == 3
+    assert result[0].normalized_score == 0.95
+    assert result[0].provenance["common_test_rank_conflict"] == [3, 500]
+
+
+@pytest.mark.unit
+def test_duplicate_rank_stays_attached_to_correct_code(merger: CandidateMerger) -> None:
+    """A rank belonging to one LOINC code must never leak onto a different
+    code merged in the same call."""
+    ranked = _c(code="LOINC:96608-5", ontology="LOINC", common_test_rank=3)
+    unranked_other_code = _c(
+        code="LOINC:12345-6", ontology="LOINC", term="Different test"
+    )
+    result = merger.merge([ranked, unranked_other_code])
+    by_code = {c.code: c for c in result}
+    assert by_code["LOINC:96608-5"].common_test_rank == 3
+    assert by_code["LOINC:12345-6"].common_test_rank is None
+
+
+@pytest.mark.unit
+def test_non_loinc_candidate_common_test_rank_unaffected_by_merge(
+    merger: CandidateMerger,
+) -> None:
+    candidate = _c(code="HP:0012735", ontology="HPO")
+    result = merger.merge([candidate])
+    assert result[0].common_test_rank is None

@@ -1,0 +1,4 @@
+benchmark,both_exact,ours_only_exact,t2t_only_exact,neither_exact,aligned_n
+UKBB-EFO,616,87,34,151,888
+Biomappings-EFO,601,157,24,12,794
+OLS-EFO (full),5742,326,136,1051,7255

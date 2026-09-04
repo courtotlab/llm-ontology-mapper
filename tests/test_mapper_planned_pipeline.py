@@ -589,6 +589,50 @@ def test_planned_mode_passes_max_candidates_and_max_alternatives() -> None:
     assert fake.calls[0]["max_alternatives"] == 3
 
 
+def test_planned_mode_default_max_results_per_query_is_15() -> None:
+    """Recall-increase change: OntologyMapper's rag_top_k default rose from
+    5 to 15, and is forwarded to PlannedPipeline as max_results_per_query."""
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term("sys_bp")
+
+    assert fake.calls[0]["max_results_per_query"] == 15
+
+
+def test_planned_mode_default_max_candidates_is_20() -> None:
+    """Recall-increase change: OntologyMapper's max_candidates default rose
+    from 10 to 20."""
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term("sys_bp")
+
+    assert fake.calls[0]["max_candidates"] == 20
+
+
+def test_planned_mode_explicit_rag_top_k_override_still_wins() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+        rag_top_k=8,
+    )
+
+    mapper.map_term("sys_bp")
+
+    assert fake.calls[0]["max_results_per_query"] == 8
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # strict_target_ontology
 # ─────────────────────────────────────────────────────────────────────────────

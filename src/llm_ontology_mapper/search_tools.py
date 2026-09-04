@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 from collections import defaultdict
 from typing import Any
@@ -43,6 +44,23 @@ logger = logging.getLogger(__name__)
 
 _RETRYABLE_STATUS_CODES: frozenset[int] = frozenset({429, 500, 502, 503, 504})
 _MAX_REQUEST_ATTEMPTS = 3
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LOINC Search API eligibility filter
+#
+# The public LOINC Search API expresses filters as part of the `query`
+# expression rather than as a separate HTTP parameter. `=status:ACTIVE`
+# restricts results to ACTIVE LOINC concepts before they ever reach the
+# retrieval/reranking pipeline. See:
+#   https://loinc.org/kb/api/search-api
+#   https://forum.loinc.org/t/search-for-loinc-codes-with-keywords-using-the-fhir-rest-api/1634
+# ─────────────────────────────────────────────────────────────────────────────
+
+_LOINC_ACTIVE_STATUS_FILTER = "=status:ACTIVE"
+# Matches any existing `=status:<value>` clause (any value/casing) plus the
+# whitespace preceding it, so it can be stripped and replaced wholesale --
+# a non-ACTIVE filter supplied by an upstream caller must never survive.
+_LOINC_STATUS_FILTER_PATTERN = re.compile(r"\s*=status:\S+", re.IGNORECASE)
 _RETRY_BACKOFF_SECONDS: tuple[float, ...] = (0.5, 1.0)  # wait before attempt 2, before attempt 3
 
 
@@ -339,7 +357,12 @@ class SearchTools:
             )
             return []
 
-        request_params = {"query": query, "rows": str(top_k), "offset": "0"}
+        filtered_query = self._with_active_status_filter(query)
+        if os.environ.get("SMOKE_DEBUG") == "1":
+            # ACTIVE-filter verification: confirms exactly one =status:ACTIVE
+            # clause was appended to the semantic query actually sent.
+            print(f"[LOINC DEBUG] raw_query={query!r} filtered_query={filtered_query!r}")
+        request_params = {"query": filtered_query, "rows": str(top_k), "offset": "0"}
         try:
             response = _get_with_retry(
                 self.loinc_search_url,
@@ -361,8 +384,8 @@ class SearchTools:
                 logger.error(
                     "LOINC Search API rejected the search request (HTTP 400). "
                     "query=%r query_length=%d rows=%s offset=%s response_body=%r",
-                    _bounded_text(query, 200),
-                    len(query),
+                    _bounded_text(filtered_query, 200),
+                    len(filtered_query),
                     request_params["rows"],
                     request_params["offset"],
                     _bounded_response_preview(response),
@@ -370,8 +393,10 @@ class SearchTools:
                 return []
             _record_http_error_diagnostics(route_diagnostics, response.status_code)
             response.raise_for_status()
+            payload = response.json()
+
             candidates: list[dict[str, Any]] = []
-            for idx, concept in enumerate(self._loinc_results(response.json())[:top_k]):
+            for idx, concept in enumerate(self._loinc_results(payload)[:top_k]):
                 code = self._loinc_value(concept, "loincNum", "LOINC_NUM", "loincNumber", "code")
                 if not code:
                     continue
@@ -395,6 +420,7 @@ class SearchTools:
                         "score": 1.0 - (idx * 0.05),
                         "definition": definition,
                         "source": "LOINC-Search-API",
+                        "common_test_rank": self._parse_common_test_rank(concept),
                     }
                 )
             time.sleep(self.request_delay)
@@ -405,6 +431,23 @@ class SearchTools:
         except Exception as exc:
             logger.error("Error parsing LOINC search results: %s", exc)
             return []
+
+    @staticmethod
+    def _with_active_status_filter(query: str) -> str:
+        """Ensure *query* carries exactly one `=status:ACTIVE` filter.
+
+        Any existing `=status:<value>` clause is stripped first, regardless of
+        its value or casing, then the canonical ACTIVE filter is appended.
+        This guarantees the ACTIVE-only restriction can never be bypassed by
+        an upstream caller supplying its own (e.g. DEPRECATED, DISCOURAGED,
+        TRIAL) status filter, while remaining idempotent for repeated/retried
+        calls that already pass an ACTIVE-filtered query.
+        """
+        query = query or ""
+        stripped = _LOINC_STATUS_FILTER_PATTERN.sub("", query).strip()
+        if not stripped:
+            return _LOINC_ACTIVE_STATUS_FILTER
+        return f"{stripped} {_LOINC_ACTIVE_STATUS_FILTER}"
 
     @staticmethod
     def _loinc_results(payload: Any) -> list[dict[str, Any]]:
@@ -438,17 +481,53 @@ class SearchTools:
         return []
 
     @staticmethod
-    def _loinc_value(row: dict[str, Any], *field_names: str) -> str:
-        """Read a LOINC field while tolerating case and separator variants."""
-        normalized = {
+    def _loinc_normalized_row(row: dict[str, Any]) -> dict[str, Any]:
+        """Key a LOINC result row by alnum-lowered field name for case/separator-
+        tolerant lookup (e.g. "COMMON_TEST_RANK" and "commonTestRank" both key
+        to "commontestrank")."""
+        return {
             "".join(ch for ch in str(key).lower() if ch.isalnum()): value
             for key, value in row.items()
         }
+
+    @staticmethod
+    def _loinc_value(row: dict[str, Any], *field_names: str) -> str:
+        """Read a LOINC field while tolerating case and separator variants."""
+        normalized = SearchTools._loinc_normalized_row(row)
         for field_name in field_names:
             value = normalized.get("".join(ch for ch in field_name.lower() if ch.isalnum()))
             if value is not None and str(value).strip():
                 return str(value).strip()
         return ""
+
+    @staticmethod
+    def _parse_common_test_rank(concept: dict[str, Any]) -> int | None:
+        """Normalize the LOINC Search API's COMMON_TEST_RANK into a secondary
+        usage-frequency signal.
+
+        The live API uses 0 to mean "no common-test rank" for this code -- 0
+        would otherwise look like the best possible rank (lower is better), so
+        it is normalized to None exactly like a missing/null value. Any other
+        non-positive, non-integral, or unparseable value is also treated as
+        unranked rather than failing an otherwise valid LOINC retrieval or
+        silently truncating a malformed value (e.g. "3.7") into a fabricated
+        integer rank.
+
+        COMMON_ORDER_RANK and COMMON_SI_TEST_RANK are deliberately not read
+        here; only COMMON_TEST_RANK is in scope.
+        """
+        normalized = SearchTools._loinc_normalized_row(concept)
+        raw = normalized.get("commontestrank")
+        if raw is None:
+            return None
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return None
+        if not value.is_integer():
+            return None
+        rank = int(value)
+        return rank if rank > 0 else None
 
     def search_rxnorm(
         self,

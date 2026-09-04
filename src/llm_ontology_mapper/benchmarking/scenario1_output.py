@@ -108,9 +108,15 @@ def _join(values: Sequence[str | None]) -> str:
 
 
 def _split(value: str) -> list[str]:
+    """Reload a pipe-joined stored field. Strips whitespace around every
+    resulting token (defensive: a pre-fix predictions.csv may still contain
+    a compound gold-code cell like "EFO:0009679 | EFO:0009684" -- splitting
+    on the bare "|" without stripping would otherwise leave stray leading/
+    trailing spaces that can never equal a clean rank code). Blank tokens
+    are dropped, matching parse_gold_codes()'s contract."""
     if value == "":
         return []
-    return value.split(_PIPE)
+    return [p.strip() for p in value.split(_PIPE) if p.strip()]
 
 
 def row_to_csv_dict(

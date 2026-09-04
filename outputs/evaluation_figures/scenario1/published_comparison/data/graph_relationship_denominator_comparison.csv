@@ -1,0 +1,4 @@
+benchmark,our_n,our_mapped_n,our_no_top1_n,text2term_n,denominators_match
+UKBB-EFO,888,884,4,899,False
+Biomappings-EFO,795,781,14,795,True
+OLS-EFO (full),7377,7262,115,8143,False

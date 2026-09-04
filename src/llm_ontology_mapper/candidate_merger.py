@@ -51,7 +51,7 @@ class CandidateMerger:
         merged = merger.merge(
             candidates,
             target_ontology_constraint="HPO",
-            max_candidates=10,
+            max_candidates=20,
         )
     """
 
@@ -225,6 +225,23 @@ def _merge_group(group: list[NormalizedCandidate]) -> NormalizedCandidate:
     """
     winner = min(group, key=_winner_key)
 
+    # common_test_rank is code-level LOINC metadata (usage frequency of the
+    # LOINC code itself), not per-query evidence, so it is reconciled
+    # independently of the score-based winner selection above: prefer the
+    # winner's own rank, falling back to the first non-None rank found among
+    # the other duplicates so one occurrence being unranked never discards a
+    # rank another occurrence already reported for the same code. A genuine
+    # conflict (distinct positive ranks for the same code) never overrides
+    # confidence/scoring -- it is only surfaced in merged_provenance for
+    # debug visibility.
+    common_test_rank = winner.common_test_rank
+    if common_test_rank is None:
+        for c in group:
+            if c.common_test_rank is not None:
+                common_test_rank = c.common_test_rank
+                break
+    distinct_ranks = sorted({c.common_test_rank for c in group if c.common_test_rank is not None})
+
     all_matched_queries: list[str] = list(dict.fromkeys(c.matched_query for c in group))
     retrieved_from_ontologies: list[str] = list(
         dict.fromkeys(
@@ -245,6 +262,8 @@ def _merge_group(group: list[NormalizedCandidate]) -> NormalizedCandidate:
             for c in group
         ],
     }
+    if len(distinct_ranks) > 1:
+        merged_provenance["common_test_rank_conflict"] = distinct_ranks
 
     return NormalizedCandidate(
         code=winner.code,
@@ -258,4 +277,5 @@ def _merge_group(group: list[NormalizedCandidate]) -> NormalizedCandidate:
         normalized_score=winner.normalized_score,
         provenance=merged_provenance,
         retrieved_from_ontologies=retrieved_from_ontologies,
+        common_test_rank=common_test_rank,
     )

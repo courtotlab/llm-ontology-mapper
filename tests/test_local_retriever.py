@@ -769,12 +769,13 @@ def test_max_results_per_query_forwarded_as_top_k() -> None:
     assert fake.calls[0][2] == 7
 
 
-def test_default_max_results_is_ten() -> None:
+def test_default_max_results_is_fifteen() -> None:
+    """Recall-increase change: the per-query default rose from 10 to 15."""
     fake = FakeClient(returns=[])
     retriever = LocalSemanticRetriever(client=fake)
     plan = _local_plan(preferred_ontology="HPO")
     retriever.retrieve(plan)
-    assert fake.calls[0][2] == 10
+    assert fake.calls[0][2] == 15
 
 
 # ─────────────────────────────────────────────────────────────────────────────

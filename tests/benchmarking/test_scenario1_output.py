@@ -102,6 +102,45 @@ def test_csv_round_trip_preserves_enough_to_rescore(tmp_path: Path) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# csv_row_to_prediction_record()'s gold_codes split strips whitespace
+# (UKBB gold-parsing-bug fix, PART 5): a stored gold_codes cell that still
+# carries the old compound " | "-joined text (e.g. a pre-fix predictions.csv,
+# or the already-completed UKBB query-872 rerun) must reload as clean,
+# individually-trimmed codes rather than tokens with stray leading/trailing
+# whitespace that can never equal a clean rank code.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_csv_row_to_prediction_record_strips_whitespace_around_split_gold_codes() -> None:
+    record = csv_row_to_prediction_record(
+        {
+            "query_id": "872",
+            "query": "Paraplegia and tetraplegia",
+            "gold_codes": "EFO:0009679 | EFO:0009684",
+            "status": "unmapped",
+            "rank_1_code": "",
+            "rank_2_code": "EFO:0009679",
+            "rank_3_code": "EFO:0009684",
+            "rank_4_code": "HP:0003470",
+            "rank_5_code": "HP:0002385",
+        }
+    )
+    assert record.gold_codes == ("EFO:0009679", "EFO:0009684")
+
+    row_metrics = score_prediction(record)
+    assert row_metrics.gold_rank == 2
+    assert row_metrics.top3_hit is True
+    assert row_metrics.top5_hit is True
+
+
+def test_csv_row_to_prediction_record_gold_codes_no_delimiter_unchanged() -> None:
+    record = csv_row_to_prediction_record(
+        {"query_id": "1", "query": "q", "gold_codes": "EFO:0000001", "status": "mapped", "rank_1_code": "EFO:0000001"}
+    )
+    assert record.gold_codes == ("EFO:0000001",)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 31/32/33. resume with identical config / rejected on mismatch / SHA recorded
 # ─────────────────────────────────────────────────────────────────────────────
 

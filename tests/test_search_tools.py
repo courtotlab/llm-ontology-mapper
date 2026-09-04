@@ -49,7 +49,7 @@ def test_search_loinc_passes_basic_auth() -> None:
     assert auth.password == "service-password"
     assert mock_get.call_args.args[0] == ("https://loinc.regenstrief.org/searchapi/loincs")
     assert mock_get.call_args.kwargs["params"] == {
-        "query": "systolic blood pressure",
+        "query": "systolic blood pressure =status:ACTIVE",
         "rows": "10",
         "offset": "0",
     }
@@ -179,8 +179,204 @@ def test_search_loinc_parser_accepts_field_name_variants() -> None:
             "score": 1.0,
             "definition": "Arterial systolic pressure",
             "source": "LOINC-Search-API",
+            "common_test_rank": None,
         },
     ]
+
+
+# ── LOINC COMMON_TEST_RANK parsing ────────────────────────────────────────────
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("raw_value", "expected"),
+    [
+        # integer-like values parse normally
+        (3, 3),
+        (1, 1),
+        (20000, 20000),
+        ("3", 3),
+        (3.0, 3),
+        ("3.0", 3),
+        # zero / negative / missing / non-numeric are unranked
+        (0, None),
+        ("0", None),
+        (-2, None),
+        ("-2", None),
+        (-5, None),
+        (None, None),
+        ("", None),
+        ("not-a-number", None),
+        # non-integral values must not be silently truncated into a
+        # fabricated rank
+        (3.7, None),
+        ("3.7", None),
+    ],
+)
+def test_parse_common_test_rank_normalizes_zero_and_invalid_to_none(
+    raw_value, expected
+) -> None:
+    concept = {"LOINC_NUM": "8480-6"}
+    if raw_value is not None:
+        concept["COMMON_TEST_RANK"] = raw_value
+    assert SearchTools._parse_common_test_rank(concept) == expected
+
+
+@pytest.mark.unit
+def test_parse_common_test_rank_missing_field_becomes_none() -> None:
+    concept = {"LOINC_NUM": "8480-6", "LONG_COMMON_NAME": "Systolic blood pressure"}
+    assert SearchTools._parse_common_test_rank(concept) is None
+
+
+@pytest.mark.unit
+def test_parse_common_test_rank_does_not_use_order_or_si_rank_fields() -> None:
+    """COMMON_ORDER_RANK and COMMON_SI_TEST_RANK are explicitly out of scope --
+    only COMMON_TEST_RANK feeds common_test_rank."""
+    concept = {
+        "LOINC_NUM": "8480-6",
+        "COMMON_ORDER_RANK": 7,
+        "COMMON_SI_TEST_RANK": 12,
+    }
+    assert SearchTools._parse_common_test_rank(concept) is None
+
+
+@pytest.mark.unit
+def test_search_loinc_populates_common_test_rank_from_raw_response() -> None:
+    """A ranked live-shaped result row parses COMMON_TEST_RANK onto the
+    candidate dict; malformed rank metadata never fails retrieval."""
+    response = _loinc_response()
+    response.json.return_value = {
+        "results": [
+            {
+                "LOINC_NUM": "96608-5",
+                "LONG_COMMON_NAME": "Some ranked test",
+                "STATUS": "ACTIVE",
+                "COMMON_TEST_RANK": 3,
+                "COMMON_ORDER_RANK": 0,
+                "COMMON_SI_TEST_RANK": 0,
+            },
+            {
+                "LOINC_NUM": "12345-6",
+                "LONG_COMMON_NAME": "Some unranked test",
+                "STATUS": "ACTIVE",
+                "COMMON_TEST_RANK": 0,
+            },
+        ],
+    }
+    tools = SearchTools(
+        loinc_username="service-user",
+        loinc_password="service-password",
+        request_delay=0,
+    )
+
+    with patch("requests.get", return_value=response):
+        results = tools.search_loinc("glucose")
+
+    assert results[0]["code"] == "LOINC:96608-5"
+    assert results[0]["common_test_rank"] == 3
+    assert results[1]["code"] == "LOINC:12345-6"
+    assert results[1]["common_test_rank"] is None
+
+
+# ── LOINC =status:ACTIVE eligibility filter ───────────────────────────────────
+
+
+@pytest.mark.unit
+def test_search_loinc_appends_active_status_filter() -> None:
+    """Every public LOINC search must be restricted to ACTIVE concepts, and the
+    original semantic query text must remain intact ahead of the filter."""
+    tools = SearchTools(
+        loinc_username="service-user",
+        loinc_password="service-password",
+        request_delay=0,
+    )
+
+    with patch("requests.get", return_value=_loinc_response()) as mock_get:
+        tools.search_loinc("glucose")
+
+    assert mock_get.call_args.kwargs["params"]["query"] == "glucose =status:ACTIVE"
+
+
+@pytest.mark.unit
+def test_search_loinc_active_status_filter_added_exactly_once() -> None:
+    """A query that already carries a `=status:` filter (e.g. a retried or
+    pre-filtered query) must not have the filter appended a second time."""
+    tools = SearchTools(
+        loinc_username="service-user",
+        loinc_password="service-password",
+        request_delay=0,
+    )
+
+    with patch("requests.get", return_value=_loinc_response()) as mock_get:
+        tools.search_loinc("glucose =status:ACTIVE")
+
+    assert mock_get.call_args.kwargs["params"]["query"] == "glucose =status:ACTIVE"
+    assert mock_get.call_args.kwargs["params"]["query"].count("=status:") == 1
+
+
+@pytest.mark.unit
+def test_search_loinc_active_status_filter_applied_to_every_planned_query() -> None:
+    """A query planner may issue several LOINC searches (variants/retries) for a
+    single mapping request; each independent call must receive the filter."""
+    tools = SearchTools(
+        loinc_username="service-user",
+        loinc_password="service-password",
+        request_delay=0,
+    )
+
+    with patch("requests.get", return_value=_loinc_response()) as mock_get:
+        tools.search_loinc("glucose")
+        tools.search_loinc("blood glucose level")
+        tools.search_loinc("fasting glucose")
+
+    queries = [call.kwargs["params"]["query"] for call in mock_get.call_args_list]
+    assert queries == [
+        "glucose =status:ACTIVE",
+        "blood glucose level =status:ACTIVE",
+        "fasting glucose =status:ACTIVE",
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("raw_query", "expected"),
+    [
+        # 1. no existing status filter
+        ("glucose", "glucose =status:ACTIVE"),
+        ("glucose  ", "glucose =status:ACTIVE"),
+        ("", "=status:ACTIVE"),
+        # 2. ACTIVE already present
+        ("glucose =status:ACTIVE", "glucose =status:ACTIVE"),
+        # 3. differently-cased ACTIVE
+        ("glucose =STATUS:active", "glucose =status:ACTIVE"),
+        ("glucose =Status:Active", "glucose =status:ACTIVE"),
+        # 4-6. a non-ACTIVE filter must be replaced, not preserved/stacked
+        ("glucose =status:DEPRECATED", "glucose =status:ACTIVE"),
+        ("glucose =status:DISCOURAGED", "glucose =status:ACTIVE"),
+        ("glucose =status:TRIAL", "glucose =status:ACTIVE"),
+        ("glucose =status:deprecated", "glucose =status:ACTIVE"),
+    ],
+)
+def test_with_active_status_filter_enforces_active_only(
+    raw_query: str, expected: str
+) -> None:
+    result = SearchTools._with_active_status_filter(raw_query)
+    assert result == expected
+    # 7. exactly one status filter remains in every case
+    assert result.count("=status:") == 1
+
+
+@pytest.mark.unit
+def test_search_ols_query_unaffected_by_loinc_status_filter() -> None:
+    """The =status:ACTIVE eligibility filter is LOINC-only; OLS-backed ontology
+    searches (HPO, MONDO, NCIT, EFO, SNOMED, ...) must be untouched."""
+    tools = SearchTools(request_delay=0)
+
+    with patch("requests.get", return_value=_ols_response([])) as mock_get:
+        tools.search_ols("glucose", "EFO")
+
+    assert mock_get.call_args.kwargs["params"]["q"] == "glucose"
+    assert "status" not in mock_get.call_args.kwargs["params"]["q"]
 
 
 # ── _normalize_code tests ─────────────────────────────────────────────────────

@@ -100,7 +100,7 @@ class PublicOntologyRetriever:
         query_plan: QueryPlan,
         *,
         route_plan: RetrievalRoutePlan | None = None,
-        max_results_per_query: int = 10,
+        max_results_per_query: int = 15,
         route_calls: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
         """
@@ -113,7 +113,7 @@ class PublicOntologyRetriever:
                                    candidate_ontologies take precedence over
                                    the equivalent fields derived from query_plan.
             max_results_per_query: Maximum candidates to fetch per (query, ontology)
-                                   pair.  Defaults to 10.
+                                   pair.  Defaults to 15.
 
         Returns:
             Flat list of raw candidate dicts, one entry per hit.  Each dict

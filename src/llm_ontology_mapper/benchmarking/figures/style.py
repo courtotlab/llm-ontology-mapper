@@ -84,11 +84,16 @@ def pct(x: float) -> str:
     return f"{100 * x:.1f}%"
 
 
-def save_figure(fig, name: str, subdir: str, output_dir: Path) -> None:
-    """Save fig as .svg/.pdf/.png (dpi=300, bbox_inches='tight') under
-    output_dir/subdir/name.{ext}, then close it."""
+def save_figure(
+    fig, name: str, subdir: str, output_dir: Path, *, formats: tuple[str, ...] = ("svg", "pdf", "png")
+) -> None:
+    """Save fig (dpi=300, bbox_inches='tight') under output_dir/subdir/name.{ext}
+    for each extension in `formats`, then close it. Defaults to the existing
+    svg+pdf+png triple used by every pre-existing figure suite; pass
+    formats=("png", "svg") for a PDF-free suite (e.g. published_comparison.py)
+    without touching the default for callers that still need PDFs."""
     target_dir = output_dir / subdir
     target_dir.mkdir(parents=True, exist_ok=True)
-    for ext in ("svg", "pdf", "png"):
+    for ext in formats:
         fig.savefig(target_dir / f"{name}.{ext}", bbox_inches="tight", dpi=300)
     plt.close(fig)

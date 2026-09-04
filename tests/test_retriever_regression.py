@@ -191,9 +191,9 @@ def test_retrieve_loinc_path() -> None:
         "https://loinc.regenstrief.org/searchapi/loincs"
     )
     assert mock_get.call_args.kwargs["params"] == {
-        "query": "blood pressure",
-        "rows": 5,
-        "offset": 0,
+        "query": "blood pressure =status:ACTIVE",
+        "rows": "5",
+        "offset": "0",
     }
     assert mock_get.call_args.kwargs["auth"].username == "service-user"
 

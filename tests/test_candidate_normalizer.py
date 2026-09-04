@@ -945,3 +945,123 @@ def test_candidate_serialises_to_json(normalizer: CandidateNormalizer) -> None:
     assert dumped["code"] == "HP:0012735"
     assert dumped["ontology"] == "HPO"  # uppercased
     assert dumped["retrieval_mode"] == "public"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# common_test_rank propagation
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_public_loinc_candidate_preserves_common_test_rank(
+    normalizer: CandidateNormalizer,
+) -> None:
+    raw = {
+        "code": "LOINC:96608-5",
+        "term": "Some ranked test",
+        "ontology": "LOINC",
+        "source": "LOINC-Search-API",
+        "score": 0.9,
+        "common_test_rank": 3,
+    }
+    candidate = normalizer.normalize(
+        raw,
+        retrieval_mode=RetrievalMode.PUBLIC,
+        matched_query="ranked test",
+    )
+    assert candidate.common_test_rank == 3
+
+
+@pytest.mark.unit
+def test_missing_common_test_rank_becomes_none(normalizer: CandidateNormalizer) -> None:
+    raw = {
+        "code": "LOINC:96608-5",
+        "term": "Some test",
+        "ontology": "LOINC",
+        "source": "LOINC-Search-API",
+        "score": 0.9,
+    }
+    candidate = normalizer.normalize(
+        raw,
+        retrieval_mode=RetrievalMode.PUBLIC,
+        matched_query="test",
+    )
+    assert candidate.common_test_rank is None
+
+
+@pytest.mark.unit
+def test_zero_common_test_rank_becomes_none(normalizer: CandidateNormalizer) -> None:
+    """Defense in depth: even if a raw candidate carried the unranked sentinel
+    0 unnormalized, the normalizer itself must not surface it as rank 0."""
+    raw = {
+        "code": "LOINC:96608-5",
+        "term": "Some test",
+        "ontology": "LOINC",
+        "source": "LOINC-Search-API",
+        "score": 0.9,
+        "common_test_rank": 0,
+    }
+    candidate = normalizer.normalize(
+        raw,
+        retrieval_mode=RetrievalMode.PUBLIC,
+        matched_query="test",
+    )
+    assert candidate.common_test_rank is None
+
+
+@pytest.mark.unit
+def test_invalid_common_test_rank_does_not_fail_normalization(
+    normalizer: CandidateNormalizer,
+) -> None:
+    raw = {
+        "code": "LOINC:96608-5",
+        "term": "Some test",
+        "ontology": "LOINC",
+        "source": "LOINC-Search-API",
+        "score": 0.9,
+        "common_test_rank": "not-a-number",
+    }
+    candidate = normalizer.normalize(
+        raw,
+        retrieval_mode=RetrievalMode.PUBLIC,
+        matched_query="test",
+    )
+    assert candidate.common_test_rank is None
+
+
+@pytest.mark.unit
+def test_non_loinc_candidate_common_test_rank_is_none(
+    normalizer: CandidateNormalizer,
+) -> None:
+    raw = {
+        "code": "HP:0012735",
+        "term": "Cough",
+        "ontology": "HPO",
+        "source": "OLS",
+        "score": 0.95,
+    }
+    candidate = normalizer.normalize(
+        raw,
+        retrieval_mode=RetrievalMode.PUBLIC,
+        matched_query="cough",
+    )
+    assert candidate.common_test_rank is None
+
+
+@pytest.mark.unit
+def test_local_sapbert_candidate_common_test_rank_is_none(
+    normalizer: CandidateNormalizer,
+) -> None:
+    raw = {
+        "code": "LOINC:8480-6",
+        "term": "Systolic blood pressure",
+        "ontology": "LOINC",
+        "similarity": 0.88,
+    }
+    candidate = normalizer.normalize(
+        raw,
+        retrieval_mode=RetrievalMode.LOCAL,
+        matched_query="systolic blood pressure",
+    )
+    assert candidate.common_test_rank is None
+    assert candidate.raw_score == 0.88  # SapBERT similarity scoring unaffected

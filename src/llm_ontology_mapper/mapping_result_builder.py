@@ -140,6 +140,7 @@ class MappingResultBuilder:
                 candidates=candidates,
                 retrieval_trace=retrieval_trace,
                 source_type=source_type,
+                max_alternatives=max_alternatives,
                 strict_target_ontology=strict_target_ontology,
             )
 
@@ -203,6 +204,7 @@ class MappingResultBuilder:
                 candidates=candidates,
                 retrieval_trace=retrieval_trace,
                 source_type=source_type,
+                max_alternatives=max_alternatives,
                 strict_target_ontology=strict_target_ontology,
             )
 
@@ -235,6 +237,7 @@ class MappingResultBuilder:
                 candidates=candidates,
                 retrieval_trace=retrieval_trace,
                 source_type=source_type,
+                max_alternatives=max_alternatives,
                 strict_target_ontology=strict_target_ontology,
             )
 
@@ -279,6 +282,7 @@ class MappingResultBuilder:
         candidates: Sequence[NormalizedCandidate],
         retrieval_trace: RetrievalTrace | None,
         source_type: str | None,
+        max_alternatives: int = 5,
         strict_target_ontology: bool = False,
     ) -> MappingResult:
         metadata = _build_metadata(
@@ -287,6 +291,24 @@ class MappingResultBuilder:
             candidates=candidates,
             selected_candidate=None,
             retrieval_trace=retrieval_trace,
+            strict_target_ontology=strict_target_ontology,
+        )
+
+        # No candidate was selected, so there is no exclude-candidate or
+        # selected-confidence ceiling: the reranker's own per-candidate
+        # confidence survives into alternatives even though the UNMAPPED
+        # result's own confidence stays 0.0. Alternatives still go through
+        # the same grounding/eligibility validation as the selected path.
+        allowed_ontologies = _normalize_allowed_target_ontologies(
+            query_plan.allowed_target_ontologies
+        )
+        alternatives = _build_alternatives(
+            structured_alternatives=rerank_decision.alternatives,
+            candidates=candidates,
+            exclude_candidate=None,
+            selected_confidence=None,
+            allowed_ontologies=allowed_ontologies,
+            max_alternatives=max_alternatives,
             strict_target_ontology=strict_target_ontology,
         )
 
@@ -299,7 +321,7 @@ class MappingResultBuilder:
             ontology=_UNMAPPED_ONTOLOGY,
             confidence=rerank_decision.confidence,
             logic_type=LogicType.RAG,
-            alternatives=[],
+            alternatives=alternatives,
             notes=rerank_decision.reasoning,
             metadata=metadata,
         )
@@ -332,8 +354,8 @@ def _build_alternatives(
     *,
     structured_alternatives: Sequence[RerankAlternative],
     candidates: Sequence[NormalizedCandidate],
-    exclude_candidate: NormalizedCandidate,
-    selected_confidence: float,
+    exclude_candidate: NormalizedCandidate | None,
+    selected_confidence: float | None,
     allowed_ontologies: set[str] | None,
     max_alternatives: int = 5,
     strict_target_ontology: bool = False,
@@ -344,11 +366,18 @@ def _build_alternatives(
     At the MappingResult boundary, AlternativeMapping.confidence has the same
     meaning as MappingResult.confidence: final LLM reranker confidence. Retrieval
     scores are intentionally not used here.
+
+    exclude_candidate/selected_confidence are None for an UNMAPPED result:
+    there is no selected candidate to exclude, and no selected-confidence
+    ceiling to enforce -- alternatives keep their own reranker-assigned
+    confidence even though MappingResult.confidence stays 0.0.
     """
     code_map: dict[str, NormalizedCandidate] = {c.code: c for c in candidates}
     result: list[AlternativeMapping] = []
     seen_identities: set[tuple[str, str]] = set()
-    exclude_identity = _candidate_identity(exclude_candidate)
+    exclude_identity = (
+        _candidate_identity(exclude_candidate) if exclude_candidate is not None else None
+    )
 
     def _append(
         *,
@@ -358,7 +387,7 @@ def _build_alternatives(
     ) -> None:
         if len(result) >= max_alternatives:
             return
-        if confidence > selected_confidence:
+        if selected_confidence is not None and confidence > selected_confidence:
             raise MappingResultBuilderError(
                 "Alternative reranker confidence cannot be greater than selected "
                 "result confidence at the MappingResult boundary."
@@ -492,6 +521,7 @@ def _candidate_score_provenance(candidate: NormalizedCandidate) -> dict[str, Any
         "retrieval_mode": candidate.retrieval_mode.value,
         "source": candidate.source,
         "matched_query": candidate.matched_query,
+        "common_test_rank": candidate.common_test_rank,
     }
 
 
@@ -520,14 +550,19 @@ def _final_ranking_trace(
                 "confidence_source": "llm_reranker",
                 "raw_retrieval_score": selected_candidate.raw_score,
                 "normalized_retrieval_score": selected_candidate.normalized_score,
+                "common_test_rank": selected_candidate.common_test_rank,
                 "selected": True,
             }
         )
 
-    for rank, alt in enumerate(
-        sorted(rerank_decision.alternatives, key=lambda item: item.confidence, reverse=True),
-        start=2,
-    ):
+    # Alternatives continue the rank sequence after the selected candidate
+    # (rank 2+) when one was appended above, or start the sequence at rank 1
+    # when the result is UNMAPPED and there is no selected candidate to
+    # occupy rank 1. Counting from len(trace) rather than a fixed offset
+    # also keeps ranks contiguous if an alternative is filtered out below --
+    # no synthetic UNMAPPED entry is ever inserted at rank 1.
+    next_rank = len(trace) + 1
+    for alt in sorted(rerank_decision.alternatives, key=lambda item: item.confidence, reverse=True):
         candidate = code_map.get(alt.code)
         if allowed_ontologies is not None and (
             candidate is None
@@ -538,7 +573,7 @@ def _final_ranking_trace(
             continue
         trace.append(
             {
-                "rank": rank,
+                "rank": next_rank,
                 "candidate_id": alt.candidate_id,
                 "code": alt.code,
                 "ontology": candidate.ontology if candidate is not None else None,
@@ -549,9 +584,11 @@ def _final_ranking_trace(
                 "normalized_retrieval_score": (
                     candidate.normalized_score if candidate is not None else None
                 ),
+                "common_test_rank": candidate.common_test_rank if candidate is not None else None,
                 "selected": False,
             }
         )
+        next_rank += 1
 
     return trace
 

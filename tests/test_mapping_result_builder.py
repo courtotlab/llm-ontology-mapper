@@ -67,6 +67,7 @@ def _make_candidate(
     normalized_score: float | None = 0.92,
     provenance: dict | None = None,
     retrieved_from_ontologies: list[str] | None = None,
+    common_test_rank: int | None = None,
 ) -> NormalizedCandidate:
     return NormalizedCandidate(
         code=code,
@@ -79,6 +80,7 @@ def _make_candidate(
         normalized_score=normalized_score,
         provenance=provenance,
         retrieved_from_ontologies=retrieved_from_ontologies or [],
+        common_test_rank=common_test_rank,
     )
 
 
@@ -113,6 +115,7 @@ def _make_unmapped_decision(
     retrieval_mode: RetrievalMode = RetrievalMode.PUBLIC,
     confidence: float = 0.0,
     reasoning: str = "No semantically correct candidate found.",
+    alternatives: list[RerankAlternative] | None = None,
 ) -> RerankDecision:
     return RerankDecision(
         selected_code=None,
@@ -124,6 +127,7 @@ def _make_unmapped_decision(
         confidence=confidence,
         reasoning=reasoning,
         alternative_codes=[],
+        alternatives=alternatives or [],
         policy="production_grounded",
     )
 
@@ -980,6 +984,648 @@ def test_unmapped_local_mode() -> None:
     )
     assert result.target_code == "UNKNOWN:UNMAPPED"
     assert _get_pipeline_info(result)["retrieval_mode"] == "local"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6b. UNMAPPED results with preserved reranker alternatives
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_unmapped_result_preserves_reranker_ranked_alternatives() -> None:
+    """UNMAPPED must remain a valid final result, but the reranker's closest
+    ranked candidates should survive into alternatives for human review."""
+    builder = MappingResultBuilder()
+    a = _make_candidate("LOINC:1000-1", "Glucose, plasma, random")
+    b = _make_candidate("LOINC:1000-2", "Glucose, urine, timed")
+    decision = _make_unmapped_decision(
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C1",
+                code="LOINC:1000-1",
+                confidence=0.24,
+                explanation="Related glucose measurement, but requires a "
+                "specimen not specified by the source.",
+            ),
+            RerankAlternative(
+                candidate_id="C2",
+                code="LOINC:1000-2",
+                confidence=0.12,
+                explanation="Related concept, but represents a timed "
+                "post-dose measurement.",
+            ),
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[a, b],
+    )
+
+    assert result.target_code == "UNKNOWN:UNMAPPED"
+    assert result.target_term == "UNMAPPED"
+    assert result.ontology == "UNKNOWN"
+    assert result.confidence == 0.0
+    assert [alt.code for alt in result.alternatives] == ["LOINC:1000-1", "LOINC:1000-2"]
+
+
+def test_unmapped_alternative_confidence_matches_reranker_value_unchanged() -> None:
+    """Alternative confidence on UNMAPPED must come from the reranker's own
+    per-candidate value, not be derived from retrieval score/rank."""
+    builder = MappingResultBuilder()
+    candidate = _make_candidate(
+        "LOINC:1000-1",
+        "Glucose, plasma, random",
+        raw_score=1.0,
+        normalized_score=1.0,
+    )
+    decision = _make_unmapped_decision(
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C1",
+                code="LOINC:1000-1",
+                confidence=0.24,
+                explanation="Close but insufficient.",
+            ),
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[candidate],
+    )
+
+    assert result.alternatives[0].confidence == 0.24
+    assert result.alternatives[0].confidence != candidate.raw_score
+    assert result.alternatives[0].confidence != candidate.normalized_score
+
+
+def test_unmapped_alternative_explanations_are_preserved() -> None:
+    builder = MappingResultBuilder()
+    candidate = _make_candidate("LOINC:1000-1", "Glucose, plasma, random")
+    explanation = "Related glucose measurement, but requires a specimen not specified."
+    decision = _make_unmapped_decision(
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C1",
+                code="LOINC:1000-1",
+                confidence=0.24,
+                explanation=explanation,
+            ),
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[candidate],
+    )
+
+    assert result.alternatives[0].explanation == explanation
+
+
+def test_unmapped_alternatives_ordered_by_reranker_confidence_descending() -> None:
+    builder = MappingResultBuilder()
+    a = _make_candidate("LOINC:1000-1", "A")
+    b = _make_candidate("LOINC:1000-2", "B")
+    c = _make_candidate("LOINC:1000-3", "C")
+    decision = _make_unmapped_decision(
+        alternatives=[
+            RerankAlternative(candidate_id="C1", code="LOINC:1000-1", confidence=0.10, explanation="low"),
+            RerankAlternative(candidate_id="C2", code="LOINC:1000-2", confidence=0.35, explanation="high"),
+            RerankAlternative(candidate_id="C3", code="LOINC:1000-3", confidence=0.20, explanation="mid"),
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[a, b, c],
+    )
+
+    assert [alt.confidence for alt in result.alternatives] == [0.35, 0.20, 0.10]
+
+
+def test_unmapped_alternatives_respect_max_alternatives() -> None:
+    builder = MappingResultBuilder()
+    candidates = [_make_candidate(f"LOINC:2000-{i}", f"Candidate {i}") for i in range(7)]
+    decision = _make_unmapped_decision(
+        alternatives=[
+            RerankAlternative(
+                candidate_id=f"C{i + 1}",
+                code=f"LOINC:2000-{i}",
+                confidence=0.5 - i * 0.01,
+                explanation=f"Alternative {i}.",
+            )
+            for i in range(7)
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=candidates,
+        max_alternatives=5,
+    )
+
+    assert len(result.alternatives) == 5
+
+
+def test_unmapped_alternatives_must_exist_in_retrieved_candidates() -> None:
+    """Alternatives are re-derived from the actual candidate set at the
+    MappingResult boundary; an alternative pointing at a code that was never
+    retrieved is silently dropped rather than fabricated."""
+    builder = MappingResultBuilder()
+    retrieved = _make_candidate("LOINC:1000-1", "Glucose, plasma, random")
+    decision = _make_unmapped_decision(
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C1",
+                code="LOINC:1000-1",
+                confidence=0.24,
+                explanation="Retrieved, kept.",
+            ),
+            RerankAlternative(
+                candidate_id="C2",
+                code="LOINC:9999-9",
+                confidence=0.50,
+                explanation="Never retrieved -- must not appear.",
+            ),
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[retrieved],
+    )
+
+    assert [alt.code for alt in result.alternatives] == ["LOINC:1000-1"]
+    assert all(alt.code != "LOINC:9999-9" for alt in result.alternatives)
+
+
+def test_unmapped_selected_candidate_code_remains_null() -> None:
+    builder = MappingResultBuilder()
+    candidate = _make_candidate("LOINC:1000-1", "Glucose, plasma, random")
+    decision = _make_unmapped_decision(
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C1",
+                code="LOINC:1000-1",
+                confidence=0.24,
+                explanation="Close but insufficient.",
+            ),
+        ],
+    )
+
+    assert decision.selected_code is None
+    assert decision.selected_candidate_id is None
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[candidate],
+    )
+    assert result.target_code == "UNKNOWN:UNMAPPED"
+
+
+def test_unmapped_alternatives_may_exceed_zero_result_confidence() -> None:
+    """The mapped-result invariant (alternative confidence <= result confidence)
+    does not apply to UNMAPPED: result.confidence stays 0.0 while alternatives
+    may legitimately carry a positive reranker confidence."""
+    builder = MappingResultBuilder()
+    candidate = _make_candidate("LOINC:1000-1", "Glucose, plasma, random")
+    decision = _make_unmapped_decision(
+        confidence=0.0,
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C1",
+                code="LOINC:1000-1",
+                confidence=0.24,
+                explanation="Close but insufficient.",
+            ),
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[candidate],
+    )
+
+    assert result.confidence == 0.0
+    assert result.alternatives[0].confidence == 0.24
+    assert result.alternatives[0].confidence > result.confidence
+
+
+def test_mapped_result_alternative_confidence_ceiling_still_enforced() -> None:
+    """The mapped-result invariant is unchanged: no alternative may exceed the
+    selected candidate's confidence."""
+    builder = MappingResultBuilder()
+    selected = _make_candidate("LOINC:8480-6", "Systolic BP")
+    alternative = _make_candidate("LOINC:8462-4", "Diastolic BP")
+    decision = _make_selected_decision(
+        confidence=0.5,
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C2",
+                code="LOINC:8462-4",
+                confidence=0.8,
+                explanation="Inconsistent confidence.",
+            )
+        ],
+    )
+
+    with pytest.raises(MappingResultBuilderError, match="greater than selected"):
+        builder.build(
+            query_plan=_make_plan(),
+            rerank_decision=decision,
+            candidates=[selected, alternative],
+        )
+
+
+def test_unmapped_alternatives_empty_when_reranker_provides_none() -> None:
+    """If candidates were retrieved but the reranker produced no valid ranked
+    evaluations, the UNMAPPED result must still have alternatives=[] rather
+    than inventing anything."""
+    builder = MappingResultBuilder()
+    candidate = _make_candidate("LOINC:1000-1", "Glucose, plasma, random")
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=_make_unmapped_decision(),
+        candidates=[candidate],
+    )
+
+    assert result.alternatives == []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6c. final_ranking_trace rank semantics (mapped vs. UNMAPPED)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_mapped_ranking_trace_selected_is_rank_1_alternatives_contiguous() -> None:
+    """Mapped result: selected candidate is rank 1, first alternative is rank
+    2, and ranks stay contiguous for subsequent alternatives."""
+    builder = MappingResultBuilder()
+    selected = _make_candidate("LOINC:8480-6", "Systolic BP")
+    alt_a = _make_candidate("LOINC:1000-1", "A")
+    alt_b = _make_candidate("LOINC:1000-2", "B")
+    decision = _make_selected_decision(
+        selected_code="LOINC:8480-6",
+        confidence=0.91,
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C2", code="LOINC:1000-1", confidence=0.5, explanation="a"
+            ),
+            RerankAlternative(
+                candidate_id="C3", code="LOINC:1000-2", confidence=0.4, explanation="b"
+            ),
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[selected, alt_a, alt_b],
+    )
+    trace = _get_pipeline_info(result)["final_ranking_trace"]
+
+    assert [entry["rank"] for entry in trace] == [1, 2, 3]
+    assert trace[0]["selected"] is True
+    assert trace[0]["code"] == "LOINC:8480-6"
+    assert trace[1]["selected"] is False
+    assert trace[1]["code"] == "LOINC:1000-1"
+    assert trace[2]["code"] == "LOINC:1000-2"
+
+
+def test_unmapped_ranking_trace_closest_alternative_is_rank_1() -> None:
+    """UNMAPPED with alternatives: there is no selected candidate, so the
+    closest alternative starts the sequence at rank 1 with no gap."""
+    builder = MappingResultBuilder()
+    a = _make_candidate("LOINC:1000-1", "A")
+    b = _make_candidate("LOINC:1000-2", "B")
+    c = _make_candidate("LOINC:1000-3", "C")
+    decision = _make_unmapped_decision(
+        alternatives=[
+            RerankAlternative(candidate_id="C1", code="LOINC:1000-1", confidence=0.48, explanation="a"),
+            RerankAlternative(candidate_id="C2", code="LOINC:1000-2", confidence=0.42, explanation="b"),
+            RerankAlternative(candidate_id="C3", code="LOINC:1000-3", confidence=0.40, explanation="c"),
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[a, b, c],
+    )
+    trace = _get_pipeline_info(result)["final_ranking_trace"]
+
+    assert [entry["rank"] for entry in trace] == [1, 2, 3]
+    assert trace[0]["code"] == "LOINC:1000-1"
+    assert trace[1]["code"] == "LOINC:1000-2"
+    assert trace[2]["code"] == "LOINC:1000-3"
+
+
+def test_unmapped_ranking_trace_all_entries_not_selected() -> None:
+    builder = MappingResultBuilder()
+    a = _make_candidate("LOINC:1000-1", "A")
+    b = _make_candidate("LOINC:1000-2", "B")
+    decision = _make_unmapped_decision(
+        alternatives=[
+            RerankAlternative(candidate_id="C1", code="LOINC:1000-1", confidence=0.48, explanation="a"),
+            RerankAlternative(candidate_id="C2", code="LOINC:1000-2", confidence=0.42, explanation="b"),
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[a, b],
+    )
+    trace = _get_pipeline_info(result)["final_ranking_trace"]
+
+    assert trace
+    assert all(entry["selected"] is False for entry in trace)
+    assert not any(entry["code"] == "UNKNOWN:UNMAPPED" for entry in trace)
+
+
+def test_unmapped_ranking_trace_empty_when_no_alternatives() -> None:
+    """UNMAPPED with zero alternatives: final_ranking_trace stays empty --
+    no synthetic rank-1 UNMAPPED entry is ever created."""
+    builder = MappingResultBuilder()
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=_make_unmapped_decision(),
+        candidates=[_make_candidate()],
+    )
+    trace = _get_pipeline_info(result)["final_ranking_trace"]
+
+    assert trace == []
+
+
+def test_unmapped_ranking_trace_preserves_confidence_and_scores() -> None:
+    """The rank fix must not alter any other trace field: reranker confidence,
+    raw/normalized retrieval score, and candidate ids stay exactly as before."""
+    builder = MappingResultBuilder()
+    candidate = _make_candidate(
+        "LOINC:1000-1", "A", raw_score=0.77, normalized_score=0.66
+    )
+    decision = _make_unmapped_decision(
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C1", code="LOINC:1000-1", confidence=0.48, explanation="a"
+            ),
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[candidate],
+    )
+    entry = _get_pipeline_info(result)["final_ranking_trace"][0]
+
+    assert entry["rank"] == 1
+    assert entry["candidate_id"] == "C1"
+    assert entry["code"] == "LOINC:1000-1"
+    assert entry["reranker_score"] == 0.48
+    assert entry["final_confidence"] == 0.48
+    assert entry["raw_retrieval_score"] == 0.77
+    assert entry["normalized_retrieval_score"] == 0.66
+    assert entry["selected"] is False
+
+
+def test_unmapped_ranking_trace_ordering_unchanged_by_rank_fix() -> None:
+    """Alternative ordering itself (by descending reranker confidence) is
+    unaffected by the rank-numbering fix."""
+    builder = MappingResultBuilder()
+    a = _make_candidate("LOINC:1000-1", "A")
+    b = _make_candidate("LOINC:1000-2", "B")
+    c = _make_candidate("LOINC:1000-3", "C")
+    decision = _make_unmapped_decision(
+        alternatives=[
+            RerankAlternative(candidate_id="C1", code="LOINC:1000-1", confidence=0.10, explanation="low"),
+            RerankAlternative(candidate_id="C2", code="LOINC:1000-2", confidence=0.35, explanation="high"),
+            RerankAlternative(candidate_id="C3", code="LOINC:1000-3", confidence=0.20, explanation="mid"),
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[a, b, c],
+    )
+    trace = _get_pipeline_info(result)["final_ranking_trace"]
+
+    assert [entry["confidence_source"] for entry in trace] == ["llm_reranker"] * 3
+    assert [entry["code"] for entry in trace] == ["LOINC:1000-2", "LOINC:1000-3", "LOINC:1000-1"]
+
+
+def test_unmapped_ranking_trace_respects_max_alternatives() -> None:
+    """MAX_ALTERNATIVES truncation (applied to result.alternatives before the
+    trace is built) is unchanged by the rank fix."""
+    builder = MappingResultBuilder()
+    candidates = [_make_candidate(f"LOINC:2000-{i}", f"Candidate {i}") for i in range(7)]
+    decision = _make_unmapped_decision(
+        alternatives=[
+            RerankAlternative(
+                candidate_id=f"C{i + 1}",
+                code=f"LOINC:2000-{i}",
+                confidence=0.5 - i * 0.01,
+                explanation=f"Alternative {i}.",
+            )
+            for i in range(7)
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=candidates,
+        max_alternatives=5,
+    )
+
+    assert len(result.alternatives) == 5
+
+
+@pytest.mark.parametrize("mode", [RetrievalMode.PUBLIC, RetrievalMode.LOCAL])
+def test_unmapped_ranking_trace_rank_1_start_shared_across_public_and_local(
+    mode: RetrievalMode,
+) -> None:
+    """Public and Local retrieval both go through the same MappingResultBuilder
+    / _final_ranking_trace implementation, so both get the rank-1 fix."""
+    builder = MappingResultBuilder()
+    candidate = _make_candidate("LOINC:1000-1", "A", retrieval_mode=mode)
+    decision = _make_unmapped_decision(
+        retrieval_mode=mode,
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C1", code="LOINC:1000-1", confidence=0.48, explanation="a"
+            ),
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(retrieval_mode=mode),
+        rerank_decision=decision,
+        candidates=[candidate],
+    )
+    trace = _get_pipeline_info(result)["final_ranking_trace"]
+
+    assert trace[0]["rank"] == 1
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6d. common_test_rank in debug provenance / final_ranking_trace
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_common_test_rank_appears_in_candidate_score_provenance() -> None:
+    builder = MappingResultBuilder()
+    ranked = _make_candidate("LOINC:8480-6", "Systolic BP", common_test_rank=3)
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=_make_selected_decision(selected_code="LOINC:8480-6"),
+        candidates=[ranked],
+    )
+    provenance = _get_pipeline_info(result)["candidate_score_provenance"]
+
+    assert provenance[0]["common_test_rank"] == 3
+
+
+def test_unranked_candidate_common_test_rank_is_none_in_provenance() -> None:
+    builder = MappingResultBuilder()
+    unranked = _make_candidate("LOINC:8480-6", "Systolic BP", common_test_rank=None)
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=_make_selected_decision(selected_code="LOINC:8480-6"),
+        candidates=[unranked],
+    )
+    provenance = _get_pipeline_info(result)["candidate_score_provenance"]
+
+    assert provenance[0]["common_test_rank"] is None
+
+
+def test_common_test_rank_appears_in_final_ranking_trace_for_selected_and_alternatives() -> None:
+    builder = MappingResultBuilder()
+    selected = _make_candidate("LOINC:8480-6", "Systolic BP", common_test_rank=3)
+    alt = _make_candidate(
+        "LOINC:60984-2", "Aortic systolic pressure", common_test_rank=500
+    )
+    decision = _make_selected_decision(
+        selected_code="LOINC:8480-6",
+        confidence=0.98,
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C2", code="LOINC:60984-2", confidence=0.4, explanation="related"
+            ),
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[selected, alt],
+    )
+    trace = _get_pipeline_info(result)["final_ranking_trace"]
+
+    assert trace[0]["common_test_rank"] == 3
+    assert trace[0]["selected"] is True
+    assert trace[0]["rank"] == 1
+    assert trace[1]["common_test_rank"] == 500
+    assert trace[1]["selected"] is False
+    assert trace[1]["rank"] == 2
+
+
+def test_final_ranking_trace_rank_field_unaffected_by_common_test_rank() -> None:
+    """final_ranking_trace.rank keeps meaning the LLM's own final ordering --
+    unrelated to and unaffected by the presence of common_test_rank."""
+    builder = MappingResultBuilder()
+    selected = _make_candidate("LOINC:8480-6", "Systolic BP", common_test_rank=500)
+    alt = _make_candidate("LOINC:60984-2", "Aortic systolic pressure", common_test_rank=3)
+    decision = _make_selected_decision(
+        selected_code="LOINC:8480-6",
+        confidence=0.9,
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C2", code="LOINC:60984-2", confidence=0.3, explanation="related"
+            ),
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[selected, alt],
+    )
+    trace = _get_pipeline_info(result)["final_ranking_trace"]
+
+    # The less-common code (rank 500) is still the LLM's rank-1 selection --
+    # final_ranking_trace.rank must not be reordered by common_test_rank.
+    assert trace[0]["code"] == "LOINC:8480-6"
+    assert trace[0]["rank"] == 1
+    assert trace[0]["common_test_rank"] == 500
+
+
+def test_common_test_rank_does_not_change_confidence_or_alternatives_semantics() -> None:
+    builder = MappingResultBuilder()
+    selected = _make_candidate("LOINC:8480-6", "Systolic BP", common_test_rank=3)
+    alt = _make_candidate("LOINC:60984-2", "Aortic systolic pressure", common_test_rank=None)
+    decision = _make_selected_decision(
+        selected_code="LOINC:8480-6",
+        confidence=0.91,
+        alternatives=[
+            RerankAlternative(
+                candidate_id="C2", code="LOINC:60984-2", confidence=0.5, explanation="related"
+            ),
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[selected, alt],
+    )
+
+    assert result.confidence == 0.91
+    assert result.alternatives[0].confidence == 0.5
+
+
+def test_common_test_rank_does_not_affect_max_alternatives() -> None:
+    """MAX_ALTERNATIVES truncation is unaffected by candidates carrying
+    common_test_rank."""
+    builder = MappingResultBuilder()
+    selected = _make_candidate("LOINC:0000-0", "Selected")
+    others = [
+        _make_candidate(f"LOINC:{1000 + i}-{i % 10}", f"Alt {i}", common_test_rank=i + 1)
+        for i in range(1, 8)
+    ]
+    decision = _make_selected_decision(
+        selected_code="LOINC:0000-0",
+        alternatives=[
+            RerankAlternative(
+                candidate_id=f"C{i + 1}",
+                code=f"LOINC:{1000 + i}-{i % 10}",
+                confidence=0.9 - i * 0.01,
+                explanation=f"Alternative {i}.",
+            )
+            for i in range(1, 8)
+        ],
+    )
+
+    result = builder.build(
+        query_plan=_make_plan(),
+        rerank_decision=decision,
+        candidates=[selected, *others],
+        max_alternatives=5,
+    )
+
+    assert len(result.alternatives) == 5
 
 
 def test_allowed_target_ontologies_unselected_final_selection_becomes_unmapped() -> None:

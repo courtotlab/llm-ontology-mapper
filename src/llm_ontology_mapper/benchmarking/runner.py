@@ -67,8 +67,8 @@ class BenchmarkRunConfig:
     seed: int
     retrieval_mode: str = "public"
     max_alternatives: int = 4
-    max_results_per_query: int = 10
-    max_candidates: int | None = 10
+    max_results_per_query: int = 15
+    max_candidates: int | None = 20
 
     @property
     def temperature_mode(self) -> str:

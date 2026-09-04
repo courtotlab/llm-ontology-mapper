@@ -1175,6 +1175,37 @@ def test_max_results_per_query_forwarded_to_ols() -> None:
     assert fake.calls[0][1]["top_k"] == 3
 
 
+def test_max_results_per_query_default_is_15() -> None:
+    """Recall-increase change: the per-query default rose from 10 to 15."""
+    fake = FakeSearchTools(ols_returns=[])
+    retriever = PublicOntologyRetriever(search_tools=fake)
+    plan = _public_plan(
+        expanded_queries=["cough"],
+        preferred_ontology="HPO",
+    )
+    retriever.retrieve(plan)  # no explicit max_results_per_query override
+    assert fake.calls[0][1]["top_k"] == 15
+
+
+def test_two_expanded_queries_can_yield_30_raw_candidates_for_one_ontology() -> None:
+    """Recall-increase change: two expanded queries x 15 top_k for one
+    ontology route can now produce up to 30 raw candidates pre-merge
+    (previously up to 20 at top_k=10)."""
+    fifteen_hits = [
+        {"code": f"HP:{i:07d}", "term": f"Term {i}", "score": 1.0 - (i * 0.01), "source": "OLS"}
+        for i in range(15)
+    ]
+    fake = FakeSearchTools(ols_returns=fifteen_hits)
+    retriever = PublicOntologyRetriever(search_tools=fake)
+    plan = _public_plan(
+        expanded_queries=["cough", "chronic cough"],
+        preferred_ontology="HPO",
+    )
+    results = retriever.retrieve(plan)  # default max_results_per_query (now 15)
+    assert len(results) == 30
+    assert all(call[1]["top_k"] == 15 for call in fake.calls)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # No normalization is performed (returns raw dicts, not NormalizedCandidate)
 # ─────────────────────────────────────────────────────────────────────────────

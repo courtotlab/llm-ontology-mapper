@@ -1,0 +1,4 @@
+benchmark,matched_n,agreement_n,disagreement_n,agreement_rate
+UKBB-EFO,888,888,0,1.0
+Biomappings-EFO,794,794,0,1.0
+OLS-EFO (full),7255,7255,0,1.0

@@ -51,12 +51,12 @@ OLLAMA_BASE_URL = "http://localhost:11528"
 
 SAPBERT_URL = "http://localhost:8765"
 
-SOURCE_TERM = "headache_disorder"
-SOURCE_LABEL = "headache disorder"
+SOURCE_TERM = "sys_bp"
+SOURCE_LABEL = ""
 SOURCE_DESCRIPTION = ""
 SOURCE_TYPE = ""
 CLINICAL_AREA = ""
-TARGET_ONTOLOGY = "EFO"
+TARGET_ONTOLOGY = "LOINC"
 RETRIEVAL_MODE = "local"
 
 # When True, mappings must belong natively to one of the requested target
@@ -65,7 +65,7 @@ RETRIEVAL_MODE = "local"
 STRICT_TARGET_ONTOLOGY = False
 
 MAX_RESULTS_PER_QUERY = int(
-    os.environ.get("MAX_RESULTS_PER_QUERY", "10")
+    os.environ.get("MAX_RESULTS_PER_QUERY", "15")
 )
 MAX_ALTERNATIVES = int(
     os.environ.get("MAX_ALTERNATIVES", "5")
@@ -391,13 +391,22 @@ def _run_case(
         strict_target_ontology=STRICT_TARGET_ONTOLOGY,
     )
 
-    assert not any(
-        alternative.confidence > result.confidence
-        for alternative in result.alternatives
-    ), (
-        "alternative confidence must not exceed "
-        "selected result confidence"
-    )
+    if _is_unmapped(result):
+        # UNMAPPED keeps confidence == 0.0 by contract, but its alternatives
+        # carry the reranker's own per-candidate confidence and may
+        # legitimately exceed 0.0 -- that is the closest-candidates-for-review
+        # signal, not a violation of the mapped-result ceiling below.
+        assert result.confidence == 0.0, (
+            "UNMAPPED result confidence must remain 0.0"
+        )
+    else:
+        assert not any(
+            alternative.confidence > result.confidence
+            for alternative in result.alternatives
+        ), (
+            "alternative confidence must not exceed "
+            "selected result confidence"
+        )
 
     if target_ontologies:
         allowed = (

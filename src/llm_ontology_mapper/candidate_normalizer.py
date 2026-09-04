@@ -125,6 +125,7 @@ class CandidateNormalizer:
         raw_score = self._extract_score(raw_candidate)
         normalized_score = self._extract_normalized_score(raw_candidate, raw_score)
         retrieved_from_ontologies = self._extract_retrieved_from_ontologies(raw_candidate)
+        common_test_rank = self._extract_common_test_rank(raw_candidate)
 
         provenance: dict[str, Any] = {
             "raw_candidate": raw_candidate,
@@ -149,6 +150,7 @@ class CandidateNormalizer:
             normalized_score=normalized_score,
             provenance=provenance,
             retrieved_from_ontologies=retrieved_from_ontologies,
+            common_test_rank=common_test_rank,
         )
 
     def normalize_many(
@@ -302,6 +304,25 @@ class CandidateNormalizer:
         if raw_score is not None and 0.0 <= raw_score <= 1.0:
             return raw_score
         return None
+
+    @staticmethod
+    def _extract_common_test_rank(raw: dict[str, Any]) -> int | None:
+        """Re-derive common_test_rank defensively rather than trusting the raw
+        dict blindly (consistent with _extract_score/_extract_normalized_score).
+
+        SearchTools already normalizes LOINC's COMMON_TEST_RANK=0 sentinel to
+        None before this point, but this re-validates so any malformed or
+        non-positive value from any raw candidate source becomes None instead
+        of failing normalization.
+        """
+        value = raw.get("common_test_rank")
+        if value is None:
+            return None
+        try:
+            rank = int(float(value))
+        except (TypeError, ValueError):
+            return None
+        return rank if rank > 0 else None
 
     @staticmethod
     def _extract_retrieved_from_ontologies(raw: dict[str, Any]) -> list[str]:

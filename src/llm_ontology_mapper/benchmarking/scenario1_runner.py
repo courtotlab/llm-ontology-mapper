@@ -222,8 +222,8 @@ class Scenario1RunConfig:
     temperature: float | None = None
     seed: int = 42
     max_alternatives: int = 4
-    max_results_per_query: int = 10
-    max_candidates: int | None = 10
+    max_results_per_query: int = 15
+    max_candidates: int | None = 20
 
     @property
     def temperature_mode(self) -> str:

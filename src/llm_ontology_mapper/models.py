@@ -498,6 +498,17 @@ class NormalizedCandidate(BaseModel):
             "from ontology, which is the candidate's native code namespace."
         ),
     )
+    common_test_rank: int | None = Field(
+        None,
+        gt=0,
+        description=(
+            "LOINC COMMON_TEST_RANK usage-frequency ranking (lower is more common). "
+            "None for unranked LOINC codes and for every non-LOINC candidate. "
+            "Secondary preference signal only -- distinct from raw_score/"
+            "normalized_score, which are retrieval-provenance scores, and never "
+            "affects confidence."
+        ),
+    )
 
     @field_validator("code", "term", "source", "matched_query")
     @classmethod

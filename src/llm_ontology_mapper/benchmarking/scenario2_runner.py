@@ -79,8 +79,8 @@ class Scenario2RunConfig:
     temperature: float | None = None
     seed: int = 42
     max_alternatives: int = 4
-    max_results_per_query: int = 10
-    max_candidates: int | None = 10
+    max_results_per_query: int = 15
+    max_candidates: int | None = 20
     sapbert_url: str | None = None  # required iff retrieval_mode == "local"
 
     def __post_init__(self) -> None:

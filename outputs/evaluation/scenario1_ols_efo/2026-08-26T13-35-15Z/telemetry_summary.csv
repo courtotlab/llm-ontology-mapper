@@ -1,2 +1,0 @@
-mean_end_to_end_seconds,median_end_to_end_seconds,mean_query_planner_seconds,median_query_planner_seconds,mean_retrieval_seconds,median_retrieval_seconds,mean_reranker_seconds,median_reranker_seconds,total_api_cost_usd,mean_api_cost_per_query_usd
-5.959223079199728,5.54614433349343,2.1999900937487835,2.174368770502042,0.2113394395499199,0.1925276244946872,3.5450681395974244,3.0641301664945786,0.0199896,0.00099948

@@ -396,6 +396,21 @@ class LLMReranker:
         reasoning: str | None = data.get("reasoning") or None
 
         if is_unmapped:
+            # No candidate was selected, so there is no "selected confidence"
+            # ceiling to enforce here (unlike the selected branch below) --
+            # alternatives keep their own reranker-assigned confidence even
+            # though the final decision confidence stays 0.0.
+            allowed_ontologies = _normalize_allowed_target_ontologies(
+                query_plan.allowed_target_ontologies
+            )
+            alternative_codes, alternatives = _parse_alternatives(
+                data=data,
+                candidate_map=candidate_map,
+                candidate_codes=candidate_codes,
+                selected_code=None,
+                allowed_ontologies=allowed_ontologies,
+                strict_target_ontology=strict_target_ontology,
+            )
             return RerankDecision(
                 selected_code=None,
                 selected_candidate_id=None,
@@ -405,8 +420,8 @@ class LLMReranker:
                 retrieval_mode=retrieval_mode,
                 confidence=confidence,
                 reasoning=reasoning,
-                alternative_codes=[],
-                alternatives=[],
+                alternative_codes=alternative_codes,
+                alternatives=alternatives,
                 policy="production_grounded",
             )
 
@@ -823,6 +838,8 @@ def _build_candidate_list(candidate_map: dict[str, NormalizedCandidate]) -> str:
             score_parts.append(f"raw_score={c.raw_score:.4f}")
         if score_parts:
             fields.append(f"[{', '.join(score_parts)}]")
+        if c.common_test_rank is not None:
+            fields.append(f"common_test_rank={c.common_test_rank}")
         fields.append(f"Source: {c.source}")
         fields.append(f"Query: '{c.matched_query}'")
         if c.definition:
