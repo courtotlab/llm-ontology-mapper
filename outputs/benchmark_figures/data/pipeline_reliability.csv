@@ -1,0 +1,5 @@
+model,model_display,n_attempts,execution_error_count,execution_errors_per_100,rows_with_retrieval_retries_count,rows_with_retrieval_retries_per_100,rows_with_final_retrieval_errors_count,rows_with_final_retrieval_errors_per_100
+gpt-4.1-mini,GPT-4.1 mini,436,1,0.22935779816513763,1,0.22935779816513763,0,0.0
+gpt-5-mini,GPT-5 mini,436,0,0.0,1,0.22935779816513763,9,2.0642201834862384
+gpt-5.4-mini,GPT-5.4 mini,436,0,0.0,1,0.22935779816513763,4,0.9174311926605505
+gpt-5.6-luna,GPT-5.6 Luna,436,0,0.0,1,0.22935779816513763,0,0.0

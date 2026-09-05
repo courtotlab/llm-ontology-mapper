@@ -1,0 +1,4 @@
+benchmark,n,top1,top3,top5,mrr,run_dir,model,retrieval_mode,target_ontology,strict_target_ontology
+UKBB-EFO,888,0.7905405405405406,0.8873873873873874,0.8975225225225225,0.8395833333333332,outputs/evaluation/scenario1_ukbb_efo/2026-08-31T13-54-53Z,gpt-5.6-luna,local,EFO,False
+Biomappings-EFO,795,0.9534591194968554,0.9660377358490566,0.9660377358490566,0.959538784067086,outputs/evaluation/scenario1_biomappings_efo/2026-08-31T16-10-24Z,gpt-5.6-luna,local,EFO,False
+OLS-EFO (full),7377,0.8342144503185577,0.8582079436085129,0.8598346211196963,0.8457841941168497,outputs/evaluation/scenario1_ols_efo/2026-08-26T15-04-18Z,gpt-5.6-luna,local,EFO,False

@@ -1,0 +1,5 @@
+query_id,query,gold_codes,gold_labels,gold_count
+80,Atrial fibrillation and flutter,EFO:0000275,atrial fibrillation,1
+416,emphysema/chronic bronchitis,EFO:0000464,emphysema,1
+574,food intolerance,EFO:1001890,food allergy,1
+872,Paraplegia and tetraplegia,EFO:0009679 | EFO:0009684,paraplegia,1

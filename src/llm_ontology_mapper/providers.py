@@ -57,6 +57,67 @@ class CompletionResponse:
     raw: Any | None              = None   # original SDK response object
 
 
+@dataclass
+class ToolCall:
+    """A single tool invocation requested by the model."""
+
+    id: str           # provider-assigned call ID (used to route results back)
+    name: str         # tool/function name
+    arguments: dict[str, Any]  # parsed argument dict
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tool-format translation
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def to_provider_tools(provider: str, tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Translate MCP JSON-Schema tool definitions to the wire format expected by
+    a given provider.
+
+    Input tool shape (MCP / library-internal):
+        {
+            "name": "search_ols",
+            "description": "...",
+            "inputSchema": {"type": "object", "properties": {...}, "required": [...]}
+        }
+
+    Output per provider:
+        OpenAI / Ollama / GitHub / Azure:
+            {"type": "function", "function": {"name": ..., "description": ..., "parameters": ...}}
+        Anthropic:
+            {"name": ..., "description": ..., "input_schema": {...}}
+    """
+    p = provider.lower()
+    result: list[dict[str, Any]] = []
+    for tool in tools:
+        name = tool.get("name", "")
+        description = tool.get("description", "")
+        schema = (
+            tool.get("inputSchema")
+            or tool.get("parameters")
+            or {"type": "object", "properties": {}}
+        )
+        if p == "anthropic":
+            result.append({
+                "name": name,
+                "description": description,
+                "input_schema": schema,
+            })
+        else:
+            # OpenAI-style: covers openai, ollama, github, azure, local
+            result.append({
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "description": description,
+                    "parameters": schema,
+                },
+            })
+    return result
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Abstract base
 # ─────────────────────────────────────────────────────────────────────────────
@@ -91,7 +152,7 @@ class BaseLLMProvider(abc.ABC):
     def complete(
         self,
         messages: list[ChatMessage],
-        temperature: float = 0.1,
+        temperature: float | None = 0.1,
         max_tokens: int = 1024,
         **kwargs: Any,
     ) -> CompletionResponse:
@@ -105,12 +166,47 @@ class BaseLLMProvider(abc.ABC):
         - Log at DEBUG level: model, token counts, latency
         """
 
+    # ── Tool-calling completion ───────────────────────────────────────────────
+
+    def complete_with_tools(
+        self,
+        messages: list[ChatMessage],
+        tools: list[dict[str, Any]],
+        temperature: float = 0.1,
+        max_tokens: int = 1024,
+        **kwargs: Any,
+    ) -> tuple[str | None, list[ToolCall]]:
+        """
+        Send a chat completion request that may produce tool calls.
+
+        Args:
+            messages: Conversation history (system + user turns).
+            tools:    MCP JSON-Schema tool definitions (inputSchema key).
+            temperature, max_tokens: standard sampling params.
+
+        Returns:
+            (text, tool_calls)
+            text:       The model's text content, or None when it produced only
+                        tool calls with no accompanying text.
+            tool_calls: Ordered list of ToolCall objects (empty when the model
+                        responded with plain text).
+
+        Raises:
+            RuntimeError: Provider returned neither text nor tool calls (Ollama
+                          empty-response guard), or the underlying API failed.
+            NotImplementedError: Provider subclass has not implemented this method.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not implement complete_with_tools(). "
+            "Override this method in the provider subclass."
+        )
+
     # ── Retry helper (shared) ─────────────────────────────────────────────────
 
     def _complete_with_retry(
         self,
         messages: list[ChatMessage],
-        temperature: float,
+        temperature: float | None,
         max_tokens: int,
         **kwargs: Any,
     ) -> CompletionResponse:
@@ -153,7 +249,7 @@ class BaseLLMProvider(abc.ABC):
     def _do_complete(
         self,
         messages: list[ChatMessage],
-        temperature: float,
+        temperature: float | None,
         max_tokens: int,
         **kwargs: Any,
     ) -> CompletionResponse:
@@ -181,6 +277,192 @@ class BaseLLMProvider(abc.ABC):
 
 class _RetryableError(Exception):
     """Raised inside _do_complete to signal a transient error worth retrying."""
+
+
+OPENAI_REASONING_EFFORT_BY_MODEL = {
+    "gpt-5.1": "low",
+    "gpt-5.6-luna": "medium",
+}
+
+
+def is_reasoning_model(model: str) -> bool:
+    """Return True for OpenAI reasoning-style model families."""
+    normalized = model.lower().rsplit("/", 1)[-1]
+    return normalized.startswith(("o1", "o3", "o4", "gpt-5"))
+
+
+def openai_reasoning_effort_for_model(model: str) -> str | None:
+    """Return the application-selected OpenAI reasoning effort for exact models."""
+    normalized = model.lower().rsplit("/", 1)[-1]
+    return OPENAI_REASONING_EFFORT_BY_MODEL.get(normalized)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared empty-response-from-reasoning-model retry support
+#
+# QueryPlanner and LLMReranker both call a reasoning-style OpenAI model and
+# must tell whether an empty assistant-content response is worth retrying
+# with a larger completion-token budget before giving up. Both components
+# share this single detection helper and retry-budget constant rather than
+# each choosing its own value.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+REASONING_EMPTY_RESPONSE_RETRY_TOKENS = 8192
+"""Completion-token allowance for the one-time empty-response retry on a
+reasoning model. Shared by QueryPlanner and LLMReranker."""
+
+
+def provider_uses_reasoning_model(provider: BaseLLMProvider) -> bool:
+    """True when `provider` is an OpenAI reasoning-style model (o1/o3/o4/gpt-5*).
+
+    An empty assistant-content response is only worth retrying with a larger
+    completion budget for this model family — for other providers/models an
+    empty response is not attributable to reasoning-token exhaustion.
+    """
+    return (
+        getattr(provider, "provider_name", "") == "openai"
+        and is_reasoning_model(str(getattr(provider, "model", "")))
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Explicit LLM call configuration override (opt-in; benchmarking / evaluation)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class LLMCallConfig:
+    """
+    Explicit override for sampling/reasoning parameters sent on every LLM call.
+
+    Callers such as the model benchmark runner construct one of these and pass
+    it into QueryPlanner / LLMReranker (directly, or via PlannedPipeline) to
+    force identical temperature/seed/reasoning_effort across every applicable
+    LLM call in the planned pipeline, instead of relying on each component's
+    own hard-coded default.
+
+    Leaving a field as None preserves that component's existing default
+    behavior for that field — this type is purely additive and does not
+    change behavior for callers that never construct one.
+
+    force_temperature: bypass the provider's normal silent-drop of the
+        `temperature` parameter for reasoning-style models (o1/o3/o4/gpt-5*),
+        which by default omit it because the real OpenAI API historically
+        rejects a non-default temperature for those models. Setting this
+        True makes `temperature` on this config authoritative for the
+        request: a numeric value is sent regardless of model family and lets
+        the API itself accept or reject it (see `strict`); `temperature=None`
+        instead forces the `temperature` parameter to be omitted entirely
+        (provider default), overriding the calling component's own default
+        temperature rather than falling back to it.
+    strict: when True, disable the provider's silent parameter-stripping
+        retry (e.g. dropping `reasoning_effort` after the API rejects it)
+        so an unsupported requested parameter raises immediately instead of
+        being silently ignored.
+    """
+
+    temperature: float | None = None
+    seed: int | None = None
+    reasoning_effort: str | None = None
+    force_temperature: bool = False
+    strict: bool = False
+
+
+def resolve_llm_call_params(
+    llm_call_config: LLMCallConfig | None,
+    *,
+    default_temperature: float | None,
+    default_extra_kwargs: dict[str, Any] | None = None,
+) -> tuple[float | None, dict[str, Any]]:
+    """
+    Merge a component's default temperature/extra-kwargs with an optional
+    LLMCallConfig override.
+
+    Used identically by QueryPlanner and LLMReranker so that a single
+    LLMCallConfig applies consistently to every applicable LLM call in the
+    planned pipeline, rather than each component tracking its own override
+    logic.
+
+    Normally a config's `temperature=None` means "no opinion" and the
+    component's own default_temperature is kept. When `force_temperature`
+    is set, the config's `temperature` field (even None) is authoritative
+    instead — this is how a caller explicitly requests that `temperature`
+    be omitted from the request (provider default) rather than silently
+    falling back to the component default.
+    """
+    temperature = default_temperature
+    kwargs = dict(default_extra_kwargs or {})
+    if llm_call_config is not None:
+        if llm_call_config.force_temperature or llm_call_config.temperature is not None:
+            temperature = llm_call_config.temperature
+        if llm_call_config.reasoning_effort is not None:
+            kwargs["reasoning_effort"] = llm_call_config.reasoning_effort
+        if llm_call_config.seed is not None:
+            kwargs["seed"] = llm_call_config.seed
+        if llm_call_config.force_temperature:
+            kwargs["force_temperature"] = True
+        if llm_call_config.strict:
+            kwargs["strict"] = True
+    return temperature, kwargs
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Usage telemetry extraction (opt-in; benchmarking / evaluation)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def extract_completion_usage(response: CompletionResponse) -> dict[str, Any]:
+    """
+    Extract whatever token-usage/provenance detail the SDK response actually
+    exposes. Never fabricates a value: fields the response does not carry
+    are left None.
+
+    Reads CompletionResponse.raw (the original SDK response object) for
+    provider-specific detail beyond the normalised prompt/completion token
+    counts — e.g. OpenAI's cached-token and reasoning-token breakdowns and
+    system_fingerprint.
+    """
+    usage: dict[str, Any] = {
+        "model": response.model,
+        "input_tokens": response.prompt_tokens,
+        "output_tokens": response.completion_tokens,
+        "cached_input_tokens": None,
+        "reasoning_tokens": None,
+        "system_fingerprint": None,
+        "call_count": 1,
+    }
+    raw = response.raw
+    raw_usage = getattr(raw, "usage", None)
+    if raw_usage is not None:
+        prompt_details = getattr(raw_usage, "prompt_tokens_details", None)
+        if prompt_details is not None:
+            usage["cached_input_tokens"] = getattr(prompt_details, "cached_tokens", None)
+        completion_details = getattr(raw_usage, "completion_tokens_details", None)
+        if completion_details is not None:
+            usage["reasoning_tokens"] = getattr(completion_details, "reasoning_tokens", None)
+    usage["system_fingerprint"] = getattr(raw, "system_fingerprint", None)
+    return usage
+
+
+def accumulate_usage(existing: dict[str, Any] | None, new: dict[str, Any]) -> dict[str, Any]:
+    """Sum token counts across repeated calls for one logical pipeline stage.
+
+    Used when a component (e.g. LLMReranker's empty-response retry) issues
+    more than one billed LLM call for a single row, so benchmark cost/usage
+    reporting reflects everything actually billed rather than only the last
+    call.
+    """
+    if existing is None:
+        return dict(new)
+    merged = dict(existing)
+    for key in ("input_tokens", "output_tokens", "cached_input_tokens", "reasoning_tokens"):
+        a, b = existing.get(key), new.get(key)
+        merged[key] = None if a is None and b is None else (a or 0) + (b or 0)
+    merged["model"] = new.get("model") or existing.get("model")
+    merged["system_fingerprint"] = new.get("system_fingerprint") or existing.get("system_fingerprint")
+    merged["call_count"] = existing.get("call_count", 1) + 1
+    return merged
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -235,10 +517,121 @@ class OpenAIProvider(BaseLLMProvider):
                 )
         return self._client
 
+    def _token_limit_kwargs(
+        self,
+        max_tokens: int,
+        min_completion_tokens: int | None = None,
+    ) -> dict[str, int]:
+        """Return the Chat Completions token-limit parameter for this model."""
+        if self._uses_reasoning_style_parameters():
+            effective_tokens = max(max_tokens, min_completion_tokens or 0)
+            return {"max_completion_tokens": effective_tokens}
+        return {"max_tokens": max_tokens}
+
+    def _temperature_kwargs(
+        self, temperature: float | None, *, force: bool = False
+    ) -> dict[str, float]:
+        """Return sampling kwargs supported by this model family.
+
+        temperature=None always omits the parameter entirely — the request
+        never sends `temperature=None` and never substitutes a default value
+        on the caller's behalf (see LLMCallConfig.force_temperature).
+
+        force=True bypasses the normal silent-drop for reasoning-style models
+        and sends a non-None requested temperature regardless, letting the
+        API itself accept or reject it.
+        """
+        if temperature is None:
+            return {}
+        if force or not self._uses_reasoning_style_parameters():
+            return {"temperature": temperature}
+        return {}
+
+    def _uses_reasoning_style_parameters(self) -> bool:
+        """True for OpenAI models that reject max_tokens or non-default temperature."""
+        return is_reasoning_model(self.model)
+
+    def _reasoning_kwargs(self, requested_effort: str | None) -> dict[str, str]:
+        """Return conservative reasoning controls for compatible model families."""
+        if not self._uses_reasoning_style_parameters():
+            return {}
+        if requested_effort:
+            return {"reasoning_effort": requested_effort}
+        model = self.model.lower().rsplit("/", 1)[-1]
+        if model.startswith("gpt-5"):
+            return {"reasoning_effort": "minimal"}
+        return {"reasoning_effort": "low"}
+
+    @staticmethod
+    def _requires_max_completion_tokens(exc: Exception) -> bool:
+        """Detect OpenAI's model-specific rejection of max_tokens."""
+        message = str(exc).lower()
+        return (
+            "max_tokens" in message
+            and "max_completion_tokens" in message
+            and ("unsupported" in message or "not supported" in message)
+        )
+
+    @staticmethod
+    def _rejects_parameter(exc: Exception, parameter_name: str) -> bool:
+        """Detect provider rejection of an optional request parameter."""
+        message = str(exc).lower()
+        parameter = parameter_name.lower()
+        return (
+            parameter in message
+            and (
+                "unsupported" in message
+                or "not supported" in message
+                or "unrecognized" in message
+                or "unknown parameter" in message
+            )
+        )
+
+    def _create_chat_completion(
+        self,
+        client: Any,
+        request_kwargs: dict[str, Any],
+        *,
+        max_tokens: int,
+        strict: bool = False,
+    ) -> Any:
+        """Send the request, auto-correcting the max_tokens/max_completion_tokens
+        parameter name on rejection.
+
+        strict=True disables the reasoning_effort silent-drop-and-retry so a
+        rejected benchmark-locked parameter raises immediately instead of the
+        request silently proceeding without it (see LLMCallConfig.strict).
+        The max_tokens/max_completion_tokens rename is not a benchmark-locked
+        value — it is kept even under strict=True.
+        """
+        import openai  # noqa: PLC0415  # type: ignore[import-untyped]
+
+        for _ in range(3):
+            try:
+                return client.chat.completions.create(**request_kwargs)
+            except openai.APIStatusError as exc:
+                if (
+                    "max_tokens" in request_kwargs
+                    and self._requires_max_completion_tokens(exc)
+                ):
+                    request_kwargs.pop("max_tokens")
+                    request_kwargs["max_completion_tokens"] = max_tokens
+                    continue
+                if (
+                    not strict
+                    and "reasoning_effort" in request_kwargs
+                    and self._rejects_parameter(exc, "reasoning_effort")
+                ):
+                    request_kwargs.pop("reasoning_effort")
+                    continue
+                raise
+
+        return client.chat.completions.create(**request_kwargs)
+
     def complete(
         self,
         messages: list[ChatMessage],
-        temperature: float = 0.1,
+        temperature: float | None = 0.1,
         max_tokens: int = 1024,
         **kwargs: Any,
     ) -> CompletionResponse:
@@ -247,7 +640,7 @@ class OpenAIProvider(BaseLLMProvider):
     def _do_complete(
         self,
         messages: list[ChatMessage],
-        temperature: float,
+        temperature: float | None,
         max_tokens: int,
         **kwargs: Any,
     ) -> CompletionResponse:
@@ -255,13 +648,27 @@ class OpenAIProvider(BaseLLMProvider):
 
         client = self._get_client()
         sdk_messages = [{"role": m.role, "content": m.content} for m in messages]
+        min_completion_tokens = kwargs.pop("min_completion_tokens", None)
+        reasoning_effort = kwargs.pop("reasoning_effort", None)
+        force_temperature = kwargs.pop("force_temperature", False)
+        strict = kwargs.pop("strict", False)
+        request_kwargs = {
+            "model": self.model,
+            "messages": sdk_messages,
+            **self._temperature_kwargs(temperature, force=force_temperature),
+            **self._token_limit_kwargs(
+                max_tokens,
+                min_completion_tokens=min_completion_tokens,
+            ),
+            **self._reasoning_kwargs(reasoning_effort),
+            **kwargs,
+        }
         try:
-            resp = client.chat.completions.create(
-                model=self.model,
-                messages=sdk_messages,
-                temperature=temperature,
+            resp = self._create_chat_completion(
+                client,
+                request_kwargs,
                 max_tokens=max_tokens,
-                **kwargs,
+                strict=strict,
             )
         except openai.RateLimitError as exc:
             raise _RetryableError(str(exc)) from exc
@@ -270,13 +677,75 @@ class OpenAIProvider(BaseLLMProvider):
                 raise _RetryableError(str(exc)) from exc
             raise RuntimeError(str(exc)) from exc
 
+        content = resp.choices[0].message.content or ""
+        if not content.strip():
+            logger.warning(
+                "OpenAI returned empty assistant content | model=%s finish_reason=%s usage=%s",
+                getattr(resp, "model", self.model),
+                getattr(resp.choices[0], "finish_reason", None),
+                _safe_usage_dict(getattr(resp, "usage", None)),
+            )
+
         return CompletionResponse(
-            content=resp.choices[0].message.content or "",
+            content=content,
             model=resp.model,
             prompt_tokens=resp.usage.prompt_tokens if resp.usage else None,
             completion_tokens=resp.usage.completion_tokens if resp.usage else None,
             raw=resp,
         )
+
+    def complete_with_tools(
+        self,
+        messages: list[ChatMessage],
+        tools: list[dict[str, Any]],
+        temperature: float | None = 0.1,
+        max_tokens: int = 1024,
+        **kwargs: Any,
+    ) -> tuple[str | None, list[ToolCall]]:
+        import json as _json
+
+        import openai  # noqa: PLC0415  # type: ignore[import-untyped]
+
+        client = self._get_client()
+        sdk_messages = [{"role": m.role, "content": m.content} for m in messages]
+        provider_tools = to_provider_tools(self.provider_name, tools)
+        min_completion_tokens = kwargs.pop("min_completion_tokens", None)
+        reasoning_effort = kwargs.pop("reasoning_effort", None)
+        request_kwargs = {
+            "model": self.model,
+            "messages": sdk_messages,
+            "tools": provider_tools,
+            **self._temperature_kwargs(temperature),
+            **self._token_limit_kwargs(
+                max_tokens,
+                min_completion_tokens=min_completion_tokens,
+            ),
+            **self._reasoning_kwargs(reasoning_effort),
+            **kwargs,
+        }
+        try:
+            resp = self._create_chat_completion(
+                client,
+                request_kwargs,
+                max_tokens=max_tokens,
+            )
+        except openai.RateLimitError as exc:
+            raise _RetryableError(str(exc)) from exc
+        except openai.APIStatusError as exc:
+            if exc.status_code >= 500:
+                raise _RetryableError(str(exc)) from exc
+            raise RuntimeError(str(exc)) from exc
+
+        msg = resp.choices[0].message
+        text: str | None = msg.content or None
+        tool_calls: list[ToolCall] = []
+        for tc in (msg.tool_calls or []):
+            tool_calls.append(ToolCall(
+                id=tc.id,
+                name=tc.function.name,
+                arguments=_json.loads(tc.function.arguments),
+            ))
+        return text, tool_calls
 
     @property
     def provider_name(self) -> str:
@@ -285,6 +754,26 @@ class OpenAIProvider(BaseLLMProvider):
         if self._base_url and "models.inference" in (self._base_url or ""):
             return "github"
         return "openai"
+
+
+def _safe_usage_dict(usage: Any) -> dict[str, Any] | None:
+    """Return non-sensitive token usage diagnostics from an SDK usage object."""
+    if usage is None:
+        return None
+    if hasattr(usage, "model_dump"):
+        return usage.model_dump(mode="json")
+    result: dict[str, Any] = {}
+    for key in (
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "completion_tokens_details",
+        "prompt_tokens_details",
+    ):
+        value = getattr(usage, key, None)
+        if value is not None:
+            result[key] = value
+    return result or None
 
 
 class AnthropicProvider(BaseLLMProvider):
@@ -354,6 +843,52 @@ class AnthropicProvider(BaseLLMProvider):
             completion_tokens=resp.usage.output_tokens if resp.usage else None,
             raw=resp,
         )
+
+    def complete_with_tools(
+        self,
+        messages: list[ChatMessage],
+        tools: list[dict[str, Any]],
+        temperature: float = 0.1,
+        max_tokens: int = 1024,
+        **kwargs: Any,
+    ) -> tuple[str | None, list[ToolCall]]:
+        import anthropic  # noqa: PLC0415  # type: ignore[import-untyped]
+
+        client = self._get_client()
+        system = next((m.content for m in messages if m.role == "system"), "")
+        sdk_messages = [
+            {"role": m.role, "content": m.content}
+            for m in messages if m.role != "system"
+        ]
+        provider_tools = to_provider_tools("anthropic", tools)
+        try:
+            resp = client.messages.create(
+                model=self.model,
+                system=system,
+                messages=sdk_messages,
+                tools=provider_tools,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+        except anthropic.RateLimitError as exc:
+            raise _RetryableError(str(exc)) from exc
+        except anthropic.APIStatusError as exc:
+            if exc.status_code >= 500:
+                raise _RetryableError(str(exc)) from exc
+            raise RuntimeError(str(exc)) from exc
+
+        text: str | None = None
+        tool_calls: list[ToolCall] = []
+        for block in resp.content:
+            if block.type == "text":
+                text = block.text
+            elif block.type == "tool_use":
+                tool_calls.append(ToolCall(
+                    id=block.id,
+                    name=block.name,
+                    arguments=block.input,
+                ))
+        return text, tool_calls
 
     @property
     def provider_name(self) -> str:
@@ -433,6 +968,62 @@ class OllamaProvider(BaseLLMProvider):
 
         content = resp["message"]["content"] if isinstance(resp, dict) else resp.message.content
         return CompletionResponse(content=content, model=self.model, raw=resp)
+
+    def complete_with_tools(
+        self,
+        messages: list[ChatMessage],
+        tools: list[dict[str, Any]],
+        temperature: float = 0.1,
+        max_tokens: int = 1024,
+        **kwargs: Any,
+    ) -> tuple[str | None, list[ToolCall]]:
+        client = self._get_client()
+        sdk_messages = [{"role": m.role, "content": m.content} for m in messages]
+        provider_tools = to_provider_tools("ollama", tools)
+        try:
+            resp = client.chat(
+                model=self.model,
+                messages=sdk_messages,
+                tools=provider_tools,
+                options={"temperature": temperature},
+                # format="json" intentionally omitted for tool-calling mode
+            )
+        except Exception as exc:
+            err = str(exc).lower()
+            if any(kw in err for kw in ("connection", "timeout", "refused", "reset")):
+                raise _RetryableError(str(exc)) from exc
+            raise RuntimeError(str(exc)) from exc
+
+        msg = resp["message"] if isinstance(resp, dict) else resp.message
+        if isinstance(msg, dict):
+            content: str | None = msg.get("content") or None
+            raw_tool_calls = msg.get("tool_calls") or []
+        else:
+            content = msg.content or None
+            raw_tool_calls = msg.tool_calls or []
+
+        tool_calls: list[ToolCall] = []
+        for tc in raw_tool_calls:
+            if isinstance(tc, dict):
+                fn = tc.get("function", {})
+                tool_calls.append(ToolCall(
+                    id=tc.get("id", ""),
+                    name=fn.get("name", ""),
+                    arguments=fn.get("arguments", {}),
+                ))
+            else:
+                tool_calls.append(ToolCall(
+                    id=getattr(tc, "id", ""),
+                    name=tc.function.name,
+                    arguments=tc.function.arguments,
+                ))
+
+        if not tool_calls and not content:
+            raise RuntimeError(
+                "Ollama complete_with_tools: model returned neither tool calls nor text content"
+            )
+
+        return content, tool_calls
 
     @property
     def provider_name(self) -> str:

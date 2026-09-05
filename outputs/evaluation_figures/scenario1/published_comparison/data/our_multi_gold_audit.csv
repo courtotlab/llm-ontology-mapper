@@ -1,0 +1,6 @@
+benchmark,gold_count,n_queries
+UKBB-EFO,1,888
+Biomappings-EFO,1,795
+OLS-EFO (full),1,7257
+OLS-EFO (full),2,113
+OLS-EFO (full),3,7

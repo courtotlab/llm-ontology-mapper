@@ -1,0 +1,23 @@
+{
+  "input_filename": "dict_mapped_all.xlsx",
+  "input_file_sha256": "91980c4df28781e5ef8d33d614c4f768966fa88b3db24996f3da38fc01bbddfd",
+  "model": "gpt-5-mini",
+  "provider": "openai",
+  "runs": 2,
+  "temperature": null,
+  "temperature_mode": "provider_default",
+  "seed": 42,
+  "reasoning_effort": "low",
+  "retrieval_mode": "public",
+  "max_alternatives": 4,
+  "hard_target_ontology_behavior": "Each row's target_ontology is supplied as a one-item ontologies=[...] hard constraint to OntologyMapper (one mapper instance per distinct target ontology in the dataset, sharing one PlannedPipeline/provider).",
+  "pricing_snapshot": {
+    "model": "gpt-5-mini",
+    "input_per_1m_usd": 0.25,
+    "cached_input_per_1m_usd": 0.025,
+    "output_per_1m_usd": 2.0,
+    "snapshot_date": "2026-08-19"
+  },
+  "git_commit_hash": "575741dc947dd17be6b1125423d16100b3468012",
+  "start_timestamp": "2026-08-21T18:24:05.610603+00:00"
+}

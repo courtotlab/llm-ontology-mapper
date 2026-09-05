@@ -8,8 +8,7 @@ Run with:  pytest tests/test_providers.py -v -m unit
 
 from __future__ import annotations
 
-from typing import Any, List
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -21,8 +20,8 @@ from llm_ontology_mapper.providers import (
     OllamaProvider,
     OpenAIProvider,
     _RetryableError,
+    is_reasoning_model,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # LLMProviderFactory
@@ -89,6 +88,154 @@ def test_openai_provider_raises_after_max_retries(monkeypatch: pytest.MonkeyPatc
 
     with pytest.raises(RuntimeError, match="failed after 2 retries"):
         provider.complete([ChatMessage(role="user", content="x")])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OpenAIProvider — request kwargs
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _make_openai_completion_response(
+    *,
+    content: str = "ok",
+    model: str = "gpt-4.1-mini",
+) -> MagicMock:
+    resp = MagicMock()
+    resp.choices[0].message.content = content
+    resp.model = model
+    resp.usage = None
+    return resp
+
+
+@pytest.mark.unit
+def test_openai_complete_gpt_41_mini_uses_max_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = OpenAIProvider(model="gpt-4.1-mini")
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = (
+        _make_openai_completion_response(model="gpt-4.1-mini")
+    )
+    monkeypatch.setattr(provider, "_get_client", lambda: mock_client)
+
+    provider.complete(
+        [ChatMessage(role="user", content="hello")],
+        max_tokens=512,
+    )
+
+    _, call_kwargs = mock_client.chat.completions.create.call_args
+    assert call_kwargs["temperature"] == 0.1
+    assert call_kwargs["max_tokens"] == 512
+    assert "max_completion_tokens" not in call_kwargs
+
+
+@pytest.mark.unit
+def test_openai_complete_gpt_5_omits_temperature_and_uses_max_completion_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = OpenAIProvider(model="gpt-5")
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = (
+        _make_openai_completion_response(model="gpt-5")
+    )
+    monkeypatch.setattr(provider, "_get_client", lambda: mock_client)
+
+    provider.complete(
+        [ChatMessage(role="user", content="hello")],
+        max_tokens=512,
+    )
+
+    _, call_kwargs = mock_client.chat.completions.create.call_args
+    assert "temperature" not in call_kwargs
+    assert call_kwargs["max_completion_tokens"] == 512
+    assert call_kwargs["reasoning_effort"] == "minimal"
+    assert "max_tokens" not in call_kwargs
+
+
+@pytest.mark.unit
+def test_openai_complete_o_series_omits_temperature_and_uses_max_completion_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = OpenAIProvider(model="o3-mini")
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = (
+        _make_openai_completion_response(model="o3-mini")
+    )
+    monkeypatch.setattr(provider, "_get_client", lambda: mock_client)
+
+    provider.complete(
+        [ChatMessage(role="user", content="hello")],
+        max_tokens=256,
+    )
+
+    _, call_kwargs = mock_client.chat.completions.create.call_args
+    assert "temperature" not in call_kwargs
+    assert call_kwargs["max_completion_tokens"] == 256
+    assert call_kwargs["reasoning_effort"] == "low"
+    assert "max_tokens" not in call_kwargs
+
+
+@pytest.mark.unit
+def test_openai_complete_gpt_5_honors_min_completion_token_floor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = OpenAIProvider(model="gpt-5")
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = (
+        _make_openai_completion_response(model="gpt-5")
+    )
+    monkeypatch.setattr(provider, "_get_client", lambda: mock_client)
+
+    provider.complete(
+        [ChatMessage(role="user", content="hello")],
+        max_tokens=512,
+        min_completion_tokens=4096,
+        reasoning_effort="minimal",
+    )
+
+    _, call_kwargs = mock_client.chat.completions.create.call_args
+    assert call_kwargs["max_completion_tokens"] == 4096
+    assert "max_tokens" not in call_kwargs
+    assert call_kwargs["reasoning_effort"] == "minimal"
+
+
+@pytest.mark.unit
+def test_openai_complete_preserves_explicit_reasoning_effort(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = OpenAIProvider(model="gpt-5")
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = (
+        _make_openai_completion_response(model="gpt-5")
+    )
+    monkeypatch.setattr(provider, "_get_client", lambda: mock_client)
+
+    provider.complete(
+        [ChatMessage(role="user", content="hello")],
+        max_tokens=512,
+        reasoning_effort="low",
+    )
+
+    _, call_kwargs = mock_client.chat.completions.create.call_args
+    assert call_kwargs["reasoning_effort"] == "low"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    [
+        ("gpt-5", True),
+        ("gpt-5-mini", True),
+        ("gpt-5-2026-06-01", True),
+        ("o1", True),
+        ("o3-mini", True),
+        ("o4", True),
+        ("gpt-4.1-mini", False),
+        ("claude-3-5-sonnet", False),
+    ],
+)
+def test_is_reasoning_model(model: str, expected: bool) -> None:
+    assert is_reasoning_model(model) is expected
 
 
 # ─────────────────────────────────────────────────────────────────────────────

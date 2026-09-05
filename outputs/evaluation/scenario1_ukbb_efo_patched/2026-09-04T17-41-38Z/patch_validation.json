@@ -1,0 +1,17 @@
+{
+  "original_selection_run": "/Users/akandwal/Developer/llm-ontology-mapper/outputs/evaluation/scenario1_ukbb_efo/2026-08-31T13-54-53Z",
+  "baseline_run": "outputs/evaluation/scenario1_ukbb_efo_gold_corrected/2026-09-04T17-37-10Z",
+  "rerun_run": "outputs/evaluation/scenario1_ukbb_efo_rerun_unmapped/2026-09-04T17-06-22Z",
+  "patched_run": "/Users/akandwal/Developer/llm-ontology-mapper/outputs/evaluation/scenario1_ukbb_efo_patched/2026-09-04T17-41-38Z",
+  "original_row_count": 888,
+  "targeted_row_count": 4,
+  "rerun_row_count": 4,
+  "patched_row_count": 888,
+  "replaced_query_ids_count": 4,
+  "missing_query_ids": [],
+  "unexpected_query_ids": [],
+  "duplicate_query_ids": [],
+  "immutable_column_mismatches": [],
+  "non_target_row_mismatches": [],
+  "validation_passed": true
+}

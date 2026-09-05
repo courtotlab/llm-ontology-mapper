@@ -1,0 +1,51 @@
+{
+  "dataset": "ols-efo",
+  "metric_comparison": {
+    "Top-1": {
+      "original": "0.8342144503185577",
+      "patched": "0.8347566761556188"
+    },
+    "Top-3": {
+      "original": "0.8582079436085129",
+      "patched": "0.8599701775789617"
+    },
+    "Top-5": {
+      "original": "0.8598346211196963",
+      "patched": "0.8620035244679409"
+    },
+    "MRR": {
+      "original": "0.8457841941168497",
+      "patched": "0.8469929058786317"
+    },
+    "Recall@GT": {
+      "original": "0.8310062807826126",
+      "patched": "0.8315485066196737"
+    },
+    "Precision": {
+      "original": "0.8701459652988157",
+      "patched": "0.869039439329394"
+    },
+    "Recall": {
+      "original": "0.9821262045383898",
+      "patched": "0.9844333748443338"
+    },
+    "F1": {
+      "original": "0.9227511682242991",
+      "patched": "0.9231442960367856"
+    }
+  },
+  "transitions": {
+    "originally_unmapped_still_unmapped": 100,
+    "originally_unmapped_now_mapped": 15,
+    "originally_unmapped_now_error": 0,
+    "total_rerun": 115
+  },
+  "gold_rank_among_rerun_rows": {
+    "1": 4,
+    "2": 7,
+    "3": 2,
+    "4": 3,
+    "5": 0,
+    "absent": 99
+  }
+}

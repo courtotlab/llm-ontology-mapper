@@ -83,6 +83,8 @@ eval = [
     "pandas>=2.0",
     "matplotlib>=3.8",
     "seaborn>=0.13",
+    "openpyxl>=3.1",          # .xlsx read/write engine for pandas (benchmark input)
+    "scipy>=1.11",             # Wilcoxon rank-sum test (scenario2 calibration separation stats)
 ]
 
 # Pull in every optional group at once (useful for full dev installs)
@@ -150,6 +152,7 @@ asyncio_default_fixture_loop_scope = "function"
 markers = [
     "unit:      pure-logic tests, no I/O",
     "integration: tests that call external APIs",
+    "live:      opt-in tests that call live external APIs",
     "slow:      tests that take > 10 s",
 ]
 

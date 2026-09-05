@@ -1,0 +1,19 @@
+# Published baseline comparison -- OLS-EFO (Scenario 1)
+
+text2term and MetaHarmonizer were NOT rerun for this study. Their values below (if present) come only from `published_baselines.csv`, a manually curated file citing the exact publication/table/figure -- never fabricated or estimated. 'unavailable' means no verified value has been supplied yet.
+
+| Metric | text2term (published) | MetaHarmonizer (published) | llm-ontology-mapper (this study) |
+| --- | --- | --- | --- |
+| % More General | unavailable | unavailable | 0.0094 |
+| % More Specific | unavailable | unavailable | 0.0072 |
+| % Same | unavailable | unavailable | 0.8342 |
+| % Sibling | unavailable | unavailable | 0.0058 |
+| % Unrelated | unavailable | unavailable | 0.1278 |
+| F1 | unavailable | unavailable | 0.9228 |
+| MRR | unavailable | unavailable | 0.8458 |
+| Precision | unavailable | unavailable | 0.8701 |
+| Recall | unavailable | unavailable | 0.9821 |
+| Recall@GT | unavailable | unavailable | 0.8310 |
+| Top-1 | unavailable | unavailable | 0.8342 |
+| Top-3 | unavailable | unavailable | 0.8582 |
+| Top-5 | unavailable | unavailable | 0.8598 |

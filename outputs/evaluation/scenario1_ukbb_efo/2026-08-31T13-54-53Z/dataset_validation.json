@@ -1,0 +1,22 @@
+{
+  "raw_row_count": 888,
+  "missing_query_count": 0,
+  "missing_ref_match_count": 0,
+  "missing_ref_match_id_count": 0,
+  "ref_match_id_prefix_counts": {
+    "EFO": 740,
+    "HP": 117,
+    "NCBITaxon": 2,
+    "Orphanet": 27,
+    "NCIT": 2
+  },
+  "exact_duplicate_row_count": 0,
+  "unique_mapping_pair_count": 888,
+  "unique_query_count": 888,
+  "gold_count_distribution": {
+    "1": 888
+  },
+  "max_gold_codes_per_query": 1,
+  "canonical_unique_query_count": 888,
+  "max_gold_codes_within_rank_capacity": true
+}

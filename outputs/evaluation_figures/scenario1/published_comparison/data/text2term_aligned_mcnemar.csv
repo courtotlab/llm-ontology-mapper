@@ -1,0 +1,4 @@
+benchmark,ours_only_correct,t2t_only_correct,discordant_n,statistic_method,p_value
+UKBB-EFO,87,34,121,exact binomial McNemar (scipy.stats.binomtest),1.5716537188665445e-06
+Biomappings-EFO,157,24,181,exact binomial McNemar (scipy.stats.binomtest),3.8385362584732712e-25
+OLS-EFO (full),326,136,462,exact binomial McNemar (scipy.stats.binomtest),4.574969372161117e-19

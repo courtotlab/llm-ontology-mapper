@@ -1,0 +1,739 @@
+"""
+Unit tests for OntologyMapper optional PlannedPipeline integration (Phase 10).
+
+All planned-pipeline behavior is tested with injected fakes. No live LLM,
+public API, or SapBERT service is called.
+"""
+
+from __future__ import annotations
+
+import inspect
+from typing import Any
+
+import pytest
+
+from llm_ontology_mapper import mapper as mapper_module
+from llm_ontology_mapper.mapper import OntologyMapper
+from llm_ontology_mapper.models import (
+    LogicType,
+    MappingBatch,
+    MappingMetadata,
+    MappingResult,
+    RAGDebugInfo,
+    RetrievalMode,
+)
+from llm_ontology_mapper.providers import BaseLLMProvider, ChatMessage, CompletionResponse
+
+pytestmark = pytest.mark.unit
+
+
+class _StubProvider(BaseLLMProvider):
+    RESPONSE_JSON = """{
+        "code": "HP:0012735",
+        "term": "Cough",
+        "ontology": "HPO",
+        "confidence": 0.93,
+        "alternatives": [],
+        "notes": null
+    }"""
+
+    def __init__(self) -> None:
+        super().__init__(model="stub-model")
+        self.calls: list[list[ChatMessage]] = []
+
+    def complete(
+        self,
+        messages: list[ChatMessage],
+        temperature: float = 0.1,
+        max_tokens: int = 1024,
+        **kwargs: Any,
+    ) -> CompletionResponse:
+        self.calls.append(list(messages))
+        return CompletionResponse(
+            content=self.RESPONSE_JSON,
+            model=self.model,
+            prompt_tokens=10,
+            completion_tokens=5,
+        )
+
+
+class _FakePlannedPipeline:
+    def __init__(self, result: MappingResult | None = None) -> None:
+        self.calls: list[dict[str, Any]] = []
+        self.result = result or _planned_result("planned")
+
+    def map_term(self, **kwargs: Any) -> MappingResult:
+        self.calls.append(kwargs)
+        return self.result
+
+
+class _ForbiddenPlannedPipeline:
+    calls: list[dict[str, Any]]
+
+    def __init__(self) -> None:
+        self.calls = []
+
+    def map_term(self, **kwargs: Any) -> MappingResult:
+        raise AssertionError("PlannedPipeline should not be called")
+
+
+def _planned_result(source_term: str = "sys_bp") -> MappingResult:
+    return MappingResult(
+        source_term=source_term,
+        source_label="Systolic blood pressure",
+        source_type="integer",
+        target_code="LOINC:8480-6",
+        target_term="Systolic blood pressure",
+        ontology="LOINC",
+        confidence=0.91,
+        logic_type=LogicType.RAG,
+    )
+
+
+def _planned_result_with_metadata(source_term: str = "sys_bp") -> MappingResult:
+    result = _planned_result(source_term)
+    result.metadata = MappingMetadata(
+        model="pipeline",
+        provider="grounded_pipeline",
+        rag_debug=RAGDebugInfo(
+            query_sent=source_term,
+            candidates_retrieved=[
+                {
+                    "retrieval_mode": "public",
+                    "is_grounded": True,
+                }
+            ],
+            top_k=1,
+        ),
+    )
+    return result
+
+
+def _planned_disabled_result_with_metadata(source_term: str = "sys_bp") -> MappingResult:
+    result = MappingResult(
+        source_term=source_term,
+        target_code="UNKNOWN:UNMAPPED",
+        target_term="UNMAPPED",
+        ontology="UNKNOWN",
+        confidence=0.0,
+        logic_type=LogicType.LLM,
+        metadata=MappingMetadata(
+            model="stub",
+            provider="stub",
+            rag_debug=RAGDebugInfo(
+                query_sent=source_term,
+                candidates_retrieved=[
+                    {
+                        "retrieval_mode": "disabled",
+                        "is_grounded": False,
+                    }
+                ],
+                top_k=0,
+            ),
+        ),
+    )
+    return result
+
+
+def test_default_constructor_uses_legacy_path() -> None:
+    provider = _StubProvider()
+    forbidden = _ForbiddenPlannedPipeline()
+    mapper = OntologyMapper(llm_provider=provider, planned_pipeline=forbidden)
+
+    result = mapper.map_term("cough", source_label="Do you have a cough?")
+
+    assert result.target_code == "HP:0012735"
+    assert result.metadata is not None
+    assert result.metadata.latency_ms is not None
+    assert result.metadata.latency_ms >= 0
+    assert result.metadata.rag_debug is None
+    assert provider.calls
+    assert forbidden.calls == []
+
+
+def test_map_term_default_still_uses_legacy_path() -> None:
+    provider = _StubProvider()
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(llm_provider=provider, planned_pipeline=fake)
+
+    result = mapper.map_term("cough")
+
+    assert result.logic_type == LogicType.LLM
+    assert provider.calls
+    assert fake.calls == []
+
+
+def test_planned_flag_enables_planned_pipeline_delegation() -> None:
+    provider = _StubProvider()
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=provider,
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    result = mapper.map_term("sys_bp")
+
+    assert result is fake.result
+    assert len(fake.calls) == 1
+    assert provider.calls == []
+
+
+def test_planned_mode_populates_total_latency_at_mapper_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ticks = iter([10.0, 10.25])
+    monkeypatch.setattr(mapper_module.time, "monotonic", lambda: next(ticks))
+    fake = _FakePlannedPipeline(result=_planned_result_with_metadata())
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    result = mapper.map_term("sys_bp")
+
+    assert result is fake.result
+    assert result.metadata is not None
+    assert result.metadata.latency_ms == 250.0
+    assert result.metadata.rag_debug is not None
+    assert result.metadata.rag_debug.pipeline_timings is None
+
+
+def test_planned_disabled_mode_populates_total_latency_without_stage_timings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ticks = iter([3.0, 3.125])
+    monkeypatch.setattr(mapper_module.time, "monotonic", lambda: next(ticks))
+    fake = _FakePlannedPipeline(result=_planned_disabled_result_with_metadata())
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        retrieval_mode=RetrievalMode.DISABLED,
+        planned_pipeline=fake,
+    )
+
+    result = mapper.map_term("sys_bp")
+
+    assert result.metadata is not None
+    assert result.metadata.latency_ms == 125.0
+    assert result.metadata.rag_debug is not None
+    assert result.metadata.rag_debug.pipeline_timings is None
+
+
+def test_map_term_override_enables_planned_pipeline_delegation() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(llm_provider=_StubProvider(), planned_pipeline=fake)
+
+    mapper.map_term("sys_bp", use_planned_pipeline=True)
+
+    assert len(fake.calls) == 1
+
+
+def test_planned_mode_passes_source_term_label_and_type() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term(
+        "sys_bp",
+        source_label="Systolic BP",
+        source_type="integer",
+    )
+
+    call = fake.calls[0]
+    assert call["source_term"] == "sys_bp"
+    assert call["source_label"] == "Systolic BP"
+    assert call["source_type"] == "integer"
+
+
+def test_map_term_signature_adds_keyword_only_source_description() -> None:
+    signature = inspect.signature(OntologyMapper.map_term)
+
+    assert "source_description" in signature.parameters
+    assert "source_data_type" not in signature.parameters
+    assert signature.parameters["source_description"].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+def test_planned_mode_passes_source_description() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term(
+        "creat",
+        source_label="Serum creatinine",
+        source_type="decimal",
+        source_description="Most recent serum creatinine result collected at enrolment",
+    )
+
+    call = fake.calls[0]
+    assert call["source_description"] == (
+        "Most recent serum creatinine result collected at enrolment"
+    )
+    assert call["source_type"] == "decimal"
+
+
+def test_existing_positional_arguments_keep_their_meanings() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term("sys_bp", "Systolic BP", "integer", "measurement")
+
+    call = fake.calls[0]
+    assert call["source_term"] == "sys_bp"
+    assert call["source_label"] == "Systolic BP"
+    assert call["source_type"] == "integer"
+    assert call["clinical_area"] == "measurement"
+    assert call["source_description"] is None
+
+
+def test_planned_mode_passes_entity_type_as_clinical_area() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term("sys_bp", entity_type="cardiology")
+
+    assert fake.calls[0]["clinical_area"] == "cardiology"
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [RetrievalMode.PUBLIC, RetrievalMode.LOCAL, RetrievalMode.DISABLED],
+)
+def test_planned_mode_passes_constructor_retrieval_mode(mode: RetrievalMode) -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        retrieval_mode=mode,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term("sys_bp")
+
+    assert fake.calls[0]["retrieval_mode"] == mode
+
+
+@pytest.mark.parametrize("mode", ["public", "local", "disabled"])
+def test_planned_mode_accepts_retrieval_mode_override_strings(mode: str) -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term("sys_bp", retrieval_mode=mode)
+
+    assert fake.calls[0]["retrieval_mode"] == RetrievalMode(mode)
+
+
+def test_planned_mode_passes_single_explicit_target_ontology() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        ontologies=["loinc"],
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term("sys_bp")
+
+    assert fake.calls[0]["target_ontology"] == "LOINC"
+    assert fake.calls[0]["allowed_target_ontologies"] == ["LOINC"]
+
+
+def test_planned_mode_passes_single_explicit_efo_target_ontology() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        ontologies=["EFO"],
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term("disease")
+
+    assert fake.calls[0]["target_ontology"] == "EFO"
+    assert fake.calls[0]["allowed_target_ontologies"] == ["EFO"]
+
+
+def test_planned_mode_without_explicit_ontologies_is_unrestricted() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        ontologies=None,
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term("sys_bp")
+
+    assert fake.calls[0]["target_ontology"] is None
+    assert fake.calls[0]["allowed_target_ontologies"] is None
+
+
+def test_planned_mode_empty_explicit_ontologies_is_unrestricted() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        ontologies=[],
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term("sys_bp")
+
+    assert fake.calls[0]["target_ontology"] is None
+    assert fake.calls[0]["allowed_target_ontologies"] is None
+
+
+def test_planned_mode_accepts_multiple_explicit_target_ontologies() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        ontologies=[" loinc ", "HPO", "HP", "", "MONDO"],
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term("sys_bp")
+
+    assert fake.calls[0]["target_ontology"] is None
+    assert fake.calls[0]["allowed_target_ontologies"] == ["LOINC", "HPO", "MONDO"]
+
+
+def test_planned_mode_returns_mapping_result_from_planned_pipeline() -> None:
+    expected = _planned_result("custom")
+    fake = _FakePlannedPipeline(result=expected)
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    result = mapper.map_term("sys_bp")
+
+    assert result is expected
+    assert isinstance(result, MappingResult)
+
+
+def test_legacy_map_data_dictionary_remains_unchanged_by_default() -> None:
+    provider = _StubProvider()
+    forbidden = _ForbiddenPlannedPipeline()
+    mapper = OntologyMapper(llm_provider=provider, planned_pipeline=forbidden)
+
+    batch = mapper.map_data_dictionary(
+        [
+            {"field_name": "cough", "field_label": "Cough?", "field_type": "radio"},
+            {"field_name": "fever", "field_label": "Fever?", "field_type": "radio"},
+        ],
+        study_id="STUDY",
+    )
+
+    assert isinstance(batch, MappingBatch)
+    assert len(batch.results) == 2
+    assert provider.calls
+    assert forbidden.calls == []
+
+
+def test_planned_map_data_dictionary_uses_planned_pipeline_safely() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    batch = mapper.map_data_dictionary(
+        [
+            {"field_name": "sys_bp", "field_label": "Systolic BP", "field_type": "integer"},
+            {"field_name": "dia_bp", "field_label": "Diastolic BP", "field_type": "integer"},
+        ],
+        entity_type="cardiology",
+        study_id="STUDY",
+    )
+
+    assert len(batch.results) == 2
+    assert len(fake.calls) == 2
+    assert fake.calls[0]["clinical_area"] == "cardiology"
+
+
+def test_planned_map_data_dictionary_forwards_row_source_context() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        planned_pipeline=fake,
+    )
+
+    batch = mapper.map_data_dictionary(
+        [
+            {
+                "field_name": "creat",
+                "field_label": "Serum creatinine",
+                "field_description": ("Most recent serum creatinine result collected at enrolment"),
+                "field_type": "decimal",
+            }
+        ],
+        source_description_field="field_description",
+        entity_type="measurement",
+        use_planned_pipeline=True,
+        retrieval_mode=RetrievalMode.PUBLIC,
+    )
+
+    assert len(batch.results) == 1
+    assert len(fake.calls) == 1
+    assert fake.calls[0]["source_term"] == "creat"
+    assert fake.calls[0]["source_label"] == "Serum creatinine"
+    assert fake.calls[0]["source_description"] == (
+        "Most recent serum creatinine result collected at enrolment"
+    )
+    assert fake.calls[0]["source_type"] == "decimal"
+    assert fake.calls[0]["clinical_area"] == "measurement"
+    assert fake.calls[0]["retrieval_mode"] == RetrievalMode.PUBLIC
+
+
+def test_retrieval_mode_is_rejected_for_legacy_map_term() -> None:
+    mapper = OntologyMapper(llm_provider=_StubProvider())
+
+    with pytest.raises(ValueError, match="use_planned_pipeline=True"):
+        mapper.map_term("sys_bp", retrieval_mode="public")
+
+
+def test_non_default_constructor_retrieval_mode_requires_planned_mode() -> None:
+    with pytest.raises(ValueError, match="use_planned_pipeline=True"):
+        OntologyMapper(llm_provider=_StubProvider(), retrieval_mode="local")
+
+
+def test_no_both_mode_is_accepted_in_planned_mode() -> None:
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=_FakePlannedPipeline(),
+    )
+
+    with pytest.raises(ValueError):
+        mapper.map_term("sys_bp", retrieval_mode="both")
+
+
+def test_provider_configuration_still_builds_provider_for_planned_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from llm_ontology_mapper import mapper as mapper_module
+
+    provider = _StubProvider()
+    captured: dict[str, Any] = {}
+
+    class _Factory:
+        @staticmethod
+        def from_config(**kwargs: Any) -> _StubProvider:
+            captured["factory_kwargs"] = kwargs
+            return provider
+
+    class _PipelineFactory:
+        def __init__(self, *, provider: BaseLLMProvider) -> None:
+            captured["pipeline_provider"] = provider
+
+        def map_term(self, **kwargs: Any) -> MappingResult:
+            captured["pipeline_call"] = kwargs
+            return _planned_result(kwargs["source_term"])
+
+    monkeypatch.setattr(mapper_module, "LLMProviderFactory", _Factory)
+    monkeypatch.setattr(mapper_module, "PlannedPipeline", _PipelineFactory)
+
+    mapper = OntologyMapper(
+        provider="openai",
+        model="gpt-test",
+        api_key="sk-test",
+        use_planned_pipeline=True,
+    )
+    result = mapper.map_term("sys_bp")
+
+    assert result.source_term == "sys_bp"
+    assert captured["factory_kwargs"] == {
+        "provider": "openai",
+        "model": "gpt-test",
+        "api_key": "sk-test",
+    }
+    assert captured["pipeline_provider"] is provider
+
+
+def test_planned_mode_passes_max_candidates_and_max_alternatives() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+        max_candidates=7,
+        max_alternatives=3,
+    )
+
+    mapper.map_term("sys_bp")
+
+    assert fake.calls[0]["max_candidates"] == 7
+    assert fake.calls[0]["max_alternatives"] == 3
+
+
+def test_planned_mode_default_max_results_per_query_is_15() -> None:
+    """Recall-increase change: OntologyMapper's rag_top_k default rose from
+    5 to 15, and is forwarded to PlannedPipeline as max_results_per_query."""
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term("sys_bp")
+
+    assert fake.calls[0]["max_results_per_query"] == 15
+
+
+def test_planned_mode_default_max_candidates_is_20() -> None:
+    """Recall-increase change: OntologyMapper's max_candidates default rose
+    from 10 to 20."""
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term("sys_bp")
+
+    assert fake.calls[0]["max_candidates"] == 20
+
+
+def test_planned_mode_explicit_rag_top_k_override_still_wins() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+        rag_top_k=8,
+    )
+
+    mapper.map_term("sys_bp")
+
+    assert fake.calls[0]["max_results_per_query"] == 8
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# strict_target_ontology
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_planned_mode_passes_strict_target_ontology_true() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term("disease", strict_target_ontology=True)
+
+    assert fake.calls[0]["strict_target_ontology"] is True
+
+
+def test_planned_mode_defaults_strict_target_ontology_to_false() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    mapper.map_term("sys_bp")
+
+    assert fake.calls[0]["strict_target_ontology"] is False
+
+
+def test_map_data_dictionary_forwards_strict_target_ontology_to_every_row() -> None:
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(),
+        use_planned_pipeline=True,
+        planned_pipeline=fake,
+    )
+
+    batch = mapper.map_data_dictionary(
+        [
+            {"field_name": "row1", "field_label": "Row 1", "field_type": "text"},
+            {"field_name": "row2", "field_label": "Row 2", "field_type": "text"},
+            {"field_name": "row3", "field_label": "Row 3", "field_type": "text"},
+        ],
+        strict_target_ontology=True,
+    )
+
+    assert len(batch.results) == 3
+    assert len(fake.calls) == 3
+    assert all(call["strict_target_ontology"] is True for call in fake.calls)
+
+
+def test_strict_target_ontology_true_raises_on_legacy_path() -> None:
+    provider = _StubProvider()
+    mapper = OntologyMapper(llm_provider=provider)
+
+    with pytest.raises(ValueError, match="use_planned_pipeline=True"):
+        mapper.map_term("sys_bp", strict_target_ontology=True)
+
+    assert provider.calls == []
+
+
+def test_strict_target_ontology_true_raises_when_planned_disabled_per_call() -> None:
+    provider = _StubProvider()
+    mapper = OntologyMapper(
+        llm_provider=provider,
+        use_planned_pipeline=True,
+        planned_pipeline=_FakePlannedPipeline(),
+    )
+
+    with pytest.raises(ValueError, match="use_planned_pipeline=True"):
+        mapper.map_term("sys_bp", use_planned_pipeline=False, strict_target_ontology=True)
+
+    assert provider.calls == []
+
+
+def test_strict_target_ontology_explicit_false_does_not_raise_on_legacy_path() -> None:
+    provider = _StubProvider()
+    mapper = OntologyMapper(llm_provider=provider)
+
+    result = mapper.map_term("cough", strict_target_ontology=False)
+
+    assert result.target_code == "HP:0012735"
+
+
+def test_map_data_dictionary_validates_strict_target_ontology_once_upfront() -> None:
+    """Requesting strict_target_ontology=True for a batch that will use the
+    legacy path must raise immediately, not be discovered (and silently
+    swallowed by the per-row try/except) on the first row."""
+    provider = _StubProvider()
+    mapper = OntologyMapper(llm_provider=provider)
+
+    with pytest.raises(ValueError, match="use_planned_pipeline=True"):
+        mapper.map_data_dictionary(
+            [
+                {"field_name": "row1", "field_label": "Row 1", "field_type": "text"},
+                {"field_name": "row2", "field_label": "Row 2", "field_type": "text"},
+            ],
+            strict_target_ontology=True,
+        )
+
+    # Validated before the per-row loop ran — no row was ever attempted.
+    assert provider.calls == []

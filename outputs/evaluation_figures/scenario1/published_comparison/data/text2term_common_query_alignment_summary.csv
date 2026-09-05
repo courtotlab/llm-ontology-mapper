@@ -1,0 +1,4 @@
+benchmark,ours_total_n,t2t_total_n,ours_single_gold_n,candidate_exact_matches,strict_matched_n,ours_unmatched_n,t2t_unmatched_n,ambiguous_n,gold_mismatch_n,match_rate_ours,match_rate_t2t,alignment_key
+UKBB-EFO,888,899,888,888,888,0,6,0,0,1.0,0.9877641824249166,normalized(source_query) + normalized(benchmark_gold_curie)
+Biomappings-EFO,795,795,795,794,794,1,0,0,0,0.9987421383647799,0.9987421383647799,normalized(source_query) + normalized(benchmark_gold_curie)
+OLS-EFO (full),7504,8143,7257,7255,7255,2,149,0,0,0.9997244040237012,0.8909492815915511,normalized(source_query) + normalized(benchmark_gold_curie)

@@ -1,0 +1,28 @@
+{
+  "row_count": 218,
+  "ontology_distribution": {
+    "HPO": 64,
+    "ICD10": 16,
+    "LOINC": 47,
+    "MONDO": 49,
+    "NCIT": 14,
+    "RxNorm": 13,
+    "SNOMED": 15
+  },
+  "missing_source_variable_count": 0,
+  "missing_source_label_count": 0,
+  "missing_target_ontology_count": 0,
+  "missing_target_code_count": 0,
+  "source_description_populated": 38,
+  "source_description_blank": 180,
+  "gold_cardinality_distribution": {
+    "2": 6,
+    "1": 212
+  },
+  "max_gold_codes_per_row": 2,
+  "namespaces_consistent": true,
+  "namespace_violation_count": 0,
+  "namespace_violations": [],
+  "source_dataset_sha256": "91980c4df28781e5ef8d33d614c4f768966fa88b3db24996f3da38fc01bbddfd",
+  "calibration_scientifically_evaluable": true
+}
