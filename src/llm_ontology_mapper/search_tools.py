@@ -420,7 +420,6 @@ class SearchTools:
                         "score": 1.0 - (idx * 0.05),
                         "definition": definition,
                         "source": "LOINC-Search-API",
-                        "common_test_rank": self._parse_common_test_rank(concept),
                     }
                 )
             time.sleep(self.request_delay)
@@ -481,53 +480,17 @@ class SearchTools:
         return []
 
     @staticmethod
-    def _loinc_normalized_row(row: dict[str, Any]) -> dict[str, Any]:
-        """Key a LOINC result row by alnum-lowered field name for case/separator-
-        tolerant lookup (e.g. "COMMON_TEST_RANK" and "commonTestRank" both key
-        to "commontestrank")."""
-        return {
+    def _loinc_value(row: dict[str, Any], *field_names: str) -> str:
+        """Read a LOINC field while tolerating case and separator variants."""
+        normalized = {
             "".join(ch for ch in str(key).lower() if ch.isalnum()): value
             for key, value in row.items()
         }
-
-    @staticmethod
-    def _loinc_value(row: dict[str, Any], *field_names: str) -> str:
-        """Read a LOINC field while tolerating case and separator variants."""
-        normalized = SearchTools._loinc_normalized_row(row)
         for field_name in field_names:
             value = normalized.get("".join(ch for ch in field_name.lower() if ch.isalnum()))
             if value is not None and str(value).strip():
                 return str(value).strip()
         return ""
-
-    @staticmethod
-    def _parse_common_test_rank(concept: dict[str, Any]) -> int | None:
-        """Normalize the LOINC Search API's COMMON_TEST_RANK into a secondary
-        usage-frequency signal.
-
-        The live API uses 0 to mean "no common-test rank" for this code -- 0
-        would otherwise look like the best possible rank (lower is better), so
-        it is normalized to None exactly like a missing/null value. Any other
-        non-positive, non-integral, or unparseable value is also treated as
-        unranked rather than failing an otherwise valid LOINC retrieval or
-        silently truncating a malformed value (e.g. "3.7") into a fabricated
-        integer rank.
-
-        COMMON_ORDER_RANK and COMMON_SI_TEST_RANK are deliberately not read
-        here; only COMMON_TEST_RANK is in scope.
-        """
-        normalized = SearchTools._loinc_normalized_row(concept)
-        raw = normalized.get("commontestrank")
-        if raw is None:
-            return None
-        try:
-            value = float(raw)
-        except (TypeError, ValueError):
-            return None
-        if not value.is_integer():
-            return None
-        rank = int(value)
-        return rank if rank > 0 else None
 
     def search_rxnorm(
         self,

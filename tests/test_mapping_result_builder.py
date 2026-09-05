@@ -67,7 +67,6 @@ def _make_candidate(
     normalized_score: float | None = 0.92,
     provenance: dict | None = None,
     retrieved_from_ontologies: list[str] | None = None,
-    common_test_rank: int | None = None,
 ) -> NormalizedCandidate:
     return NormalizedCandidate(
         code=code,
@@ -80,7 +79,6 @@ def _make_candidate(
         normalized_score=normalized_score,
         provenance=provenance,
         retrieved_from_ontologies=retrieved_from_ontologies or [],
-        common_test_rank=common_test_rank,
     )
 
 
@@ -1476,156 +1474,6 @@ def test_unmapped_ranking_trace_rank_1_start_shared_across_public_and_local(
     trace = _get_pipeline_info(result)["final_ranking_trace"]
 
     assert trace[0]["rank"] == 1
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 6d. common_test_rank in debug provenance / final_ranking_trace
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def test_common_test_rank_appears_in_candidate_score_provenance() -> None:
-    builder = MappingResultBuilder()
-    ranked = _make_candidate("LOINC:8480-6", "Systolic BP", common_test_rank=3)
-
-    result = builder.build(
-        query_plan=_make_plan(),
-        rerank_decision=_make_selected_decision(selected_code="LOINC:8480-6"),
-        candidates=[ranked],
-    )
-    provenance = _get_pipeline_info(result)["candidate_score_provenance"]
-
-    assert provenance[0]["common_test_rank"] == 3
-
-
-def test_unranked_candidate_common_test_rank_is_none_in_provenance() -> None:
-    builder = MappingResultBuilder()
-    unranked = _make_candidate("LOINC:8480-6", "Systolic BP", common_test_rank=None)
-
-    result = builder.build(
-        query_plan=_make_plan(),
-        rerank_decision=_make_selected_decision(selected_code="LOINC:8480-6"),
-        candidates=[unranked],
-    )
-    provenance = _get_pipeline_info(result)["candidate_score_provenance"]
-
-    assert provenance[0]["common_test_rank"] is None
-
-
-def test_common_test_rank_appears_in_final_ranking_trace_for_selected_and_alternatives() -> None:
-    builder = MappingResultBuilder()
-    selected = _make_candidate("LOINC:8480-6", "Systolic BP", common_test_rank=3)
-    alt = _make_candidate(
-        "LOINC:60984-2", "Aortic systolic pressure", common_test_rank=500
-    )
-    decision = _make_selected_decision(
-        selected_code="LOINC:8480-6",
-        confidence=0.98,
-        alternatives=[
-            RerankAlternative(
-                candidate_id="C2", code="LOINC:60984-2", confidence=0.4, explanation="related"
-            ),
-        ],
-    )
-
-    result = builder.build(
-        query_plan=_make_plan(),
-        rerank_decision=decision,
-        candidates=[selected, alt],
-    )
-    trace = _get_pipeline_info(result)["final_ranking_trace"]
-
-    assert trace[0]["common_test_rank"] == 3
-    assert trace[0]["selected"] is True
-    assert trace[0]["rank"] == 1
-    assert trace[1]["common_test_rank"] == 500
-    assert trace[1]["selected"] is False
-    assert trace[1]["rank"] == 2
-
-
-def test_final_ranking_trace_rank_field_unaffected_by_common_test_rank() -> None:
-    """final_ranking_trace.rank keeps meaning the LLM's own final ordering --
-    unrelated to and unaffected by the presence of common_test_rank."""
-    builder = MappingResultBuilder()
-    selected = _make_candidate("LOINC:8480-6", "Systolic BP", common_test_rank=500)
-    alt = _make_candidate("LOINC:60984-2", "Aortic systolic pressure", common_test_rank=3)
-    decision = _make_selected_decision(
-        selected_code="LOINC:8480-6",
-        confidence=0.9,
-        alternatives=[
-            RerankAlternative(
-                candidate_id="C2", code="LOINC:60984-2", confidence=0.3, explanation="related"
-            ),
-        ],
-    )
-
-    result = builder.build(
-        query_plan=_make_plan(),
-        rerank_decision=decision,
-        candidates=[selected, alt],
-    )
-    trace = _get_pipeline_info(result)["final_ranking_trace"]
-
-    # The less-common code (rank 500) is still the LLM's rank-1 selection --
-    # final_ranking_trace.rank must not be reordered by common_test_rank.
-    assert trace[0]["code"] == "LOINC:8480-6"
-    assert trace[0]["rank"] == 1
-    assert trace[0]["common_test_rank"] == 500
-
-
-def test_common_test_rank_does_not_change_confidence_or_alternatives_semantics() -> None:
-    builder = MappingResultBuilder()
-    selected = _make_candidate("LOINC:8480-6", "Systolic BP", common_test_rank=3)
-    alt = _make_candidate("LOINC:60984-2", "Aortic systolic pressure", common_test_rank=None)
-    decision = _make_selected_decision(
-        selected_code="LOINC:8480-6",
-        confidence=0.91,
-        alternatives=[
-            RerankAlternative(
-                candidate_id="C2", code="LOINC:60984-2", confidence=0.5, explanation="related"
-            ),
-        ],
-    )
-
-    result = builder.build(
-        query_plan=_make_plan(),
-        rerank_decision=decision,
-        candidates=[selected, alt],
-    )
-
-    assert result.confidence == 0.91
-    assert result.alternatives[0].confidence == 0.5
-
-
-def test_common_test_rank_does_not_affect_max_alternatives() -> None:
-    """MAX_ALTERNATIVES truncation is unaffected by candidates carrying
-    common_test_rank."""
-    builder = MappingResultBuilder()
-    selected = _make_candidate("LOINC:0000-0", "Selected")
-    others = [
-        _make_candidate(f"LOINC:{1000 + i}-{i % 10}", f"Alt {i}", common_test_rank=i + 1)
-        for i in range(1, 8)
-    ]
-    decision = _make_selected_decision(
-        selected_code="LOINC:0000-0",
-        alternatives=[
-            RerankAlternative(
-                candidate_id=f"C{i + 1}",
-                code=f"LOINC:{1000 + i}-{i % 10}",
-                confidence=0.9 - i * 0.01,
-                explanation=f"Alternative {i}.",
-            )
-            for i in range(1, 8)
-        ],
-    )
-
-    result = builder.build(
-        query_plan=_make_plan(),
-        rerank_decision=decision,
-        candidates=[selected, *others],
-        max_alternatives=5,
-    )
-
-    assert len(result.alternatives) == 5
 
 
 def test_allowed_target_ontologies_unselected_final_selection_becomes_unmapped() -> None:

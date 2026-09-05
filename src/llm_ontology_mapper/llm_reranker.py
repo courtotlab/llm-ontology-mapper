@@ -838,8 +838,6 @@ def _build_candidate_list(candidate_map: dict[str, NormalizedCandidate]) -> str:
             score_parts.append(f"raw_score={c.raw_score:.4f}")
         if score_parts:
             fields.append(f"[{', '.join(score_parts)}]")
-        if c.common_test_rank is not None:
-            fields.append(f"common_test_rank={c.common_test_rank}")
         fields.append(f"Source: {c.source}")
         fields.append(f"Query: '{c.matched_query}'")
         if c.definition:

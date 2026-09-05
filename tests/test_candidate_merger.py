@@ -32,7 +32,6 @@ def _c(
     definition: str | None = None,
     provenance: dict | None = None,
     retrieved_from_ontologies: list[str] | None = None,
-    common_test_rank: int | None = None,
 ) -> NormalizedCandidate:
     return NormalizedCandidate(
         code=code,
@@ -46,7 +45,6 @@ def _c(
         definition=definition,
         provenance=provenance,
         retrieved_from_ontologies=retrieved_from_ontologies or [],
-        common_test_rank=common_test_rank,
     )
 
 
@@ -946,6 +944,80 @@ def test_normalizer_and_merger_integration(merger: CandidateMerger) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Candidate ordering: a near-1.0 raw score must not fall behind lower-scoring
+# candidates because its normalized_score was dropped to None.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_near_unity_normalized_score_sorts_ahead_of_lower_scores(
+    merger: CandidateMerger,
+) -> None:
+    # Pure CandidateMerger-level test: given already-normalized candidates
+    # (one with a correctly clamped normalized_score of 1.0), the existing
+    # sort policy alone must rank it first. This isolates the merger's
+    # sorting behavior from the normalizer's clamping behavior.
+    best = _c(
+        code="HP:0001",
+        term="Best match",
+        raw_score=1.0000001192092896,
+        normalized_score=1.0,
+    )
+    second = _c(
+        code="HP:0002",
+        term="Second",
+        raw_score=0.8402734994888306,
+        normalized_score=0.8402734994888306,
+    )
+    third = _c(
+        code="HP:0003",
+        term="Third",
+        raw_score=0.7971447706222534,
+        normalized_score=0.7971447706222534,
+    )
+
+    merged = merger.merge([third, second, best])
+
+    assert [c.code for c in merged] == ["HP:0001", "HP:0002", "HP:0003"]
+
+
+@pytest.mark.unit
+def test_normalizer_and_merger_integration_ranks_float_overshoot_candidate_first(
+    merger: CandidateMerger,
+) -> None:
+    # End-to-end regression for the reported bug: a raw SapBERT-style hit
+    # whose similarity overshoots 1.0 by one float32 ULP must be normalized
+    # to normalized_score=1.0 (not None) and therefore sort ahead of
+    # ordinary sub-1.0 candidates rather than falling to the back of the
+    # merged list.
+    from llm_ontology_mapper.candidate_normalizer import CandidateNormalizer
+
+    normalizer = CandidateNormalizer()
+
+    raw_candidates = [
+        {"code": "LOINC:76534-7", "term": "Third candidate", "score": 0.7971447706222534},
+        {"code": "LOINC:8479-8", "term": "Second candidate", "score": 0.8402734994888306},
+        {"code": "LOINC:8480-6", "term": "Best candidate", "score": 1.0000001192092896},
+    ]
+
+    normalized = [
+        normalizer.normalize(
+            r,
+            retrieval_mode=RetrievalMode.LOCAL,
+            matched_query="query",
+            default_ontology="LOINC",
+        )
+        for r in raw_candidates
+    ]
+
+    merged = merger.merge(normalized)
+
+    assert [c.code for c in merged] == ["LOINC:8480-6", "LOINC:8479-8", "LOINC:76534-7"]
+    assert merged[0].normalized_score == 1.0
+    assert merged[0].raw_score == pytest.approx(1.0000001192092896)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Test 22: strict_target_ontology — EFO carve-out disabled
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1130,114 +1202,3 @@ def test_strict_multi_target_keeps_native_members_rejects_imported(
 
     assert {c.code for c in result} == {"EFO:0000408", "HP:0012735"}
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# common_test_rank preservation across duplicate merging
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-@pytest.mark.unit
-def test_single_candidate_retains_common_test_rank(merger: CandidateMerger) -> None:
-    candidate = _c(code="LOINC:96608-5", ontology="LOINC", common_test_rank=3)
-    result = merger.merge([candidate])
-    assert result[0].common_test_rank == 3
-
-
-@pytest.mark.unit
-def test_duplicate_same_code_same_rank_retained(merger: CandidateMerger) -> None:
-    """LOINC:8480-6 retrieved from two planned queries (e.g. 'systolic blood
-    pressure' and 'systolic BP') with the same code-level rank must merge to
-    that rank, not drop it."""
-    a = _c(
-        code="LOINC:8480-6",
-        ontology="LOINC",
-        matched_query="systolic blood pressure",
-        normalized_score=0.9,
-        common_test_rank=3,
-    )
-    b = _c(
-        code="LOINC:8480-6",
-        ontology="LOINC",
-        matched_query="systolic BP",
-        normalized_score=0.9,
-        common_test_rank=3,
-    )
-    result = merger.merge([a, b])
-    assert len(result) == 1
-    assert result[0].common_test_rank == 3
-
-
-@pytest.mark.unit
-def test_duplicate_one_none_one_ranked_retains_positive_rank(
-    merger: CandidateMerger,
-) -> None:
-    unranked_occurrence = _c(
-        code="LOINC:8480-6",
-        ontology="LOINC",
-        matched_query="systolic blood pressure",
-        normalized_score=0.95,  # scores higher, so this becomes the winner
-        common_test_rank=None,
-    )
-    ranked_occurrence = _c(
-        code="LOINC:8480-6",
-        ontology="LOINC",
-        matched_query="systolic BP",
-        normalized_score=0.80,
-        common_test_rank=3,
-    )
-    result = merger.merge([unranked_occurrence, ranked_occurrence])
-    assert len(result) == 1
-    # The winner (higher score) has no rank of its own, so the merge falls
-    # back to the other duplicate's positive rank rather than discarding it.
-    assert result[0].common_test_rank == 3
-
-
-@pytest.mark.unit
-def test_duplicate_conflicting_ranks_does_not_break_merge_or_affect_score(
-    merger: CandidateMerger,
-) -> None:
-    """A genuine rank conflict for the same LOINC code must not crash merging
-    or invent a confidence effect -- it resolves deterministically to the
-    winner's own rank."""
-    winner = _c(
-        code="LOINC:8480-6",
-        ontology="LOINC",
-        matched_query="systolic blood pressure",
-        normalized_score=0.95,
-        common_test_rank=3,
-    )
-    other = _c(
-        code="LOINC:8480-6",
-        ontology="LOINC",
-        matched_query="systolic BP",
-        normalized_score=0.80,
-        common_test_rank=500,
-    )
-    result = merger.merge([winner, other])
-    assert len(result) == 1
-    assert result[0].common_test_rank == 3
-    assert result[0].normalized_score == 0.95
-    assert result[0].provenance["common_test_rank_conflict"] == [3, 500]
-
-
-@pytest.mark.unit
-def test_duplicate_rank_stays_attached_to_correct_code(merger: CandidateMerger) -> None:
-    """A rank belonging to one LOINC code must never leak onto a different
-    code merged in the same call."""
-    ranked = _c(code="LOINC:96608-5", ontology="LOINC", common_test_rank=3)
-    unranked_other_code = _c(
-        code="LOINC:12345-6", ontology="LOINC", term="Different test"
-    )
-    result = merger.merge([ranked, unranked_other_code])
-    by_code = {c.code: c for c in result}
-    assert by_code["LOINC:96608-5"].common_test_rank == 3
-    assert by_code["LOINC:12345-6"].common_test_rank is None
-
-
-@pytest.mark.unit
-def test_non_loinc_candidate_common_test_rank_unaffected_by_merge(
-    merger: CandidateMerger,
-) -> None:
-    candidate = _c(code="HP:0012735", ontology="HPO")
-    result = merger.merge([candidate])
-    assert result[0].common_test_rank is None

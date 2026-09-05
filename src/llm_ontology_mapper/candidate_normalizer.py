@@ -8,6 +8,7 @@ Phase 4A of the planned grounded mapping pipeline.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable
 from typing import Any
 
@@ -16,6 +17,34 @@ from llm_ontology_mapper.models import (
     RetrievalMode,
 )
 from llm_ontology_mapper.ontology_identity import canonical_ontology, resolve_candidate_identity
+
+# A same-vector SapBERT similarity is conceptually exactly 1.0, but a
+# float32 embedding backend (or float32 accumulation inside a float64
+# service response) can surface it as e.g. 1.0000001192092896 -- exactly
+# one float32 ULP (2**-23) above 1.0. This tolerance clamps only that kind
+# of floating-point overshoot/undershoot at the [0, 1] boundary; it is far
+# smaller than any genuinely out-of-range score (e.g. -0.1 or 1.5), which
+# must still fall back to normalized_score=None rather than be miscalibrated.
+_SCORE_UNIT_EPSILON = 1e-6
+
+
+def _clamp_to_unit_interval(value: float) -> float | None:
+    """Return `value` clamped to [0, 1] when it is exactly in range or within
+    _SCORE_UNIT_EPSILON of a boundary; otherwise return None.
+
+    NaN and +/-inf are never clamped -- both are always None. A finite value
+    clearly outside [0, 1] (not just floating-point noise at the boundary)
+    is also None so it is never silently miscalibrated as a normalized score.
+    """
+    if not math.isfinite(value):
+        return None
+    if 0.0 <= value <= 1.0:
+        return value
+    if 1.0 < value <= 1.0 + _SCORE_UNIT_EPSILON:
+        return 1.0
+    if -_SCORE_UNIT_EPSILON <= value < 0.0:
+        return 0.0
+    return None
 
 
 class CandidateNormalizationError(Exception):
@@ -125,7 +154,6 @@ class CandidateNormalizer:
         raw_score = self._extract_score(raw_candidate)
         normalized_score = self._extract_normalized_score(raw_candidate, raw_score)
         retrieved_from_ontologies = self._extract_retrieved_from_ontologies(raw_candidate)
-        common_test_rank = self._extract_common_test_rank(raw_candidate)
 
         provenance: dict[str, Any] = {
             "raw_candidate": raw_candidate,
@@ -150,7 +178,6 @@ class CandidateNormalizer:
             normalized_score=normalized_score,
             provenance=provenance,
             retrieved_from_ontologies=retrieved_from_ontologies,
-            common_test_rank=common_test_rank,
         )
 
     def normalize_many(
@@ -291,38 +318,26 @@ class CandidateNormalizer:
         Extract normalized_score.
 
         Prefer an explicit 'normalized_score' key; otherwise reuse raw_score
-        when it already falls in [0, 1].  Never invent calibration.
+        when it represents a valid [0, 1] value. Never invent calibration.
+
+        A value within _SCORE_UNIT_EPSILON of the [0, 1] boundary is treated
+        as floating-point noise (e.g. a same-vector similarity surfaced as
+        1.0000001192092896) and clamped to the boundary. A value clearly
+        outside [0, 1], or non-finite (NaN/+inf/-inf), is left as None.
         """
         val = raw.get("normalized_score")
         if val is not None:
             try:
                 f = float(val)
-                if 0.0 <= f <= 1.0:
-                    return f
             except (TypeError, ValueError):
-                pass
-        if raw_score is not None and 0.0 <= raw_score <= 1.0:
-            return raw_score
+                f = None
+            if f is not None:
+                clamped = _clamp_to_unit_interval(f)
+                if clamped is not None:
+                    return clamped
+        if raw_score is not None:
+            return _clamp_to_unit_interval(raw_score)
         return None
-
-    @staticmethod
-    def _extract_common_test_rank(raw: dict[str, Any]) -> int | None:
-        """Re-derive common_test_rank defensively rather than trusting the raw
-        dict blindly (consistent with _extract_score/_extract_normalized_score).
-
-        SearchTools already normalizes LOINC's COMMON_TEST_RANK=0 sentinel to
-        None before this point, but this re-validates so any malformed or
-        non-positive value from any raw candidate source becomes None instead
-        of failing normalization.
-        """
-        value = raw.get("common_test_rank")
-        if value is None:
-            return None
-        try:
-            rank = int(float(value))
-        except (TypeError, ValueError):
-            return None
-        return rank if rank > 0 else None
 
     @staticmethod
     def _extract_retrieved_from_ontologies(raw: dict[str, Any]) -> list[str]:

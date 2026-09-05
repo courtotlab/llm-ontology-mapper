@@ -303,6 +303,159 @@ def test_does_not_use_out_of_range_score_as_normalized(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Test 14b: floating-point noise at the [0, 1] boundary is clamped, not dropped
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_clamps_float_overshoot_just_above_one(normalizer: CandidateNormalizer) -> None:
+    # Exactly one float32 ULP above 1.0 (2**-23) -- the pattern a same-vector
+    # embedding similarity produces when computed in float32 and surfaced as
+    # a Python float. raw_score is preserved unchanged; only normalized_score
+    # is clamped.
+    raw = {
+        "code": "HP:0012735",
+        "term": "Cough",
+        "ontology": "HPO",
+        "source": "OLS",
+        "score": 1.0000001192092896,
+    }
+    candidate = normalizer.normalize(
+        raw,
+        retrieval_mode="public",
+        matched_query="cough",
+    )
+
+    assert candidate.raw_score == pytest.approx(1.0000001192092896)
+    assert candidate.normalized_score == 1.0
+
+
+@pytest.mark.unit
+def test_clamps_float_undershoot_just_below_zero(normalizer: CandidateNormalizer) -> None:
+    raw = {
+        "code": "HP:0012735",
+        "term": "Cough",
+        "ontology": "HPO",
+        "source": "OLS",
+        "score": -1.1920928955078125e-07,
+    }
+    candidate = normalizer.normalize(
+        raw,
+        retrieval_mode="public",
+        matched_query="cough",
+    )
+
+    assert candidate.raw_score == pytest.approx(-1.1920928955078125e-07)
+    assert candidate.normalized_score == 0.0
+
+
+@pytest.mark.unit
+def test_score_exactly_one_is_normalized_score_one(normalizer: CandidateNormalizer) -> None:
+    raw = {
+        "code": "HP:0012735",
+        "term": "Cough",
+        "ontology": "HPO",
+        "source": "OLS",
+        "score": 1.0,
+    }
+    candidate = normalizer.normalize(
+        raw,
+        retrieval_mode="public",
+        matched_query="cough",
+    )
+
+    assert candidate.raw_score == 1.0
+    assert candidate.normalized_score == 1.0
+
+
+@pytest.mark.unit
+def test_score_exactly_zero_is_normalized_score_zero(normalizer: CandidateNormalizer) -> None:
+    raw = {
+        "code": "HP:0012735",
+        "term": "Cough",
+        "ontology": "HPO",
+        "source": "OLS",
+        "score": 0.0,
+    }
+    candidate = normalizer.normalize(
+        raw,
+        retrieval_mode="public",
+        matched_query="cough",
+    )
+
+    assert candidate.raw_score == 0.0
+    assert candidate.normalized_score == 0.0
+
+
+@pytest.mark.unit
+def test_ordinary_in_range_score_is_used_unchanged(normalizer: CandidateNormalizer) -> None:
+    raw = {
+        "code": "HP:0012735",
+        "term": "Cough",
+        "ontology": "HPO",
+        "source": "OLS",
+        "score": 0.818019688129425,
+    }
+    candidate = normalizer.normalize(
+        raw,
+        retrieval_mode="public",
+        matched_query="cough",
+    )
+
+    assert candidate.raw_score == pytest.approx(0.818019688129425)
+    assert candidate.normalized_score == pytest.approx(0.818019688129425)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "score",
+    [float("nan"), float("inf"), float("-inf")],
+    ids=["nan", "positive_infinity", "negative_infinity"],
+)
+def test_non_finite_score_leaves_normalized_score_none(
+    normalizer: CandidateNormalizer, score: float
+) -> None:
+    raw = {
+        "code": "HP:0012735",
+        "term": "Cough",
+        "ontology": "HPO",
+        "source": "OLS",
+        "score": score,
+    }
+    candidate = normalizer.normalize(
+        raw,
+        retrieval_mode="public",
+        matched_query="cough",
+    )
+
+    assert candidate.normalized_score is None
+
+
+@pytest.mark.unit
+def test_explicit_normalized_score_overshoot_is_clamped(
+    normalizer: CandidateNormalizer,
+) -> None:
+    # Same clamp tolerance applies whether the value came from 'score' (raw)
+    # or an explicit 'normalized_score' key.
+    raw = {
+        "code": "HP:0012735",
+        "term": "Cough",
+        "ontology": "HPO",
+        "source": "OLS",
+        "score": 0.5,
+        "normalized_score": 1.0000001192092896,
+    }
+    candidate = normalizer.normalize(
+        raw,
+        retrieval_mode="public",
+        matched_query="cough",
+    )
+
+    assert candidate.raw_score == pytest.approx(0.5)
+    assert candidate.normalized_score == 1.0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Test 15: extracts first definition from a definitions list
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -945,123 +1098,3 @@ def test_candidate_serialises_to_json(normalizer: CandidateNormalizer) -> None:
     assert dumped["code"] == "HP:0012735"
     assert dumped["ontology"] == "HPO"  # uppercased
     assert dumped["retrieval_mode"] == "public"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# common_test_rank propagation
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-@pytest.mark.unit
-def test_public_loinc_candidate_preserves_common_test_rank(
-    normalizer: CandidateNormalizer,
-) -> None:
-    raw = {
-        "code": "LOINC:96608-5",
-        "term": "Some ranked test",
-        "ontology": "LOINC",
-        "source": "LOINC-Search-API",
-        "score": 0.9,
-        "common_test_rank": 3,
-    }
-    candidate = normalizer.normalize(
-        raw,
-        retrieval_mode=RetrievalMode.PUBLIC,
-        matched_query="ranked test",
-    )
-    assert candidate.common_test_rank == 3
-
-
-@pytest.mark.unit
-def test_missing_common_test_rank_becomes_none(normalizer: CandidateNormalizer) -> None:
-    raw = {
-        "code": "LOINC:96608-5",
-        "term": "Some test",
-        "ontology": "LOINC",
-        "source": "LOINC-Search-API",
-        "score": 0.9,
-    }
-    candidate = normalizer.normalize(
-        raw,
-        retrieval_mode=RetrievalMode.PUBLIC,
-        matched_query="test",
-    )
-    assert candidate.common_test_rank is None
-
-
-@pytest.mark.unit
-def test_zero_common_test_rank_becomes_none(normalizer: CandidateNormalizer) -> None:
-    """Defense in depth: even if a raw candidate carried the unranked sentinel
-    0 unnormalized, the normalizer itself must not surface it as rank 0."""
-    raw = {
-        "code": "LOINC:96608-5",
-        "term": "Some test",
-        "ontology": "LOINC",
-        "source": "LOINC-Search-API",
-        "score": 0.9,
-        "common_test_rank": 0,
-    }
-    candidate = normalizer.normalize(
-        raw,
-        retrieval_mode=RetrievalMode.PUBLIC,
-        matched_query="test",
-    )
-    assert candidate.common_test_rank is None
-
-
-@pytest.mark.unit
-def test_invalid_common_test_rank_does_not_fail_normalization(
-    normalizer: CandidateNormalizer,
-) -> None:
-    raw = {
-        "code": "LOINC:96608-5",
-        "term": "Some test",
-        "ontology": "LOINC",
-        "source": "LOINC-Search-API",
-        "score": 0.9,
-        "common_test_rank": "not-a-number",
-    }
-    candidate = normalizer.normalize(
-        raw,
-        retrieval_mode=RetrievalMode.PUBLIC,
-        matched_query="test",
-    )
-    assert candidate.common_test_rank is None
-
-
-@pytest.mark.unit
-def test_non_loinc_candidate_common_test_rank_is_none(
-    normalizer: CandidateNormalizer,
-) -> None:
-    raw = {
-        "code": "HP:0012735",
-        "term": "Cough",
-        "ontology": "HPO",
-        "source": "OLS",
-        "score": 0.95,
-    }
-    candidate = normalizer.normalize(
-        raw,
-        retrieval_mode=RetrievalMode.PUBLIC,
-        matched_query="cough",
-    )
-    assert candidate.common_test_rank is None
-
-
-@pytest.mark.unit
-def test_local_sapbert_candidate_common_test_rank_is_none(
-    normalizer: CandidateNormalizer,
-) -> None:
-    raw = {
-        "code": "LOINC:8480-6",
-        "term": "Systolic blood pressure",
-        "ontology": "LOINC",
-        "similarity": 0.88,
-    }
-    candidate = normalizer.normalize(
-        raw,
-        retrieval_mode=RetrievalMode.LOCAL,
-        matched_query="systolic blood pressure",
-    )
-    assert candidate.common_test_rank is None
-    assert candidate.raw_score == 0.88  # SapBERT similarity scoring unaffected

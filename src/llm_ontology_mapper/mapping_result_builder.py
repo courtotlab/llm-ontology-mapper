@@ -521,7 +521,6 @@ def _candidate_score_provenance(candidate: NormalizedCandidate) -> dict[str, Any
         "retrieval_mode": candidate.retrieval_mode.value,
         "source": candidate.source,
         "matched_query": candidate.matched_query,
-        "common_test_rank": candidate.common_test_rank,
     }
 
 
@@ -550,7 +549,6 @@ def _final_ranking_trace(
                 "confidence_source": "llm_reranker",
                 "raw_retrieval_score": selected_candidate.raw_score,
                 "normalized_retrieval_score": selected_candidate.normalized_score,
-                "common_test_rank": selected_candidate.common_test_rank,
                 "selected": True,
             }
         )
@@ -584,7 +582,6 @@ def _final_ranking_trace(
                 "normalized_retrieval_score": (
                     candidate.normalized_score if candidate is not None else None
                 ),
-                "common_test_rank": candidate.common_test_rank if candidate is not None else None,
                 "selected": False,
             }
         )

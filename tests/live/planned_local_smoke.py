@@ -51,8 +51,8 @@ OLLAMA_BASE_URL = "http://localhost:11528"
 
 SAPBERT_URL = "http://localhost:8765"
 
-SOURCE_TERM = "sys_bp"
-SOURCE_LABEL = ""
+SOURCE_TERM = "bp_sys"
+SOURCE_LABEL = "Systolyc blood pressure"
 SOURCE_DESCRIPTION = ""
 SOURCE_TYPE = ""
 CLINICAL_AREA = ""
