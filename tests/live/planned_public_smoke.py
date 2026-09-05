@@ -44,12 +44,12 @@ OPENAI_MODEL = "gpt-5.6-luna"
 OLLAMA_MODEL = "gpt-oss:120b"
 OLLAMA_BASE_URL = "http://localhost:11528"
 
-SOURCE_TERM = "glucose"
-SOURCE_LABEL = ""
+SOURCE_TERM = "com_arrythmias"
+SOURCE_LABEL = "Arrythmias"
 SOURCE_DESCRIPTION = ""
 SOURCE_TYPE = ""
 CLINICAL_AREA = ""
-TARGET_ONTOLOGY = "LOINC"
+TARGET_ONTOLOGY = "ICD10"
 RETRIEVAL_MODE = "public"
 
 # When True, mappings must belong natively to one of the requested target

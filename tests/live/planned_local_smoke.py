@@ -56,7 +56,7 @@ SOURCE_LABEL = "Systolyc blood pressure"
 SOURCE_DESCRIPTION = ""
 SOURCE_TYPE = ""
 CLINICAL_AREA = ""
-TARGET_ONTOLOGY = "LOINC"
+TARGET_ONTOLOGY = "HPO"
 RETRIEVAL_MODE = "local"
 
 # When True, mappings must belong natively to one of the requested target

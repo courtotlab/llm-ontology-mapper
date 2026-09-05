@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from llm_ontology_mapper.models import QueryPlan, RetrievalMode
+from llm_ontology_mapper.ontology_identity import is_icd10_target
 from llm_ontology_mapper.providers import (
     REASONING_EMPTY_RESPONSE_RETRY_TOKENS,
     BaseLLMProvider,
@@ -43,6 +44,26 @@ _MAX_PLAN_ATTEMPTS = 2
 """Hard cap on provider calls per plan(): the normal call plus at most one
 recovery attempt (empty-response-from-reasoning-model OR malformed-JSON --
 never both, since the second attempt's outcome is never re-triaged)."""
+
+_ICD10_QUERY_GUIDANCE = """
+## ICD10-specific query guidance (applies only because ICD10 is the target ontology for this request)
+
+* ICD10 often represents a prior procedure, transplant type, implanted device, or similar intervention using a status/history concept rather than a procedure code (for example: organ transplant status, a procedure-status concept for a described intervention). When the source describes this kind of prior procedure, transplant, device, or intervention, and an ICD10-compatible status/history phrasing is the conventional way ICD10 captures that same meaning, add ONE additional expanded query for that status/history phrasing alongside the literal procedure query. Do not replace the literal query. Do not add a status/history query for ordinary diagnoses, symptoms, or findings that ICD10 already represents directly.
+* Keep every expanded query atomic: one synonym, lexical variant, or standard clinical phrase per query. Never join two alternative phrasings into a single query (bad: "hypercholesterolemia dyslipidemia"; good: "hypercholesterolemia" and "dyslipidemia" as two separate queries). This still counts toward the maximum of 4 expanded queries.
+
+Example: Input: source_term="com_transplant_type___2", source_label="Organ type of transplant (choice=Kidney)", target_ontology="ICD10"
+
+{{
+"normalized_term": "kidney transplant",
+"expanded_queries": ["kidney transplant", "kidney transplant status"],
+"inferred_meaning": "a prior kidney transplant procedure",
+"semantic_type": "procedure",
+"candidate_ontologies": ["ICD10"],
+"preferred_ontology": "ICD10",
+"reasoning": "The source describes a transplant type; ICD10 conventionally represents this as transplant status, so a status query is added alongside the literal procedure query.",
+"confidence": 0.9
+}}
+"""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -314,6 +335,12 @@ class QueryPlanner:
         else:
             ontology_section = ""
 
+        icd10_guidance_section = (
+            _ICD10_QUERY_GUIDANCE
+            if is_icd10_target(target_ontology, allowed_target_ontologies)
+            else ""
+        )
+
         content = self._prompt_template.format(
             source_term=source_term,
             optional_label_section=label_section,
@@ -321,6 +348,7 @@ class QueryPlanner:
             optional_source_type_section=source_type_section,
             optional_clinical_area_section=area_section,
             optional_target_ontology_section=ontology_section,
+            optional_icd10_guidance_section=icd10_guidance_section,
         )
 
         return [

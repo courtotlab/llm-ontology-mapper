@@ -25,7 +25,7 @@ Given a source field and optional context, return:
 6. Do not add generic queries such as `measurement`, `value`, `clinical finding`, `condition`, or `test` unless they are part of the concept.
 7. Prevent semantic drift: do not add unsupported causes, etiologies, diagnoses, subtypes, treatments, severity, patient assumptions, or related concepts.
 8. Never put ontology codes or final mapping guesses in `expanded_queries`.
-
+{optional_icd10_guidance_section}
 ## Examples
 
 ### Clear label + hard target

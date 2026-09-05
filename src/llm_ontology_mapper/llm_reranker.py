@@ -37,7 +37,7 @@ from llm_ontology_mapper.models import (
     RerankDecision,
     RetrievalMode,
 )
-from llm_ontology_mapper.ontology_identity import validate_candidate_identity
+from llm_ontology_mapper.ontology_identity import is_icd10_target, validate_candidate_identity
 from llm_ontology_mapper.providers import (
     REASONING_EMPTY_RESPONSE_RETRY_TOKENS,
     BaseLLMProvider,
@@ -62,6 +62,14 @@ _MAX_RERANK_ATTEMPTS = 2
 """Hard cap on provider calls per rerank(): the normal call plus at most one
 recovery attempt (empty-response-from-reasoning-model OR malformed-JSON --
 never both, since the second attempt's outcome is never re-triaged)."""
+
+_ICD10_RERANK_GUIDANCE = """
+## ICD10-specific guidance (applies only because ICD10 is the target ontology for this request)
+
+When the source describes a prior procedure, transplant type, implanted device, intervention, or surgery, and a candidate is the conventional ICD10 status/history representation of that same source meaning (for example, a transplant-status concept for a described transplant, or a procedure-status concept for a described intervention), do not reject it solely because the source was phrased as the procedure rather than the status. Select it, or include it as a high-confidence alternative, when nothing else about the source or the candidate is inconsistent.
+
+Do not extend this allowance to a candidate that adds clinical context the source does not support, such as transplant rejection, transplant failure, transplant infection, an aftercare/encounter concept, a complication, or an acute disease state -- reject those unless the source explicitly states them.
+"""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -348,11 +356,20 @@ class LLMReranker:
         query_context = _build_query_context(query_plan)
         candidate_list_str = _build_candidate_list(candidate_map)
         candidate_ids = ", ".join(candidate_map.keys())
+        icd10_guidance_section = (
+            _ICD10_RERANK_GUIDANCE
+            if is_icd10_target(
+                query_plan.target_ontology_constraint,
+                query_plan.allowed_target_ontologies,
+            )
+            else ""
+        )
 
         content = self._prompt_template.format(
             query_context=query_context,
             candidate_list=candidate_list_str,
             candidate_ids=candidate_ids,
+            optional_icd10_guidance_section=icd10_guidance_section,
         )
 
         return [

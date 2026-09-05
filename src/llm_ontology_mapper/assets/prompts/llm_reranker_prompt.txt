@@ -18,7 +18,7 @@ Candidates have already passed deterministic target-ontology filtering. Choose t
 `native_ontology` is the candidate's CURIE namespace; `retrieved_from_ontologies` records the ontology search space(s) that returned it.
 
 For an EFO target, a candidate retrieved from EFO remains eligible even if its native namespace is MONDO, HP, UBERON, or another namespace represented in EFO. Do not reject it solely for a non-EFO native namespace. This exception applies only to EFO eligibility and never permits invented codes.
-
+{optional_icd10_guidance_section}
 ## Required output
 
 Return ONLY valid JSON. No markdown or text outside the object.

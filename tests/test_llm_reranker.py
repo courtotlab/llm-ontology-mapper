@@ -445,8 +445,7 @@ def test_unmapped_response_preserves_ranked_alternatives() -> None:
                 "candidate_id": "C2",
                 "code": "LOINC:1000-2",
                 "confidence": 0.12,
-                "explanation": "Related concept, but represents a timed "
-                "post-dose measurement.",
+                "explanation": "Related concept, but represents a timed post-dose measurement.",
             },
         ]
     )
@@ -493,9 +492,24 @@ def test_unmapped_alternatives_ordered_by_descending_confidence() -> None:
     c3 = _make_candidate(code="LOINC:1000-3", ontology="LOINC")
     response = _unmapped_response_with_alternatives(
         [
-            {"candidate_id": "C1", "code": "LOINC:1000-1", "confidence": 0.10, "explanation": "low"},
-            {"candidate_id": "C2", "code": "LOINC:1000-2", "confidence": 0.35, "explanation": "high"},
-            {"candidate_id": "C3", "code": "LOINC:1000-3", "confidence": 0.20, "explanation": "mid"},
+            {
+                "candidate_id": "C1",
+                "code": "LOINC:1000-1",
+                "confidence": 0.10,
+                "explanation": "low",
+            },
+            {
+                "candidate_id": "C2",
+                "code": "LOINC:1000-2",
+                "confidence": 0.35,
+                "explanation": "high",
+            },
+            {
+                "candidate_id": "C3",
+                "code": "LOINC:1000-3",
+                "confidence": 0.20,
+                "explanation": "mid",
+            },
         ]
     )
     reranker = LLMReranker(_StubProvider(response))
@@ -1152,8 +1166,7 @@ def test_imported_efo_candidate_serializes_native_and_retrieval_ontology() -> No
     assert "already passed deterministic Python-side hard-target filtering" in user_message
     assert "For EFO targets only" in user_message
     assert (
-        "Do not reject an EFO-retrieved candidate solely because "
-        "native_ontology is not EFO"
+        "Do not reject an EFO-retrieved candidate solely because native_ontology is not EFO"
     ) in user_message
 
 
@@ -2101,3 +2114,206 @@ def test_strict_build_decision_drops_ineligible_alternative_that_bypasses_prefil
 
     assert decision.selected_code == "EFO:0000408"
     assert decision.alternatives == []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ICD10-specific reranker guidance
+#
+# Confirmed public-mode benchmark failure: the reranker rejected an
+# otherwise-correct ICD10 status/history candidate (e.g. kidney transplant
+# status) solely because the source was phrased as the transplant/procedure
+# rather than the status. The fix injects a narrowly scoped guidance block
+# into the reranker prompt only when ICD10 is the target/allowed ontology
+# (see ontology_identity.is_icd10_target) -- these tests confirm the
+# guidance text is present/absent in the right cases and that the existing
+# hard-grounding validation (candidate IDs, codes, ontology constraints)
+# is unaffected.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_icd10_guidance_present_for_hard_target_ontology() -> None:
+    candidate = _make_candidate(
+        code="ICD10:Z94.0",
+        term="Kidney transplant status",
+        ontology="ICD10",
+    )
+    provider = _StubProvider(_response(selected_cid="C1", selected_code="ICD10:Z94.0"))
+    reranker = LLMReranker(provider)
+
+    reranker.rerank(
+        _make_plan(
+            original_term="com_transplant_type___2",
+            original_label="Organ type of transplant (choice=Kidney)",
+            target_ontology_constraint="ICD10",
+            inferred_meaning="a prior kidney transplant procedure",
+            semantic_type="procedure",
+            expanded_queries=["kidney transplant", "kidney transplant status"],
+        ),
+        [candidate],
+    )
+
+    user_message = provider.calls[0][1].content
+    assert "ICD10-specific guidance" in user_message
+    assert "transplant rejection" in user_message
+    assert "transplant failure" in user_message
+
+
+@pytest.mark.unit
+def test_icd10_guidance_present_when_icd10_in_allowed_ontologies() -> None:
+    candidate = _make_candidate(
+        code="ICD10:Z94.0",
+        term="Kidney transplant status",
+        ontology="ICD10",
+    )
+    provider = _StubProvider(_response(selected_cid="C1", selected_code="ICD10:Z94.0"))
+    reranker = LLMReranker(provider)
+
+    reranker.rerank(
+        _make_plan(allowed_target_ontologies=["ICD10", "SNOMED"]),
+        [candidate],
+    )
+
+    user_message = provider.calls[0][1].content
+    assert "ICD10-specific guidance" in user_message
+
+
+@pytest.mark.unit
+def test_icd10_guidance_recognizes_icd10cm_alias() -> None:
+    candidate = _make_candidate(code="ICD10:Z94.0", ontology="ICD10")
+    provider = _StubProvider(_response(selected_cid="C1", selected_code="ICD10:Z94.0"))
+    reranker = LLMReranker(provider)
+
+    reranker.rerank(_make_plan(target_ontology_constraint="ICD10CM"), [candidate])
+
+    user_message = provider.calls[0][1].content
+    assert "ICD10-specific guidance" in user_message
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("target_ontology", "code"),
+    [
+        ("LOINC", "LOINC:8480-6"),
+        ("HPO", "HP:0012735"),
+        ("SNOMED", "SNOMED:38341003"),
+        ("MONDO", "MONDO:0004975"),
+        ("EFO", "EFO:0000408"),
+    ],
+)
+def test_icd10_guidance_absent_for_non_icd10_hard_target(target_ontology: str, code: str) -> None:
+    candidate = _make_candidate(code=code, ontology=target_ontology)
+    provider = _StubProvider(_response(selected_cid="C1", selected_code=code))
+    reranker = LLMReranker(provider)
+
+    reranker.rerank(_make_plan(target_ontology_constraint=target_ontology), [candidate])
+
+    user_message = provider.calls[0][1].content
+    assert "ICD10-specific guidance" not in user_message
+
+
+@pytest.mark.unit
+def test_icd10_guidance_absent_when_icd10_not_in_allowed_ontologies() -> None:
+    candidate = _make_candidate(code="HP:0012735", ontology="HPO")
+    provider = _StubProvider(_response(selected_cid="C1", selected_code="HP:0012735"))
+    reranker = LLMReranker(provider)
+
+    reranker.rerank(_make_plan(allowed_target_ontologies=["LOINC", "HPO"]), [candidate])
+
+    user_message = provider.calls[0][1].content
+    assert "ICD10-specific guidance" not in user_message
+
+
+@pytest.mark.unit
+def test_icd10_guidance_absent_with_no_target_or_allow_list() -> None:
+    candidate = _make_candidate()
+    provider = _StubProvider(_response())
+    reranker = LLMReranker(provider)
+
+    reranker.rerank(_make_plan(), [candidate])
+
+    user_message = provider.calls[0][1].content
+    assert "ICD10-specific guidance" not in user_message
+
+
+@pytest.mark.unit
+def test_icd10_transplant_status_candidate_can_be_selected() -> None:
+    """The reranker's grounding/validation logic must not block selecting an
+    ICD10 status candidate for a transplant-type source -- this is a policy
+    call for the LLM (guided by the new prompt text), not a Python-side
+    restriction, so the stubbed selection must pass through untouched."""
+    status_candidate = _make_candidate(
+        code="ICD10:Z94.0",
+        term="Kidney transplant status",
+        ontology="ICD10",
+        matched_query="kidney transplant status",
+    )
+    provider = _StubProvider(
+        _response(selected_cid="C1", selected_code="ICD10:Z94.0", confidence=0.58)
+    )
+    reranker = LLMReranker(provider)
+
+    result = reranker.rerank(
+        _make_plan(
+            original_term="com_transplant_type___2",
+            original_label="Organ type of transplant (choice=Kidney)",
+            target_ontology_constraint="ICD10",
+            semantic_type="procedure",
+        ),
+        [status_candidate],
+    )
+
+    assert result.selected_code == "ICD10:Z94.0"
+    assert result.is_unmapped is False
+    assert result.is_grounded is True
+
+
+@pytest.mark.unit
+def test_icd10_unsupported_rejection_alternative_still_requires_valid_candidate() -> None:
+    """Rejection/failure/aftercare candidates remain subject to the same
+    grounding rules as any other alternative -- a hallucinated one is still
+    dropped even under the new ICD10 guidance."""
+    status_candidate = _make_candidate(
+        code="ICD10:Z94.0",
+        term="Kidney transplant status",
+        ontology="ICD10",
+    )
+    response = _structured_response(
+        selected_cid="C1",
+        selected_code="ICD10:Z94.0",
+        alternatives=[
+            {
+                "candidate_id": "C99",
+                "code": "ICD10:T86.10",
+                "confidence": 0.4,
+                "explanation": "Invented kidney transplant rejection candidate.",
+            }
+        ],
+    )
+    reranker = LLMReranker(_StubProvider(response))
+
+    result = reranker.rerank(
+        _make_plan(target_ontology_constraint="ICD10"),
+        [status_candidate],
+    )
+
+    assert result.selected_code == "ICD10:Z94.0"
+    assert result.alternatives == []
+
+
+@pytest.mark.unit
+def test_icd10_guidance_does_not_alter_hard_ontology_enforcement() -> None:
+    """A non-ICD10 candidate must still be rejected under an ICD10 hard
+    constraint even though the new ICD10 guidance text is present."""
+    non_icd10_candidate = _make_candidate(code="HP:0012735", ontology="HPO")
+    provider = _StubProvider(_response(selected_cid="C1", selected_code="HP:0012735"))
+    reranker = LLMReranker(provider)
+
+    result = reranker.rerank(
+        _make_plan(target_ontology_constraint="ICD10"),
+        [non_icd10_candidate],
+    )
+
+    assert result.is_unmapped is True
+    assert result.selected_code is None
+    assert provider.calls == []

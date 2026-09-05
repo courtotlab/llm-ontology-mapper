@@ -100,6 +100,24 @@ def ontology_from_iri_namespace(iri: Any) -> str | None:
     return ontology_from_code_namespace(curie)
 
 
+def is_icd10_target(
+    target_ontology: Any = None,
+    allowed_target_ontologies: Any = None,
+) -> bool:
+    """Return True when ICD10 (including ICD10CM and similar aliases) is the
+    hard target ontology or is one of the caller-allowed target ontologies.
+
+    Shared by QueryPlanner and LLMReranker so ICD10-specific prompt guidance
+    is scoped consistently and is never sent for requests targeting other
+    ontologies.
+    """
+    if target_ontology and canonical_ontology(target_ontology) == "ICD10":
+        return True
+    if allowed_target_ontologies:
+        return any(canonical_ontology(o) == "ICD10" for o in allowed_target_ontologies)
+    return False
+
+
 def curie_from_iri(iri: Any) -> str | None:
     """Extract a CURIE from the final segment of an OBO-style IRI."""
     text = str(iri or "").strip()

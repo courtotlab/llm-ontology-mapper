@@ -1214,6 +1214,189 @@ def test_malformed_retry_uses_normal_2048_token_limit_not_larger_budget() -> Non
     assert "min_completion_tokens" not in provider.call_kwargs[1]
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# ICD10-specific query guidance (transplant/procedure -> status, atomic queries)
+#
+# Confirmed public-mode benchmark failures showed the planner producing
+# compound "hypercholesterolemia dyslipidemia"-style queries and missing an
+# ICD10 status/history query for a kidney-transplant-type source. The fix is
+# a prompt guidance block injected only when ICD10 is the target/allowed
+# ontology (see ontology_identity.is_icd10_target) -- these tests confirm the
+# guidance is scoped correctly and does not leak into non-ICD10 requests.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_KIDNEY_TRANSPLANT_ICD10_RESPONSE = json.dumps(
+    {
+        "normalized_term": "kidney transplant",
+        "expanded_queries": ["kidney transplant", "kidney transplant status"],
+        "inferred_meaning": "a prior kidney transplant procedure",
+        "semantic_type": "procedure",
+        "candidate_ontologies": ["ICD10"],
+        "preferred_ontology": "ICD10",
+        "reasoning": "ICD10 conventionally represents a prior transplant as transplant status.",
+        "confidence": 0.9,
+    }
+)
+
+_LIPID_ATOMIC_QUERIES_RESPONSE = json.dumps(
+    {
+        "normalized_term": "lipid disorders",
+        "expanded_queries": ["hypercholesterolemia", "dyslipidemia"],
+        "inferred_meaning": "disorders of lipoprotein metabolism",
+        "semantic_type": "diagnosis",
+        "candidate_ontologies": ["ICD10"],
+        "preferred_ontology": "ICD10",
+        "reasoning": "Each synonym is issued as its own atomic query for lexical retrieval.",
+        "confidence": 0.7,
+    }
+)
+
+_ARRHYTHMIA_ICD10_RESPONSE = json.dumps(
+    {
+        "normalized_term": "cardiac arrhythmia",
+        "expanded_queries": ["cardiac arrhythmia"],
+        "inferred_meaning": "an abnormal heart rhythm",
+        "semantic_type": "diagnosis",
+        "candidate_ontologies": ["ICD10"],
+        "preferred_ontology": "ICD10",
+        "reasoning": "Arrhythmias is a standard diagnosis ICD10 represents directly.",
+        "confidence": 0.98,
+    }
+)
+
+
+@pytest.mark.unit
+def test_icd10_guidance_present_for_hard_target_ontology() -> None:
+    stub = _RecordingStubProvider(_KIDNEY_TRANSPLANT_ICD10_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    planner.plan(
+        "com_transplant_type___2",
+        source_label="Organ type of transplant (choice=Kidney)",
+        target_ontology="ICD10",
+    )
+
+    all_content = " ".join(m.content for m in stub.calls[0])
+    assert "ICD10-specific query guidance" in all_content
+    assert "status/history" in all_content
+
+
+@pytest.mark.unit
+def test_icd10_guidance_present_when_icd10_in_allowed_ontologies() -> None:
+    stub = _RecordingStubProvider(_KIDNEY_TRANSPLANT_ICD10_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    planner.plan(
+        "com_transplant_type___2",
+        source_label="Organ type of transplant (choice=Kidney)",
+        allowed_target_ontologies=["ICD10", "SNOMED"],
+    )
+
+    all_content = " ".join(m.content for m in stub.calls[0])
+    assert "ICD10-specific query guidance" in all_content
+
+
+@pytest.mark.unit
+def test_icd10_guidance_recognizes_icd10cm_alias() -> None:
+    stub = _RecordingStubProvider(_KIDNEY_TRANSPLANT_ICD10_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    planner.plan("com_transplant_type___2", target_ontology="ICD10CM")
+
+    all_content = " ".join(m.content for m in stub.calls[0])
+    assert "ICD10-specific query guidance" in all_content
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("target_ontology", ["LOINC", "HPO", "SNOMED", "MONDO"])
+def test_icd10_guidance_absent_for_non_icd10_hard_target(target_ontology: str) -> None:
+    stub = _RecordingStubProvider(_SYS_BP_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    planner.plan("sys_bp", target_ontology=target_ontology)
+
+    all_content = " ".join(m.content for m in stub.calls[0])
+    assert "ICD10-specific query guidance" not in all_content
+
+
+@pytest.mark.unit
+def test_icd10_guidance_absent_when_icd10_not_in_allowed_ontologies() -> None:
+    stub = _RecordingStubProvider(_SYS_BP_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    planner.plan("sys_bp", allowed_target_ontologies=["LOINC", "HPO"])
+
+    all_content = " ".join(m.content for m in stub.calls[0])
+    assert "ICD10-specific query guidance" not in all_content
+
+
+@pytest.mark.unit
+def test_icd10_guidance_absent_with_no_target_or_allow_list() -> None:
+    stub = _RecordingStubProvider(_SYS_BP_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    planner.plan("sys_bp")
+
+    all_content = " ".join(m.content for m in stub.calls[0])
+    assert "ICD10-specific query guidance" not in all_content
+
+
+@pytest.mark.unit
+def test_icd10_transplant_plan_preserves_literal_and_status_queries() -> None:
+    """The planner's parsing already supports multiple expanded_queries; this
+    confirms a dual literal+status ICD10 query plan round-trips unchanged."""
+    stub = _RecordingStubProvider(_KIDNEY_TRANSPLANT_ICD10_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    plan = planner.plan(
+        "com_transplant_type___2",
+        source_label="Organ type of transplant (choice=Kidney)",
+        target_ontology="ICD10",
+    )
+
+    assert plan.expanded_queries == ["kidney transplant", "kidney transplant status"]
+    assert plan.semantic_type == "procedure"
+    assert plan.preferred_ontology == "ICD10"
+
+
+@pytest.mark.unit
+def test_icd10_lipid_atomic_queries_are_kept_as_separate_entries() -> None:
+    """Alternative synonyms (hypercholesterolemia / dyslipidemia) must remain
+    separate expanded_queries entries rather than a single combined query."""
+    stub = _RecordingStubProvider(_LIPID_ATOMIC_QUERIES_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    plan = planner.plan(
+        "com_lipids",
+        source_label="Lipid disorders (hypercholesterolemia, dyslipidemia, etc.)",
+        target_ontology="ICD10",
+    )
+
+    assert plan.expanded_queries == ["hypercholesterolemia", "dyslipidemia"]
+    assert not any(
+        " " in q and "hypercholesterolemia" in q and "dyslipidemia" in q
+        for q in plan.expanded_queries
+    )
+
+
+@pytest.mark.unit
+def test_icd10_ordinary_diagnosis_is_not_forced_into_multiple_queries() -> None:
+    """Regression: an ordinary diagnosis (arrhythmia) with ICD10 as target
+    should still pass through as a single query -- the ICD10 guidance must
+    not force every ICD10 plan into a status/history expansion."""
+    stub = _RecordingStubProvider(_ARRHYTHMIA_ICD10_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    plan = planner.plan(
+        "com_arrythmias",
+        source_label="Arrythmias",
+        target_ontology="ICD10",
+    )
+
+    assert plan.expanded_queries == ["cardiac arrhythmia"]
+    assert plan.semantic_type == "diagnosis"
+
+
 @pytest.mark.unit
 def test_malformed_retry_usage_and_timing_accumulate_across_both_calls(
     monkeypatch: pytest.MonkeyPatch,
