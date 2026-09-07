@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from llm_ontology_mapper.models import QueryPlan, RetrievalMode
-from llm_ontology_mapper.ontology_identity import is_icd10_target
+from llm_ontology_mapper.ontology_identity import is_icd10_target, is_snomed_target
 from llm_ontology_mapper.providers import (
     REASONING_EMPTY_RESPONSE_RETRY_TOKENS,
     BaseLLMProvider,
@@ -62,6 +62,42 @@ Example: Input: source_term="com_transplant_type___2", source_label="Organ type 
 "preferred_ontology": "ICD10",
 "reasoning": "The source describes a transplant type; ICD10 conventionally represents this as transplant status, so a status query is added alongside the literal procedure query.",
 "confidence": 0.9
+}}
+"""
+
+_SNOMED_QUERY_GUIDANCE = """
+## SNOMED-specific query guidance (applies only because SNOMED is the target ontology for this request)
+
+* Always keep the literal source term or label as one of the expanded queries; never replace it outright.
+* SNOMED often prefers a concise, canonical clinical phrase over a broad or colloquial everyday term for the same concept. When the source uses a broad or colloquial term and one concise canonical clinical phrase captures the identical meaning, add ONE additional expanded query for that canonical phrasing alongside the literal query. Do not add a canonical-phrase query when the literal term is already conventional SNOMED wording, and do not add one that narrows or changes the meaning.
+* When the source clearly describes an administration, treatment, therapy, or other clinical intervention involving a substance -- not merely a request for the substance or product itself -- do not narrow `semantic_type` and `expanded_queries` to a drug/product concept solely because a substance is named. Preserve the procedure/intervention meaning (`semantic_type` such as `procedure`) and, when clinically appropriate, add an action-oriented query such as "administration of <substance>" alongside the literal query.
+* Keep every expanded query atomic: one independently searchable synonym or clinical phrase per query. Never join two alternative phrasings into a single query. This still counts toward the maximum of 4 expanded queries.
+* Do not invent unsupported specificity: do not add treatment modality, frequency, severity, complications, or anatomical detail that is not present in the source.
+
+Example: Input: source_term="tummy_scan", source_label="Tummy scan", target_ontology="SNOMED"
+
+{{
+"normalized_term": "abdominal ultrasound scan",
+"expanded_queries": ["tummy scan", "abdominal ultrasound"],
+"inferred_meaning": "an ultrasound imaging examination of the abdomen",
+"semantic_type": "procedure",
+"candidate_ontologies": ["SNOMED"],
+"preferred_ontology": "SNOMED",
+"reasoning": "Tummy scan is a broad colloquial term; the more canonical SNOMED phrasing abdominal ultrasound is added alongside the literal query.",
+"confidence": 0.85
+}}
+
+Example: Input: source_term="oxygen_given", source_label="Patient given oxygen therapy", target_ontology="SNOMED"
+
+{{
+"normalized_term": "oxygen therapy",
+"expanded_queries": ["oxygen therapy", "administration of oxygen"],
+"inferred_meaning": "therapeutic delivery of supplemental oxygen to the patient",
+"semantic_type": "procedure",
+"candidate_ontologies": ["SNOMED"],
+"preferred_ontology": "SNOMED",
+"reasoning": "The source describes administering a substance as therapy rather than requesting the substance itself, so the procedure/administration meaning is preserved instead of narrowing to a drug/product concept.",
+"confidence": 0.85
 }}
 """
 
@@ -340,6 +376,11 @@ class QueryPlanner:
             if is_icd10_target(target_ontology, allowed_target_ontologies)
             else ""
         )
+        snomed_guidance_section = (
+            _SNOMED_QUERY_GUIDANCE
+            if is_snomed_target(target_ontology, allowed_target_ontologies)
+            else ""
+        )
 
         content = self._prompt_template.format(
             source_term=source_term,
@@ -349,6 +390,7 @@ class QueryPlanner:
             optional_clinical_area_section=area_section,
             optional_target_ontology_section=ontology_section,
             optional_icd10_guidance_section=icd10_guidance_section,
+            optional_snomed_guidance_section=snomed_guidance_section,
         )
 
         return [

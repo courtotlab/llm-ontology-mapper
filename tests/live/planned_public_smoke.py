@@ -44,18 +44,18 @@ OPENAI_MODEL = "gpt-5.6-luna"
 OLLAMA_MODEL = "gpt-oss:120b"
 OLLAMA_BASE_URL = "http://localhost:11528"
 
-SOURCE_TERM = "com_arrythmias"
-SOURCE_LABEL = "Arrythmias"
+SOURCE_TERM = "vaping"
+SOURCE_LABEL = "Vaping"
 SOURCE_DESCRIPTION = ""
 SOURCE_TYPE = ""
 CLINICAL_AREA = ""
-TARGET_ONTOLOGY = "ICD10"
+TARGET_ONTOLOGY = "SNOMED"
 RETRIEVAL_MODE = "public"
 
 # When True, mappings must belong natively to one of the requested target
 # ontologies. For EFO, this rejects imported HP/MONDO/UBERON/etc. concepts
 # that would otherwise remain eligible through EFO retrieval provenance.
-STRICT_TARGET_ONTOLOGY = True
+STRICT_TARGET_ONTOLOGY = False
 
 MAX_RESULTS_PER_QUERY = int(os.environ.get("MAX_RESULTS_PER_QUERY", "15"))
 MAX_ALTERNATIVES = int(os.environ.get("MAX_ALTERNATIVES", "5"))
@@ -83,14 +83,26 @@ def _target_ontologies(value: str | None) -> list[str] | None:
     return ontologies or None
 
 
-def _allowed_ontology_set(target_ontologies: list[str] | None) -> set[str] | None:
+def _allowed_ontology_set(
+    target_ontologies: list[str] | None,
+) -> set[str] | None:
     if target_ontologies is None:
         return None
+
+    aliases = {
+        "SNOMED": "SNOMED-CT",
+        "SNOMEDCT": "SNOMED-CT",
+    }
+
     allowed = {
-        ontology.upper().strip()
+        aliases.get(
+            ontology.upper().strip(),
+            ontology.upper().strip(),
+        )
         for ontology in target_ontologies
         if ontology.strip()
     }
+
     return allowed or None
 
 
@@ -130,6 +142,7 @@ _KNOWN_CODE_PREFIXES: tuple[str, ...] = (
     "NCIT:",
     "RXNORM:",
     "SNOMED-CT:",
+    "SNOMEDCT:",
     "UBERON:",
     "UO:",
 )

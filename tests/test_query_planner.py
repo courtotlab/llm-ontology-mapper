@@ -1397,6 +1397,248 @@ def test_icd10_ordinary_diagnosis_is_not_forced_into_multiple_queries() -> None:
     assert plan.semantic_type == "diagnosis"
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# SNOMED-specific query guidance (broad/colloquial -> canonical phrase;
+# administration/therapy involving a substance -> preserve procedure intent)
+#
+# Confirmed public-mode benchmark failures showed the planner (a) missing a
+# canonical SNOMED phrase for a broad/colloquial source like dialysis, and
+# (b) collapsing a therapeutic-administration source into a drug/product-only
+# search just because a substance was named. The fix is a prompt guidance
+# block injected only when SNOMED is the target/allowed ontology (see
+# ontology_identity.is_snomed_target) -- these tests confirm the guidance is
+# scoped correctly and does not leak into non-SNOMED requests or change
+# already-working SNOMED cases.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_DIALYSIS_SNOMED_RESPONSE = json.dumps(
+    {
+        "normalized_term": "renal replacement therapy or dialysis",
+        "expanded_queries": ["dialysis", "renal dialysis"],
+        "inferred_meaning": "renal replacement therapy performed via dialysis",
+        "semantic_type": "procedure",
+        "candidate_ontologies": ["SNOMED"],
+        "preferred_ontology": "SNOMED",
+        "reasoning": "Dialysis is broad/colloquial; renal dialysis is the more canonical SNOMED phrasing.",
+        "confidence": 0.85,
+    }
+)
+
+_INHALED_NO_SNOMED_RESPONSE = json.dumps(
+    {
+        "normalized_term": "inhaled nitric oxide",
+        "expanded_queries": ["inhaled nitric oxide", "administration of nitric oxide"],
+        "inferred_meaning": "therapeutic administration of nitric oxide by inhalation",
+        "semantic_type": "procedure",
+        "candidate_ontologies": ["SNOMED"],
+        "preferred_ontology": "SNOMED",
+        "reasoning": "The source describes administering a substance as therapy, not a request for the drug itself.",
+        "confidence": 0.85,
+    }
+)
+
+_EXTRACORPOREAL_SUPPORT_SNOMED_RESPONSE = json.dumps(
+    {
+        "normalized_term": "extracorporeal support",
+        "expanded_queries": ["extracorporeal support"],
+        "inferred_meaning": "extracorporeal life support",
+        "semantic_type": "procedure",
+        "candidate_ontologies": ["SNOMED"],
+        "preferred_ontology": "SNOMED",
+        "reasoning": "Already a conventional SNOMED-style phrase; no additional canonical-phrase query is needed.",
+        "confidence": 0.9,
+    }
+)
+
+_VAPING_SNOMED_RESPONSE = json.dumps(
+    {
+        "normalized_term": "vaping",
+        "expanded_queries": ["vaping"],
+        "inferred_meaning": "use of an electronic cigarette or vaping device",
+        "semantic_type": "exposure",
+        "candidate_ontologies": ["SNOMED"],
+        "preferred_ontology": "SNOMED",
+        "reasoning": "Vaping is already a conventional SNOMED-searchable term; no additional query is needed.",
+        "confidence": 0.9,
+    }
+)
+
+
+@pytest.mark.unit
+def test_snomed_guidance_present_for_hard_target_ontology() -> None:
+    stub = _RecordingStubProvider(_DIALYSIS_SNOMED_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    planner.plan(
+        "rrt_dialysis",
+        source_label="Renal replacement therapy (RRT) or dialysis",
+        target_ontology="SNOMED",
+    )
+
+    all_content = " ".join(m.content for m in stub.calls[0])
+    assert "SNOMED-specific query guidance" in all_content
+    assert "administration of <substance>" in all_content
+
+
+@pytest.mark.unit
+def test_snomed_guidance_present_when_snomed_in_allowed_ontologies() -> None:
+    stub = _RecordingStubProvider(_DIALYSIS_SNOMED_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    planner.plan(
+        "rrt_dialysis",
+        source_label="Renal replacement therapy (RRT) or dialysis",
+        allowed_target_ontologies=["SNOMED", "ICD10"],
+    )
+
+    all_content = " ".join(m.content for m in stub.calls[0])
+    assert "SNOMED-specific query guidance" in all_content
+
+
+@pytest.mark.unit
+def test_snomed_guidance_recognizes_snomedct_alias() -> None:
+    stub = _RecordingStubProvider(_DIALYSIS_SNOMED_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    planner.plan("rrt_dialysis", target_ontology="SNOMEDCT")
+
+    all_content = " ".join(m.content for m in stub.calls[0])
+    assert "SNOMED-specific query guidance" in all_content
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("target_ontology", ["LOINC", "HPO", "ICD10", "MONDO"])
+def test_snomed_guidance_absent_for_non_snomed_hard_target(target_ontology: str) -> None:
+    stub = _RecordingStubProvider(_SYS_BP_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    planner.plan("sys_bp", target_ontology=target_ontology)
+
+    all_content = " ".join(m.content for m in stub.calls[0])
+    assert "SNOMED-specific query guidance" not in all_content
+
+
+@pytest.mark.unit
+def test_snomed_guidance_absent_when_snomed_not_in_allowed_ontologies() -> None:
+    stub = _RecordingStubProvider(_SYS_BP_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    planner.plan("sys_bp", allowed_target_ontologies=["LOINC", "HPO"])
+
+    all_content = " ".join(m.content for m in stub.calls[0])
+    assert "SNOMED-specific query guidance" not in all_content
+
+
+@pytest.mark.unit
+def test_snomed_guidance_absent_with_no_target_or_allow_list() -> None:
+    stub = _RecordingStubProvider(_SYS_BP_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    planner.plan("sys_bp")
+
+    all_content = " ".join(m.content for m in stub.calls[0])
+    assert "SNOMED-specific query guidance" not in all_content
+
+
+@pytest.mark.unit
+def test_icd10_guidance_still_absent_for_snomed_target() -> None:
+    """Non-SNOMED (ICD10) guidance must not leak into SNOMED-target requests."""
+    stub = _RecordingStubProvider(_DIALYSIS_SNOMED_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    planner.plan("rrt_dialysis", target_ontology="SNOMED")
+
+    all_content = " ".join(m.content for m in stub.calls[0])
+    assert "ICD10-specific query guidance" not in all_content
+
+
+@pytest.mark.unit
+def test_snomed_dialysis_plan_can_add_canonical_phrase_query() -> None:
+    """A broad/colloquial dialysis-style source can produce a more canonical
+    SNOMED phrase (renal dialysis) alongside the literal query."""
+    stub = _RecordingStubProvider(_DIALYSIS_SNOMED_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    plan = planner.plan(
+        "rrt_dialysis",
+        source_label="Renal replacement therapy (RRT) or dialysis",
+        target_ontology="SNOMED",
+    )
+
+    assert plan.expanded_queries == ["dialysis", "renal dialysis"]
+    assert plan.semantic_type == "procedure"
+    assert plan.preferred_ontology == "SNOMED"
+
+
+@pytest.mark.unit
+def test_snomed_inhaled_therapy_plan_preserves_procedure_intent() -> None:
+    """An inhaled-therapy-style source naming a substance preserves
+    procedure/administration semantic_type and can add an administration
+    query, instead of collapsing to a drug/product-only search."""
+    stub = _RecordingStubProvider(_INHALED_NO_SNOMED_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    plan = planner.plan(
+        "inhaled_no",
+        source_label="Inhaled nitric oxide",
+        target_ontology="SNOMED",
+    )
+
+    assert plan.expanded_queries == ["inhaled nitric oxide", "administration of nitric oxide"]
+    assert plan.semantic_type == "procedure"
+    assert plan.semantic_type != "drug"
+    assert plan.preferred_ontology == "SNOMED"
+
+
+@pytest.mark.unit
+def test_snomed_extracorporeal_support_plan_unchanged() -> None:
+    """Regression: an already-conventional SNOMED phrase (extracorporeal
+    support) must stay a single literal query -- the guidance must not force
+    every SNOMED plan into a two-query expansion."""
+    stub = _RecordingStubProvider(_EXTRACORPOREAL_SUPPORT_SNOMED_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    plan = planner.plan(
+        "extracorporeal_support",
+        source_label="Extracorporeal support",
+        target_ontology="SNOMED",
+    )
+
+    assert plan.expanded_queries == ["extracorporeal support"]
+    assert plan.semantic_type == "procedure"
+
+
+@pytest.mark.unit
+def test_snomed_vaping_plan_unchanged() -> None:
+    """Regression: an already-conventional SNOMED phrase (vaping) must stay
+    a single literal query."""
+    stub = _RecordingStubProvider(_VAPING_SNOMED_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    plan = planner.plan(
+        "vaping",
+        source_label="Vaping",
+        target_ontology="SNOMED",
+    )
+
+    assert plan.expanded_queries == ["vaping"]
+
+
+@pytest.mark.unit
+def test_snomed_guidance_prohibits_unsupported_specificity() -> None:
+    """The guidance text itself must instruct the model not to invent
+    treatment modality, frequency, severity, complications, or anatomical
+    detail beyond what the source supports."""
+    stub = _RecordingStubProvider(_DIALYSIS_SNOMED_RESPONSE)
+    planner = QueryPlanner(stub)
+
+    planner.plan("rrt_dialysis", target_ontology="SNOMED")
+
+    all_content = " ".join(m.content for m in stub.calls[0])
+    assert "unsupported specificity" in all_content
+    assert "frequency, severity, complications" in all_content
+
+
 @pytest.mark.unit
 def test_malformed_retry_usage_and_timing_accumulate_across_both_calls(
     monkeypatch: pytest.MonkeyPatch,
