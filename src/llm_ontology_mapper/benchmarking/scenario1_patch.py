@@ -43,6 +43,7 @@ import random
 import subprocess
 import sys
 from collections import Counter
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -86,7 +87,6 @@ from llm_ontology_mapper.benchmarking.scenario1_runner import (
     RETRIEVAL_MODE,
     STRICT_TARGET_ONTOLOGY,
     TARGET_ONTOLOGY,
-    Scenario1RowResult,
     Scenario1RunConfig,
     build_mapper,
     build_provider,
@@ -394,7 +394,7 @@ def execute_targeted_rerun(
     graph_index: EfoGraphIndex,
     output_dir: Path,
     append: bool,
-    already_completed_query_ids: set[int] = frozenset(),
+    already_completed_query_ids: AbstractSet[int] = frozenset(),
     max_consecutive_local_retrieval_errors: int = DEFAULT_MAX_CONSECUTIVE_LOCAL_RETRIEVAL_ERRORS,
 ) -> RerunOutcome:
     """The injectable, network-free loop: given an already-built `mapper`,

@@ -797,7 +797,7 @@ class AnthropicProvider(BaseLLMProvider):
     def complete(
         self,
         messages: list[ChatMessage],
-        temperature: float = 0.1,
+        temperature: float | None = 0.1,
         max_tokens: int = 1024,
         **kwargs: Any,
     ) -> CompletionResponse:
@@ -806,7 +806,7 @@ class AnthropicProvider(BaseLLMProvider):
     def _do_complete(
         self,
         messages: list[ChatMessage],
-        temperature: float,
+        temperature: float | None,
         max_tokens: int,
         **kwargs: Any,
     ) -> CompletionResponse:
@@ -937,7 +937,7 @@ class OllamaProvider(BaseLLMProvider):
     def complete(
         self,
         messages: list[ChatMessage],
-        temperature: float = 0.1,
+        temperature: float | None = 0.1,
         max_tokens: int = 1024,
         **kwargs: Any,
     ) -> CompletionResponse:
@@ -946,7 +946,7 @@ class OllamaProvider(BaseLLMProvider):
     def _do_complete(
         self,
         messages: list[ChatMessage],
-        temperature: float,
+        temperature: float | None,
         max_tokens: int,
         **kwargs: Any,
     ) -> CompletionResponse:

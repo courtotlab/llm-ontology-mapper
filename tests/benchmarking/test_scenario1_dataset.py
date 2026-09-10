@@ -247,7 +247,10 @@ def test_query_872_expected_topk_mrr_recall_after_gold_correction() -> None:
     produced rank_1=blank, rank_2=EFO:0009679, rank_3=EFO:0009684 -- verify
     the canonical scorer, given the CORRECTED two-code gold set, reproduces
     exactly the audit's derived expected metrics."""
-    from llm_ontology_mapper.benchmarking.scenario1_metrics import PredictionRecord, score_prediction
+    from llm_ontology_mapper.benchmarking.scenario1_metrics import (
+        PredictionRecord,
+        score_prediction,
+    )
 
     record = PredictionRecord(
         query_id=872,

@@ -19,12 +19,17 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from llm_ontology_mapper.benchmarking import scenario1_patch as scenario1_patch_module
 from llm_ontology_mapper.benchmarking.scenario1_dataset import CanonicalQuery
+from llm_ontology_mapper.benchmarking.scenario1_metrics import (
+    FN,
+    TP_IDENTICAL,
+    classify_tp_taxonomy_row,
+)
 from llm_ontology_mapper.benchmarking.scenario1_output import (
     PREDICTIONS_CSV_FIELDS,
     read_existing_predictions,
 )
-from llm_ontology_mapper.benchmarking import scenario1_patch as scenario1_patch_module
 from llm_ontology_mapper.benchmarking.scenario1_patch import (
     DATASET_SPECS,
     DERIVED_SCORING_FIELDS,
@@ -33,8 +38,6 @@ from llm_ontology_mapper.benchmarking.scenario1_patch import (
     PINNED_MAX_ALTERNATIVES,
     PINNED_MAX_CANDIDATES,
     PINNED_MAX_RESULTS_PER_QUERY,
-    GoldCorrectionResult,
-    PatchResult,
     Scenario1DatasetSpec,
     Scenario1PatchError,
     Scenario1RunConfig,
@@ -49,7 +52,6 @@ from llm_ontology_mapper.benchmarking.scenario1_patch import (
     write_gold_correction_validation_json,
     write_patch_validation_json,
 )
-from llm_ontology_mapper.benchmarking.scenario1_metrics import classify_tp_taxonomy_row, TP_IDENTICAL, FN
 from llm_ontology_mapper.models import AlternativeMapping, LogicType, MappingMetadata, MappingResult
 
 pytestmark = pytest.mark.unit

@@ -14,7 +14,7 @@ Validates:
 Constraints:
 - No external API calls, no LLM calls, no live retrieval
 - All tests are pure in-memory; no fixtures requiring external state
-- Does not modify OntologyMapper, AgenticMapper, or provider behavior
+- Does not modify OntologyMapper or provider behavior
 """
 
 from __future__ import annotations

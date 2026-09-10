@@ -1,7 +1,7 @@
 """Manual live smoke script for planned disabled-mode ontology mapping.
 
 This is a direct runnable script, not a pytest test. It intentionally uses
-OntologyMapper(use_planned_pipeline=True), not AgenticMapper.
+OntologyMapper via the planned pipeline.
 
 Run with:
     uv run python tests/live/planned_disabled_smoke.py
@@ -22,6 +22,7 @@ from _planned_smoke_helpers import (
     print_result_summary,
     print_trace_summary,
 )
+
 from llm_ontology_mapper.mapper import OntologyMapper
 from llm_ontology_mapper.models import LogicType
 from llm_ontology_mapper.providers import OllamaProvider, OpenAIProvider
@@ -65,7 +66,7 @@ def _build_provider() -> OpenAIProvider | OllamaProvider | None:
 
 
 def _logic_value(result: object) -> str:
-    logic_type = getattr(result, "logic_type")
+    logic_type = result.logic_type
     return str(getattr(logic_type, "value", logic_type))
 
 

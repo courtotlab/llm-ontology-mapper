@@ -67,16 +67,6 @@ class _FakePlannedPipeline:
         return self.result
 
 
-class _ForbiddenPlannedPipeline:
-    calls: list[dict[str, Any]]
-
-    def __init__(self) -> None:
-        self.calls = []
-
-    def map_term(self, **kwargs: Any) -> MappingResult:
-        raise AssertionError("PlannedPipeline should not be called")
-
-
 def _planned_result(source_term: str = "sys_bp") -> MappingResult:
     return MappingResult(
         source_term=source_term,
@@ -135,32 +125,31 @@ def _planned_disabled_result_with_metadata(source_term: str = "sys_bp") -> Mappi
     return result
 
 
-def test_default_constructor_uses_legacy_path() -> None:
+def test_default_constructor_uses_planned_pipeline() -> None:
+    """The planned pipeline is the only supported mapping architecture, so a
+    plain OntologyMapper(llm_provider=...) construction (no explicit
+    use_planned_pipeline) must route map_term through the planned pipeline."""
     provider = _StubProvider()
-    forbidden = _ForbiddenPlannedPipeline()
-    mapper = OntologyMapper(llm_provider=provider, planned_pipeline=forbidden)
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(llm_provider=provider, planned_pipeline=fake)
 
     result = mapper.map_term("cough", source_label="Do you have a cough?")
 
-    assert result.target_code == "HP:0012735"
-    assert result.metadata is not None
-    assert result.metadata.latency_ms is not None
-    assert result.metadata.latency_ms >= 0
-    assert result.metadata.rag_debug is None
-    assert provider.calls
-    assert forbidden.calls == []
+    assert result is fake.result
+    assert len(fake.calls) == 1
+    assert provider.calls == []
 
 
-def test_map_term_default_still_uses_legacy_path() -> None:
+def test_map_term_default_uses_planned_pipeline() -> None:
     provider = _StubProvider()
     fake = _FakePlannedPipeline()
     mapper = OntologyMapper(llm_provider=provider, planned_pipeline=fake)
 
     result = mapper.map_term("cough")
 
-    assert result.logic_type == LogicType.LLM
-    assert provider.calls
-    assert fake.calls == []
+    assert result is fake.result
+    assert provider.calls == []
+    assert len(fake.calls) == 1
 
 
 def test_planned_flag_enables_planned_pipeline_delegation() -> None:
@@ -433,10 +422,10 @@ def test_planned_mode_returns_mapping_result_from_planned_pipeline() -> None:
     assert isinstance(result, MappingResult)
 
 
-def test_legacy_map_data_dictionary_remains_unchanged_by_default() -> None:
+def test_map_data_dictionary_uses_planned_pipeline_by_default() -> None:
     provider = _StubProvider()
-    forbidden = _ForbiddenPlannedPipeline()
-    mapper = OntologyMapper(llm_provider=provider, planned_pipeline=forbidden)
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(llm_provider=provider, planned_pipeline=fake)
 
     batch = mapper.map_data_dictionary(
         [
@@ -448,8 +437,8 @@ def test_legacy_map_data_dictionary_remains_unchanged_by_default() -> None:
 
     assert isinstance(batch, MappingBatch)
     assert len(batch.results) == 2
-    assert provider.calls
-    assert forbidden.calls == []
+    assert provider.calls == []
+    assert len(fake.calls) == 2
 
 
 def test_planned_map_data_dictionary_uses_planned_pipeline_safely() -> None:
@@ -508,16 +497,34 @@ def test_planned_map_data_dictionary_forwards_row_source_context() -> None:
     assert fake.calls[0]["retrieval_mode"] == RetrievalMode.PUBLIC
 
 
-def test_retrieval_mode_is_rejected_for_legacy_map_term() -> None:
-    mapper = OntologyMapper(llm_provider=_StubProvider())
+def test_map_term_accepts_retrieval_mode_override() -> None:
+    """retrieval_mode is a normal planned-pipeline knob now that the planned
+    pipeline is the only mapping architecture -- passing it to map_term no
+    longer requires an explicit use_planned_pipeline=True."""
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(llm_provider=_StubProvider(), planned_pipeline=fake)
 
-    with pytest.raises(ValueError, match="use_planned_pipeline=True"):
-        mapper.map_term("sys_bp", retrieval_mode="public")
+    mapper.map_term("sys_bp", retrieval_mode="public")
+
+    assert fake.calls[0]["retrieval_mode"] == RetrievalMode.PUBLIC
 
 
-def test_non_default_constructor_retrieval_mode_requires_planned_mode() -> None:
-    with pytest.raises(ValueError, match="use_planned_pipeline=True"):
-        OntologyMapper(llm_provider=_StubProvider(), retrieval_mode="local")
+def test_non_default_constructor_retrieval_mode_works_without_explicit_planned_flag() -> None:
+    """Constructing with just retrieval_mode= (no use_planned_pipeline=) must
+    succeed and take effect, since planned is the only supported mode."""
+    fake = _FakePlannedPipeline()
+    mapper = OntologyMapper(
+        llm_provider=_StubProvider(), retrieval_mode="local", planned_pipeline=fake
+    )
+
+    mapper.map_term("sys_bp")
+
+    assert fake.calls[0]["retrieval_mode"] == RetrievalMode.LOCAL
+
+
+def test_use_planned_pipeline_false_is_rejected() -> None:
+    with pytest.raises(ValueError, match="no longer supported"):
+        OntologyMapper(llm_provider=_StubProvider(), use_planned_pipeline=False)
 
 
 def test_no_both_mode_is_accepted_in_planned_mode() -> None:
@@ -686,17 +693,10 @@ def test_map_data_dictionary_forwards_strict_target_ontology_to_every_row() -> N
     assert all(call["strict_target_ontology"] is True for call in fake.calls)
 
 
-def test_strict_target_ontology_true_raises_on_legacy_path() -> None:
-    provider = _StubProvider()
-    mapper = OntologyMapper(llm_provider=provider)
-
-    with pytest.raises(ValueError, match="use_planned_pipeline=True"):
-        mapper.map_term("sys_bp", strict_target_ontology=True)
-
-    assert provider.calls == []
-
-
 def test_strict_target_ontology_true_raises_when_planned_disabled_per_call() -> None:
+    """use_planned_pipeline=False is rejected outright (the legacy mapping
+    path it used to select no longer exists), regardless of
+    strict_target_ontology."""
     provider = _StubProvider()
     mapper = OntologyMapper(
         llm_provider=provider,
@@ -704,36 +704,7 @@ def test_strict_target_ontology_true_raises_when_planned_disabled_per_call() -> 
         planned_pipeline=_FakePlannedPipeline(),
     )
 
-    with pytest.raises(ValueError, match="use_planned_pipeline=True"):
+    with pytest.raises(ValueError, match="no longer supported"):
         mapper.map_term("sys_bp", use_planned_pipeline=False, strict_target_ontology=True)
 
-    assert provider.calls == []
-
-
-def test_strict_target_ontology_explicit_false_does_not_raise_on_legacy_path() -> None:
-    provider = _StubProvider()
-    mapper = OntologyMapper(llm_provider=provider)
-
-    result = mapper.map_term("cough", strict_target_ontology=False)
-
-    assert result.target_code == "HP:0012735"
-
-
-def test_map_data_dictionary_validates_strict_target_ontology_once_upfront() -> None:
-    """Requesting strict_target_ontology=True for a batch that will use the
-    legacy path must raise immediately, not be discovered (and silently
-    swallowed by the per-row try/except) on the first row."""
-    provider = _StubProvider()
-    mapper = OntologyMapper(llm_provider=provider)
-
-    with pytest.raises(ValueError, match="use_planned_pipeline=True"):
-        mapper.map_data_dictionary(
-            [
-                {"field_name": "row1", "field_label": "Row 1", "field_type": "text"},
-                {"field_name": "row2", "field_label": "Row 2", "field_type": "text"},
-            ],
-            strict_target_ontology=True,
-        )
-
-    # Validated before the per-row loop ran — no row was ever attempted.
     assert provider.calls == []

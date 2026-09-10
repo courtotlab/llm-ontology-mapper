@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import overload
 
 from llm_ontology_mapper.models import NormalizedCandidate
 from llm_ontology_mapper.ontology_identity import canonical_ontology
@@ -41,6 +42,10 @@ def candidate_allowed_for_targets(
     )
 
 
+@overload
+def _canonical_ontology_set(values: Iterable[str]) -> set[str]: ...
+@overload
+def _canonical_ontology_set(values: None) -> None: ...
 def _canonical_ontology_set(values: Iterable[str] | None) -> set[str] | None:
     if values is None:
         return None

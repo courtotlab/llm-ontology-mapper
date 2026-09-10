@@ -1,7 +1,7 @@
 """Manual live smoke script for planned local SapBERT ontology mapping.
 
 This is a direct runnable script, not a pytest test. It intentionally uses
-OntologyMapper(use_planned_pipeline=True), not AgenticMapper.
+OntologyMapper via the planned pipeline.
 
 Run with:
     uv run python tests/live/planned_local_smoke.py
@@ -56,7 +56,7 @@ SOURCE_LABEL = "Systolyc blood pressure"
 SOURCE_DESCRIPTION = ""
 SOURCE_TYPE = ""
 CLINICAL_AREA = ""
-TARGET_ONTOLOGY = "LOINC"
+TARGET_ONTOLOGY = "HPO"
 RETRIEVAL_MODE = "local"
 
 # When True, mappings must belong natively to one of the requested target

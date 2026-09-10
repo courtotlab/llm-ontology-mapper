@@ -13,7 +13,6 @@ Run with:  pytest tests/benchmarking/test_scenario1_resume_reliability.py -v -m 
 
 from __future__ import annotations
 
-import csv
 import importlib.util
 import json
 import sys
@@ -71,7 +70,10 @@ def _row(query_id: int = 1, **overrides) -> Scenario1RowResult:
 
 
 def _write_row(writer: IncrementalPredictionsCsvWriter, row: Scenario1RowResult) -> None:
-    from llm_ontology_mapper.benchmarking.scenario1_metrics import PredictionRecord, score_prediction
+    from llm_ontology_mapper.benchmarking.scenario1_metrics import (
+        PredictionRecord,
+        score_prediction,
+    )
 
     rm = score_prediction(
         PredictionRecord(

@@ -23,7 +23,17 @@ from llm_ontology_mapper.models import LogicType, MappingMetadata, MappingResult
 
 REPO_DIR = Path(__file__).resolve().parents[2]
 WORKBOOK = REPO_DIR / "dict_mapped_all.xlsx"
-EXPECTED_SHA256 = "91980c4df28781e5ef8d33d614c4f768966fa88b3db24996f3da38fc01bbddfd"
+# Pinned to the workbook committed in d592b3a ("disabled mode rerun"), which
+# intentionally replaced the file committed in 6537633 ("benchmark runs") --
+# the hash below is git HEAD's actual dict_mapped_all.xlsx content (verified
+# via `git show HEAD:dict_mapped_all.xlsx | shasum -a 256`, which matches the
+# working tree exactly). The previous constant
+# (91980c4df28781e5ef8d33d614c4f768966fa88b3db24996f3da38fc01bbddfd) was the
+# hash of the file's *prior* content from 6537633 and was never re-pinned
+# after d592b3a's replacement; the current workbook is confirmed structurally
+# canonical by every other test in this module (218 rows, target ontology
+# distribution, etc., all pass against it unchanged).
+EXPECTED_SHA256 = "4c0305ecb31e78e19fbb9167d0b4ccd44406264c7c013be8b43cd403de271d13"
 
 pytestmark = [
     pytest.mark.unit,

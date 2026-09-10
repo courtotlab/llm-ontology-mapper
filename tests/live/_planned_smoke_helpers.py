@@ -14,9 +14,9 @@ def env_flag(name: str, default: bool = False) -> bool:
 
 def extract_pipeline_metadata(result: object) -> dict[str, Any] | None:
     try:
-        metadata = getattr(result, "metadata")
-        rag_debug = getattr(metadata, "rag_debug")
-        candidates = getattr(rag_debug, "candidates_retrieved") or []
+        metadata = result.metadata
+        rag_debug = metadata.rag_debug
+        candidates = rag_debug.candidates_retrieved or []
         if candidates and isinstance(candidates[0], dict):
             return candidates[0]
     except Exception:
@@ -68,6 +68,29 @@ def print_alternatives_summary(
 
 
 def print_trace_summary(result: object) -> None:
+    """Print a trace summary that keeps two deliberately different grounding
+    concepts visually distinct instead of printing them under identical
+    "is_grounded"/"grounding_source" labels:
+
+    - result_is_grounded / result_grounding_source come from the reranker's
+      final decision (MappingResultBuilder's top-level pipeline metadata,
+      itself copied from RerankDecision -- see llm_reranker.py). This means
+      "the final selected mapping came from a retrieved candidate." It is
+      False whenever the reranker abstains (is_unmapped=True), even if
+      retrieval itself succeeded and returned candidates.
+
+    - retrieval_is_grounded / retrieval_grounding_source come from the
+      nested RetrievalTrace (planned_pipeline.py's _build_trace). This means
+      "retrieval was attempted for this mode and produced merged
+      candidates," independent of whether the reranker went on to select
+      one of them.
+
+    It is valid and expected for these to disagree: retrieval can succeed
+    (retrieval_is_grounded=True, retrieval_grounding_source=public_api) while
+    the reranker still abstains (result_is_grounded=False,
+    result_grounding_source=none), producing an UNKNOWN:UNMAPPED result. See
+    RerankDecision.is_grounded and RetrievalTrace.is_grounded in models.py.
+    """
     pipeline_meta = extract_pipeline_metadata(result)
     if not pipeline_meta:
         return
@@ -82,8 +105,10 @@ def print_trace_summary(result: object) -> None:
     print(json.dumps({
         "trace_summary": {
             "retrieval_mode": pipeline_meta.get("retrieval_mode"),
-            "is_grounded": pipeline_meta.get("is_grounded"),
-            "grounding_source": pipeline_meta.get("grounding_source"),
+            "result_is_grounded": pipeline_meta.get("is_grounded"),
+            "result_grounding_source": pipeline_meta.get("grounding_source"),
+            "retrieval_is_grounded": retrieval_trace.get("is_grounded"),
+            "retrieval_grounding_source": retrieval_trace.get("grounding_source"),
             "policy": pipeline_meta.get("policy"),
             "retrieval_skipped": pipeline_meta.get("retrieval_skipped"),
             "retrieval_disabled_reason": pipeline_meta.get(

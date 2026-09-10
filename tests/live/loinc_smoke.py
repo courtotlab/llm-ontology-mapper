@@ -13,7 +13,6 @@ import os
 
 from llm_ontology_mapper.search_tools import SearchTools
 
-
 # =============================================================================
 # EDIT THIS SECTION FOR LOCAL SMOKE TESTING
 # =============================================================================

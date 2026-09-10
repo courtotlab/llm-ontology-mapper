@@ -1,7 +1,10 @@
 """
 llm-ontology-mapper
 ~~~~~~~~~~~~~~~~~~~
-LLM-powered ontology mapping with RAG grounding and multi-provider support.
+LLM-powered ontology mapping via the seven-stage planned pipeline
+(QueryPlanner -> RetrievalRouter -> retriever -> CandidateNormalizer ->
+CandidateMerger -> LLMReranker -> MappingResultBuilder). This is the only
+supported mapping architecture.
 
 Public API surface
 ──────────────────
@@ -11,10 +14,10 @@ Quick start::
 
     from llm_ontology_mapper import OntologyMapper, MappingResult
 
-    mapper = OntologyMapper(provider="openai", model="gpt-4o", use_rag=True)
+    mapper = OntologyMapper(provider="openai", model="gpt-4o")
     result: MappingResult = mapper.map_term("cough", source_label="Do you have a cough?")
 
-    print(result.curie)          # 'HP:0012735'
+    print(result.target_code)    # 'HP:0012735'
     print(result.confidence)     # 0.93
     print(result.logic_type)     # LogicType.RAG
 """
@@ -22,6 +25,81 @@ Quick start::
 from importlib import import_module
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
+
+# ── Phase 4B — candidate merger ───────────────────────────────────────────────
+from .candidate_merger import CandidateMergeError, CandidateMerger
+
+# ── Phase 4A — candidate normalizer ───────────────────────────────────────────
+from .candidate_normalizer import CandidateNormalizationError, CandidateNormalizer
+
+# ── Phase 6 — disabled LLM-only mapping path ──────────────────────────────────
+from .disabled_mapping import DisabledMappingError, DisabledMappingRunner
+
+# ── Phase 5A — grounded LLM reranker ──────────────────────────────────────────
+from .llm_reranker import LLMReranker, LLMRerankerError
+
+# ── Phase 8 — local semantic retriever wrapper ────────────────────────────────
+from .local_retriever import LocalRetrievalError, LocalSemanticRetriever, SapBERTClient
+
+# ── Core mapper (imported here so users don't need to know the submodule) ──────
+from .mapper import OntologyMapper
+
+# ── Phase 5B — mapping result builder ─────────────────────────────────────────
+from .mapping_result_builder import MappingResultBuilder, MappingResultBuilderError
+from .models import (
+    AlternativeMapping,
+    GroundingSource,
+    LogicType,
+    MappingBatch,
+    MappingMetadata,
+    MappingResult,
+    NormalizedCandidate,
+    OntologyPrefix,
+    QueryPlan,
+    RAGDebugInfo,
+    RerankAlternative,
+    RerankDecision,
+    RetrievalMode,
+    RetrievalRoutePlan,
+    RetrievalTrace,
+)
+
+# ── NER extractor (optional — pulls in scispacy when used) ─────────────────────
+from .ner_extractor import NERQueryExtractor
+
+# ── Phase 9 — planned pipeline orchestrator ──────────────────────────────────
+from .planned_pipeline import PlannedPipeline, PlannedPipelineError
+
+# ── Provider layer (lazy — SDK imports happen inside the classes) ──────────────
+from .providers import (
+    AnthropicProvider,
+    BaseLLMProvider,
+    ChatMessage,
+    CompletionResponse,
+    LLMProviderFactory,
+    OllamaProvider,
+    OpenAIProvider,
+)
+
+# ── Phase 7 — public ontology retriever wrapper ────────────────────────────────
+from .public_retriever import PublicOntologyRetriever, PublicRetrievalError
+
+# ── Phase 2 — LLM-assisted query planner ──────────────────────────────────────
+from .query_planner import QueryPlanner, QueryPlanningError
+
+# ── Phase 3 — retrieval router ────────────────────────────────────────────────
+from .retrieval_router import RetrievalRouter
+
+# ── Public retrieval-source adapters/registry (extensibility CASE 1 / CASE 2) ──
+from .retrieval_sources import (
+    RetrievalConfigError,
+    RetrievalSource,
+    register_source,
+    unregister_source,
+)
+
+# ── Validator (optional — needs requests for live API calls) ───────────────────
+from .validator import OntologyValidator
 
 # ── Version ───────────────────────────────────────────────────────────────────
 try:
@@ -41,79 +119,6 @@ _EVALUATOR_EXPORTS = {
     "OntologyBreakdown",
     "OntologyMappingEvaluator",
 }
-
-# ── Core mapper (imported here so users don't need to know the submodule) ──────
-from .mapper import OntologyMapper
-from .models import (
-    AlternativeMapping,
-    GroundingSource,
-    LogicType,
-    MappingBatch,
-    MappingMetadata,
-    MappingResult,
-    NormalizedCandidate,
-    OntologyPrefix,
-    QueryPlan,
-    RAGDebugInfo,
-    RerankAlternative,
-    RerankDecision,
-    RetrievalMode,
-    RetrievalRoutePlan,
-    RetrievalTrace,
-)
-
-# ── Phase 2 — LLM-assisted query planner ──────────────────────────────────────
-from .query_planner import QueryPlanner, QueryPlanningError
-
-# ── Phase 3 — retrieval router ────────────────────────────────────────────────
-from .retrieval_router import RetrievalRouter
-
-# ── Phase 4A — candidate normalizer ───────────────────────────────────────────
-from .candidate_normalizer import CandidateNormalizationError, CandidateNormalizer
-
-# ── Phase 4B — candidate merger ───────────────────────────────────────────────
-from .candidate_merger import CandidateMergeError, CandidateMerger
-
-# ── Phase 5A — grounded LLM reranker ──────────────────────────────────────────
-from .llm_reranker import LLMReranker, LLMRerankerError
-
-# ── Phase 5B — mapping result builder ─────────────────────────────────────────
-from .mapping_result_builder import MappingResultBuilder, MappingResultBuilderError
-
-# ── Phase 6 — disabled LLM-only mapping path ──────────────────────────────────
-from .disabled_mapping import DisabledMappingError, DisabledMappingRunner
-
-# ── Phase 7 — public ontology retriever wrapper ────────────────────────────────
-from .public_retriever import PublicOntologyRetriever, PublicRetrievalError
-
-# ── Phase 8 — local semantic retriever wrapper ────────────────────────────────
-from .local_retriever import LocalSemanticRetriever, LocalRetrievalError, SapBERTClient
-
-# ── Phase 9 — planned pipeline orchestrator ──────────────────────────────────
-from .planned_pipeline import PlannedPipeline, PlannedPipelineError
-
-# ── NER extractor (optional — pulls in scispacy when used) ─────────────────────
-from .ner_extractor import NERQueryExtractor
-
-# ── Provider layer (lazy — SDK imports happen inside the classes) ──────────────
-from .providers import (
-    AnthropicProvider,
-    BaseLLMProvider,
-    ChatMessage,
-    CompletionResponse,
-    LLMProviderFactory,
-    OllamaProvider,
-    OpenAIProvider,
-)
-
-# ── Retriever (optional — only materialises HTTP dep when used) ────────────────
-from .retriever import OntologyRetriever
-
-# ── Agentic engine ────────────────────────────────────────────────────────────
-from .agentic_mapper import AgenticMapper, normalize_code
-
-# ── Validator (optional — needs requests for live API calls) ───────────────────
-from .validator import OntologyValidator
 
 
 def __getattr__(name: str) -> Any:
@@ -158,7 +163,6 @@ __all__ = [
     "CompletionResponse",
     # Core services
     "OntologyMapper",
-    "OntologyRetriever",
     "OntologyValidator",
     # Evaluator
     "OntologyMappingEvaluator",
@@ -168,9 +172,6 @@ __all__ = [
     "EvaluationMetrics",
     "EvaluationReport",
     "NERQueryExtractor",
-    # Agentic engine
-    "AgenticMapper",
-    "normalize_code",
     # Phase 1 pipeline models
     "RetrievalMode",
     "GroundingSource",
@@ -203,6 +204,11 @@ __all__ = [
     # Phase 7 — public ontology retriever wrapper
     "PublicOntologyRetriever",
     "PublicRetrievalError",
+    # Public retrieval-source adapters/registry
+    "RetrievalSource",
+    "RetrievalConfigError",
+    "register_source",
+    "unregister_source",
     # Phase 8 — local semantic retriever wrapper
     "LocalSemanticRetriever",
     "LocalRetrievalError",

@@ -23,21 +23,23 @@ from llm_ontology_mapper.models import (
     RetrievalRoutePlan,
 )
 from llm_ontology_mapper.ontology_identity import canonical_ontology
+from llm_ontology_mapper.retrieval_sources import (
+    RetrievalSource,
+    build_registry,
+    resolve_retrieval_route,
+    route_name_for_source,
+    validate_retrieval_config,
+)
 from llm_ontology_mapper.search_tools import SearchTools
 
 logger = logging.getLogger(__name__)
 
-# Ontology families served by each public route.
-# Keys are upper-cased ontology identifiers as callers/planners may supply them.
-_LOINC_ONTOLOGIES: frozenset[str] = frozenset({"LOINC"})
-
-_RXNORM_ONTOLOGIES: frozenset[str] = frozenset({"RXNORM", "RXNAV", "RXCUI"})
-
-_ICD_ONTOLOGIES: frozenset[str] = frozenset({"ICD10", "ICD10CM", "ICD", "ICD-10", "ICD-10-CM"})
-
-# OLS-routed ontologies are whatever SearchTools.OLS_ONTOLOGY_MAP supports.
-# We reference the class attribute directly so additions to SearchTools propagate.
-_OLS_ONTOLOGIES: frozenset[str] = frozenset(SearchTools.OLS_ONTOLOGY_MAP.keys())
+# Ontology -> retrieval source dispatch is resolved entirely from
+# ontology_config.yaml (see retrieval_sources.config) plus the source
+# registry (see retrieval_sources.registry). There is no ontology-keyed
+# if/elif chain here -- adding an ontology to an existing source, or a new
+# endpoint, is a configuration/registration change, not a code change to
+# this module.
 
 _PUBLIC_ROUTE_ONTOLOGY_ALIASES: dict[str, str] = {
     "SNOMED-CT": "SNOMED",
@@ -90,8 +92,38 @@ class PublicOntologyRetriever:
         #   "route_name": "OLS", ...}, ...]
     """
 
-    def __init__(self, search_tools: SearchTools | None = None) -> None:
+    def __init__(
+        self,
+        search_tools: SearchTools | None = None,
+        *,
+        ontologies_config: dict[str, Any] | None = None,
+    ) -> None:
+        """
+        Args:
+            search_tools:       Injectable SearchTools instance (credentials,
+                                 base URLs). Defaults to a fresh SearchTools().
+            ontologies_config:  Optional override for the `ontologies:`
+                                 section of ontology_config.yaml, used to
+                                 resolve ontology -> retrieval source. Intended
+                                 for tests exercising a fake ontology/source
+                                 pairing without touching shipped
+                                 configuration; production callers should
+                                 leave this as None (the real config is
+                                 validated once here either way).
+        """
         self._tools: SearchTools = search_tools if search_tools is not None else SearchTools()
+        self._ontologies_config = ontologies_config
+        self._registry: dict[str, RetrievalSource] = build_registry(self._tools)
+        validate_retrieval_config(
+            self._effective_ontologies_config(), set(self._registry)
+        )
+
+    def _effective_ontologies_config(self) -> dict[str, Any]:
+        if self._ontologies_config is not None:
+            return self._ontologies_config
+        from llm_ontology_mapper.ontology_identity import get_ontology_config
+
+        return get_ontology_config().get("ontologies", {})
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -303,45 +335,32 @@ class PublicOntologyRetriever:
 
         Raises:
             PublicRetrievalError: if the ontology is not supported, or if the
-                SearchTools call raises an unexpected exception.
+                resolved source's search() call raises an unexpected exception.
         """
         onto_upper = public_route_ontology(ontology)
+        resolved = resolve_retrieval_route(
+            onto_upper, ontologies_config=self._ontologies_config
+        )
+        if resolved is None:
+            configured = sorted(self._effective_ontologies_config())
+            raise PublicRetrievalError(
+                f"Ontology {ontology!r} is not supported by any known public route. "
+                f"Configured ontologies: {', '.join(configured)}."
+            )
 
+        source = self._registry[resolved.source_id]
         try:
-            if onto_upper in _LOINC_ONTOLOGIES:
-                return self._tools.search_loinc(
-                    query, top_k=top_k, route_diagnostics=route_diagnostics
-                )
-
-            if onto_upper in _RXNORM_ONTOLOGIES:
-                return self._tools.search_rxnorm(
-                    query, top_k=top_k, route_diagnostics=route_diagnostics
-                )
-
-            if onto_upper in _ICD_ONTOLOGIES:
-                return self._tools.search_icd10(
-                    query, top_k=top_k, route_diagnostics=route_diagnostics
-                )
-
-            if onto_upper in _OLS_ONTOLOGIES:
-                return self._tools.search_ols(
-                    query,
-                    ontology=onto_upper,
-                    top_k=top_k,
-                    route_diagnostics=route_diagnostics,
-                )
-
+            return source.search(
+                query,
+                ontology_id=resolved.source_ontology_id,
+                top_k=top_k,
+                route_diagnostics=route_diagnostics,
+            )
         except Exception as exc:
             raise PublicRetrievalError(
                 f"Unexpected error calling public route for ontology={ontology!r}, "
                 f"query={query!r}: {exc}"
             ) from exc
-
-        raise PublicRetrievalError(
-            f"Ontology {ontology!r} is not supported by any known public route. "
-            f"Supported OLS ontologies: {', '.join(sorted(_OLS_ONTOLOGIES))}; "
-            f"also supported: LOINC, RXNORM/RXNAV, ICD10/ICD10CM."
-        )
 
     def _call_route_timed(
         self,
@@ -382,15 +401,19 @@ class PublicOntologyRetriever:
 
 
 def _route_name(ontology: str) -> str:
-    """Return the canonical route name for an ontology identifier."""
+    """Return the provenance route name for an ontology identifier.
+
+    Resolved from the same ontology_config.yaml + retrieval-source registry
+    used by PublicOntologyRetriever._call_route -- not a second, separately
+    maintained dispatch chain. Defaults to the OLS4 source's route name for
+    any ontology with no configured retrieval route, matching this helper's
+    long-standing lenient (non-raising) fallback behavior; strict "is this
+    ontology actually supported" validation happens in _call_route instead.
+    """
     onto_upper = public_route_ontology(ontology)
-    if onto_upper in _LOINC_ONTOLOGIES:
-        return "LOINC-Search-API"
-    if onto_upper in _RXNORM_ONTOLOGIES:
-        return "RxNav"
-    if onto_upper in _ICD_ONTOLOGIES:
-        return "NIH-ClinicalTables"
-    return "OLS"
+    resolved = resolve_retrieval_route(onto_upper)
+    source_id = resolved.source_id if resolved is not None else "ols4"
+    return route_name_for_source(source_id) or "OLS"
 
 
 def public_route_ontology(ontology: str) -> str:

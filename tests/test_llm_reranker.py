@@ -24,7 +24,12 @@ from llm_ontology_mapper.models import (
     RerankDecision,
     RetrievalMode,
 )
-from llm_ontology_mapper.providers import BaseLLMProvider, ChatMessage, CompletionResponse
+from llm_ontology_mapper.providers import (
+    OPENAI_REASONING_EFFORT_BY_MODEL,
+    BaseLLMProvider,
+    ChatMessage,
+    CompletionResponse,
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stub provider
@@ -824,7 +829,12 @@ def test_reasoning_model_reranker_uses_larger_completion_budget() -> None:
 
 @pytest.mark.unit
 @pytest.mark.parametrize("model", ["gpt-5.1", "gpt-5.6-luna"])
-def test_selected_openai_models_reranker_use_low_reasoning(model: str) -> None:
+def test_selected_openai_models_reranker_use_configured_reasoning_effort(model: str) -> None:
+    """Each model in OPENAI_REASONING_EFFORT_BY_MODEL (providers.py) has its
+    own deliberately configured effort -- gpt-5.1 uses "low", gpt-5.6-luna
+    uses "medium" -- so this asserts the reranker forwards whatever that
+    shared registry says for the given model, not one hardcoded value for
+    every model."""
     candidate = _make_candidate()
     provider = _NamedStubProvider(
         _response(selected_cid="C1", selected_code="HP:0012735"),
@@ -838,7 +848,7 @@ def test_selected_openai_models_reranker_use_low_reasoning(model: str) -> None:
     assert result.selected_code == "HP:0012735"
     assert provider.call_kwargs[0]["max_tokens"] == 512
     assert provider.call_kwargs[0]["min_completion_tokens"] == 4096
-    assert provider.call_kwargs[0]["reasoning_effort"] == "low"
+    assert provider.call_kwargs[0]["reasoning_effort"] == OPENAI_REASONING_EFFORT_BY_MODEL[model]
 
 
 @pytest.mark.unit
@@ -1163,11 +1173,12 @@ def test_imported_efo_candidate_serializes_native_and_retrieval_ontology() -> No
     assert "term=Alzheimer disease" in user_message
     assert "native_ontology=MONDO" in user_message
     assert "retrieved_from_ontologies=EFO" in user_message
-    assert "already passed deterministic Python-side hard-target filtering" in user_message
-    assert "For EFO targets only" in user_message
-    assert (
-        "Do not reject an EFO-retrieved candidate solely because native_ontology is not EFO"
-    ) in user_message
+    # Prompt wording below matches assets/prompts/llm_reranker_prompt.txt's
+    # current "Eligibility context" section (shortened for token reduction
+    # in commit b7373b4; the earlier, more verbose wording no longer ships).
+    assert "already passed deterministic target-ontology filtering" in user_message
+    assert "For an EFO target, a candidate retrieved from EFO remains eligible" in user_message
+    assert "Do not reject it solely for a non-EFO native namespace" in user_message
 
 
 @pytest.mark.unit

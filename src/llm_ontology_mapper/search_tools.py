@@ -7,8 +7,13 @@ Carries only the configuration needed to call the four public APIs:
   • RxNav (RxNorm)
   • NIH Clinical Tables (ICD-10-CM)
 
-No loop state (ontologies list, SapBERT, cache, NER) lives here.
-OntologyRetriever holds those concerns and delegates search calls to this class.
+No loop state (ontologies list, SapBERT, cache, NER) lives here. In the
+planned pipeline, each public endpoint's `retrieval_sources.RetrievalSource`
+adapter (OLS4Source, LOINCSource, RxNavSource, NIHClinicalTablesSource) is a
+thin wrapper that delegates its HTTP call to the corresponding method on this
+class; PublicOntologyRetriever resolves which adapter to use for a given
+ontology entirely from ontology_config.yaml + the source registry, not from
+this module.
 """
 
 from __future__ import annotations
@@ -34,9 +39,9 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 # Bounded retry for transient public-API failures
 #
-# Applies uniformly to every SearchTools caller (OntologyMapper legacy path,
-# AgenticMapper, PublicOntologyRetriever) since it lives at the lowest level
-# that issues the actual HTTP request -- no per-caller opt-in needed for the
+# Applies uniformly to every SearchTools caller (PublicOntologyRetriever, via
+# the retrieval_sources adapters) since it lives at the lowest level that
+# issues the actual HTTP request -- no per-caller opt-in needed for the
 # retry itself. Diagnostics capture (attempts/final_error_type) is opt-in via
 # the `route_diagnostics` sink parameter so existing callers that don't pass
 # it see no change beyond the retry.

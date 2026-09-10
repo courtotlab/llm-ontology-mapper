@@ -4,41 +4,30 @@ These files are direct runnable local experiments, not pytest tests. Running
 the script is the explicit opt-in to contact live APIs or a local Ollama
 server.
 
-## AgenticMapper smoke scripts
+The only supported mapping architecture is the seven-stage planned pipeline;
+these scripts exercise it directly via:
 
-Edit the constants near the top of each script, keep credentials in environment
-variables, and run:
+```python
+OntologyMapper(retrieval_mode=...)
+```
+
+## LOINC smoke script
 
 ```bash
-uv run python tests/live/agentic_openai_smoke.py
 uv run python tests/live/loinc_smoke.py
-uv run python tests/live/agentic_ollama_smoke.py
-uv run python tests/live/agentic_experiment_smoke.py
 ```
 
 Required credentials:
 
 ```bash
-export OPENAI_API_KEY="..."       # OpenAI scripts
-export LOINC_USERNAME="..."       # LOINC cases
+export LOINC_USERNAME="..."
 export LOINC_PASSWORD="..."
 ```
 
-Local Ollama scripts normally require no secret, but Ollama must be running and
-the selected model must support tool calling.
-
 ## PlannedPipeline smoke scripts
 
-These are direct runnable manual smoke scripts for the new planned pipeline,
-not pytest tests. They intentionally use:
-
-```python
-OntologyMapper(use_planned_pipeline=True, retrieval_mode=...)
-```
-
-`AgenticMapper` is intentionally not used.
-
-Run:
+These are direct runnable manual smoke scripts for the planned pipeline, not
+pytest tests. Run:
 
 ```bash
 uv run python tests/live/planned_public_smoke.py

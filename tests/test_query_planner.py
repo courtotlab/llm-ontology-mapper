@@ -22,6 +22,7 @@ from llm_ontology_mapper.models import (
     RetrievalMode,
 )
 from llm_ontology_mapper.providers import (
+    OPENAI_REASONING_EFFORT_BY_MODEL,
     BaseLLMProvider,
     ChatMessage,
     CompletionResponse,
@@ -153,7 +154,14 @@ def test_query_planner_uses_planning_token_budget(
 
 @pytest.mark.unit
 @pytest.mark.parametrize("model", ["gpt-5.1", "gpt-5.6-luna"])
-def test_query_planner_uses_low_reasoning_for_selected_openai_models(model: str) -> None:
+def test_query_planner_uses_configured_reasoning_effort_for_selected_openai_models(
+    model: str,
+) -> None:
+    """Each model in OPENAI_REASONING_EFFORT_BY_MODEL (providers.py) has its
+    own deliberately configured effort -- gpt-5.1 uses "low", gpt-5.6-luna
+    uses "medium" -- so this asserts the planner forwards whatever that
+    shared registry says for the given model, not one hardcoded value for
+    every model."""
     provider = _NamedRecordingStubProvider(
         _SYS_BP_RESPONSE,
         model=model,
@@ -167,7 +175,7 @@ def test_query_planner_uses_low_reasoning_for_selected_openai_models(model: str)
         {
             "temperature": 0.1,
             "max_tokens": 2048,
-            "reasoning_effort": "low",
+            "reasoning_effort": OPENAI_REASONING_EFFORT_BY_MODEL[model],
         }
     ]
 

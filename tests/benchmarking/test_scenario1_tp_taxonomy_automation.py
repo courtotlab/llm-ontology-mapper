@@ -108,7 +108,10 @@ def _make_run_dir(tmp_path: Path, script_module) -> tuple[Path, dict[str, str]]:
         build_canonical_queries,
         load_raw_dataset,
     )
-    from llm_ontology_mapper.benchmarking.scenario1_metrics import PredictionRecord, score_prediction
+    from llm_ontology_mapper.benchmarking.scenario1_metrics import (
+        PredictionRecord,
+        score_prediction,
+    )
     from llm_ontology_mapper.benchmarking.scenario1_output import (
         IncrementalPredictionsCsvWriter,
         build_experiment_config,
@@ -117,7 +120,11 @@ def _make_run_dir(tmp_path: Path, script_module) -> tuple[Path, dict[str, str]]:
         write_experiment_config,
         write_unique_queries_csv,
     )
-    from llm_ontology_mapper.benchmarking.scenario1_runner import RankSlot, SapBertHealth, Scenario1RowResult
+    from llm_ontology_mapper.benchmarking.scenario1_runner import (
+        RankSlot,
+        SapBertHealth,
+        Scenario1RowResult,
+    )
 
     dataset_path = tmp_path / "mini_ols_efo.csv"
     _make_dataset_csv(dataset_path)

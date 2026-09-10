@@ -14,8 +14,9 @@ Run with:  pytest tests/test_tool_calling.py -v -m unit
 from __future__ import annotations
 
 import json
+import sys as _sys
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import httpx
 import openai
@@ -26,7 +27,6 @@ from llm_ontology_mapper.providers import (
     OllamaProvider,
     OpenAIProvider,
     ToolCall,
-    _RetryableError,
     to_provider_tools,
 )
 
@@ -329,10 +329,6 @@ def _make_anthropic_resp(blocks: list) -> MagicMock:
     resp = MagicMock()
     resp.content = blocks
     return resp
-
-
-import sys as _sys
-import types as _types
 
 
 def _fake_anthropic_module() -> MagicMock:

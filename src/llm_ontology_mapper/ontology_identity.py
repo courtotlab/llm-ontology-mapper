@@ -40,6 +40,15 @@ def _ontology_config() -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+def get_ontology_config() -> dict[str, Any]:
+    """Public accessor for the cached ontology_config.yaml contents.
+
+    Single shared load point for assets/ontology_config.yaml -- reused by
+    retrieval_sources.config instead of parsing the file a second time.
+    """
+    return _ontology_config()
+
+
 @lru_cache(maxsize=1)
 def _prefix_aliases() -> dict[str, str]:
     raw = _ontology_config().get("prefix_aliases", {})

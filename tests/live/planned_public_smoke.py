@@ -1,7 +1,7 @@
 """Manual live smoke script for planned public ontology mapping.
 
 This is a direct runnable script, not a pytest test. It intentionally uses
-OntologyMapper(use_planned_pipeline=True), not AgenticMapper.
+OntologyMapper via the planned pipeline.
 
 Run with:
     uv run python tests/live/planned_public_smoke.py
@@ -44,12 +44,12 @@ OPENAI_MODEL = "gpt-5.6-luna"
 OLLAMA_MODEL = "gpt-oss:120b"
 OLLAMA_BASE_URL = "http://localhost:11528"
 
-SOURCE_TERM = "heart_rate"
-SOURCE_LABEL = "Heart rate"
-SOURCE_DESCRIPTION = "unit is counts per minute"
+SOURCE_TERM = "systolic_bp"
+SOURCE_LABEL = ""
+SOURCE_DESCRIPTION = ""
 SOURCE_TYPE = ""
 CLINICAL_AREA = ""
-TARGET_ONTOLOGY = "LOINC"
+TARGET_ONTOLOGY = "HPO, LOINC"
 RETRIEVAL_MODE = "public"
 
 # When True, mappings must belong natively to one of the requested target

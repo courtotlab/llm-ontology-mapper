@@ -2,9 +2,9 @@
 
 LLM-powered Python library for mapping clinical and biomedical source fields to ontology identifiers. It accepts compact source terms, optional labels/descriptions, source data types, and entity/domain hints, then returns a structured `MappingResult` with the selected code, term, ontology, confidence, alternatives, notes, and runtime metadata.
 
-The current grounded path is the opt-in planned pipeline. It uses an LLM to plan ontology search, retrieves candidates from public ontology APIs or a configured local SapBERT/FAISS service, normalizes and merges candidates, and asks an LLM reranker to select only from retrieved candidates or return `UNKNOWN:UNMAPPED`. Retrieval can also be disabled for explicitly ungrounded LLM-only mapping.
+`OntologyMapper` maps every term through the seven-stage planned pipeline — its only supported mapping architecture. The pipeline uses an LLM to plan ontology search, retrieves candidates from public ontology APIs or a configured local SapBERT/FAISS service, normalizes and merges candidates, and asks an LLM reranker to select only from retrieved candidates or return `UNKNOWN:UNMAPPED`. Retrieval can also be disabled for explicitly ungrounded LLM-only mapping.
 
-The legacy `OntologyMapper` prompt flow, legacy RAG retriever, NER extractor, evaluator, validator, and tool-calling `AgenticMapper` remain available. The planned pipeline is enabled explicitly with `use_planned_pipeline=True`.
+`NERQueryExtractor`, `OntologyValidator`, and `OntologyMappingEvaluator` remain available as standalone supporting tools (see [Validation and evaluation](#validation-and-evaluation)); they are not part of the mapping pipeline itself.
 
 ## Architecture
 
@@ -58,12 +58,12 @@ For `retrieval_mode="disabled"`, the pipeline still performs query planning and 
 | `anthropic` | `anthropic` | Pass `api_key=` or set `ANTHROPIC_API_KEY` for the Anthropic SDK. |
 | `ollama` or `local` | `ollama` | Local Ollama uses the SDK default host. Pass `base_url=` for a remote/proxied server and `api_key=` for an optional bearer token. |
 
-Planned public mode uses the repository's `SearchTools` public API adapters:
+Planned public mode routes each ontology to a retrieval source entirely through `assets/ontology_config.yaml`'s per-ontology `retrieval:` block, resolved against the source registry in `retrieval_sources/registry.py` — `PublicOntologyRetriever` itself contains no ontology-specific dispatch. Adding an ontology already served by an existing source is a configuration change only; adding a new endpoint means implementing one `RetrievalSource` adapter and registering it once. The currently registered sources are:
 
-- EBI OLS4 for supported OLS ontologies such as HPO/HP, MONDO, NCIT, SNOMED, UBERON, CHEBI, GO, DOID, MESH, UO, and EFO
-- LOINC Search API for LOINC
-- RxNav for RxNorm/RxNav
-- NIH Clinical Tables for ICD-10-CM
+- `ols4` — EBI OLS4, for supported OLS ontologies such as HPO/HP, MONDO, NCIT, SNOMED, UBERON, CHEBI, GO, DOID, MESH, UO, and EFO
+- `loinc` — LOINC Search API, for LOINC
+- `rxnav` — RxNav, for RxNorm/RxNav
+- `nih_clinical_tables` — NIH Clinical Tables, for ICD-10-CM
 
 Live LOINC search uses the official LOINC Search API and requires configured service credentials:
 
@@ -108,7 +108,7 @@ For editable installation into an existing environment, run the equivalent `uv p
 
 #### Example 1: basic single-term mapping
 
-By default, `OntologyMapper.map_term()` uses the legacy LLM prompt flow.
+`OntologyMapper.map_term()` always runs the planned pipeline; `retrieval_mode` defaults to `public`.
 
 ```python
 from llm_ontology_mapper import OntologyMapper
@@ -277,13 +277,13 @@ mapper = OntologyMapper(
 | `source_type` | `map_term()` | Optional source schema/type hint such as `integer`, `radio`, or `text` |
 | `entity_type` | `map_term()` | Optional clinical/domain hint; planned mode passes this through as `clinical_area` |
 | `ontologies` | `OntologyMapper(...)` | Optional ontology scope; in planned mode, one value is a hard target constraint and multiple values are a hard allow-list |
-| `retrieval_mode` | `OntologyMapper(...)` or planned `map_term()` override | One of `public`, `local`, or `disabled`; only supported when planned mode is enabled |
-| `use_planned_pipeline` | `OntologyMapper(...)` or `map_term()` override | Enables the planned pipeline instead of the legacy mapper flow |
-| `rag_top_k` | `OntologyMapper(...)` | In legacy RAG, controls retriever top-k; in planned mode, controls max results per query/ontology route |
+| `retrieval_mode` | `OntologyMapper(...)` or `map_term()` override | One of `public`, `local`, or `disabled` |
+| `use_planned_pipeline` | `OntologyMapper(...)` or `map_term()` override | Accepted for call-site compatibility; the planned pipeline is the only supported mapping architecture, so this defaults to `True` and passing `False` raises `ValueError` instead of silently doing something else |
+| `rag_top_k` | `OntologyMapper(...)` | Controls max results per query/ontology route in the planned pipeline |
 | `max_candidates` | `OntologyMapper(...)` | Planned-mode merged candidate limit applied before reranking |
 | `max_alternatives` | `OntologyMapper(...)` | Planned-mode maximum alternatives exposed on `MappingResult` |
 | `planned_pipeline` | `OntologyMapper(...)` | Optional injected `PlannedPipeline`, useful for configuring local retrieval or tests |
-| `strict_target_ontology` | `map_term()` / `map_data_dictionary()` keyword-only | Planned-mode only. When `True`, a candidate must belong natively to a requested target ontology; disables the EFO imported-term provenance exception. Defaults to `False` (current behavior unchanged). Raises `ValueError` if requested while the planned pipeline is not in effect. |
+| `strict_target_ontology` | `map_term()` / `map_data_dictionary()` keyword-only | When `True`, a candidate must belong natively to a requested target ontology; disables the EFO imported-term provenance exception. Defaults to `False` (current behavior unchanged). |
 
 Current public signatures:
 
@@ -356,11 +356,9 @@ result = mapper.map_term("disease")
 result = mapper.map_term("disease", strict_target_ontology=True)
 ```
 
-### Legacy mapper flow
+### Interactive exploration
 
-Without `use_planned_pipeline=True`, `OntologyMapper.map_term()` uses the legacy prompt/response flow. Legacy RAG can still be enabled with `use_rag=True` and an `ontology_retriever`, and the older `OntologyRetriever`, `NERQueryExtractor`, validator, evaluator, and `AgenticMapper` remain available.
-
-For batch mapping, legacy RAG-enhanced mapping, evaluation, and code validation, try the interactive notebook:
+For interactive exploration of mapping, code validation, and evaluation, try the notebook:
 
 ```bash
 jupyter lab jupyter_notebook/playground.ipynb
@@ -376,12 +374,20 @@ llm-ontology-mapper/
 │   ├── __init__.py                 # Public API exports
 │   ├── models.py                   # Pydantic schemas: MappingResult, QueryPlan, candidates, traces
 │   ├── providers.py                # LLM backends (OpenAI / Anthropic / Ollama) + factory
-│   ├── mapper.py                   # OntologyMapper public wrapper; legacy and planned entry point
+│   ├── mapper.py                   # OntologyMapper public wrapper; planned pipeline entry point
 │   ├── planned_pipeline.py         # PlannedPipeline orchestrator
 │   ├── query_planner.py            # Layer 1 LLM query planning
 │   ├── retrieval_router.py         # Layer 2 retrieval route planning
-│   ├── search_tools.py             # Public ontology API adapters
-│   ├── public_retriever.py         # Public API retrieval wrapper
+│   ├── search_tools.py             # Public ontology API HTTP layer (used by retrieval_sources adapters)
+│   ├── retrieval_sources/          # Config/registry-driven public retrieval-source adapters
+│   │   ├── protocol.py             # RetrievalSource adapter contract
+│   │   ├── registry.py             # The one source-registration location
+│   │   ├── config.py               # ontology_config.yaml retrieval-block resolution/validation
+│   │   ├── ols4.py                 # EBI OLS4 adapter
+│   │   ├── loinc.py                # LOINC Search API adapter
+│   │   ├── rxnav.py                # RxNav adapter
+│   │   └── nih_clinical_tables.py  # NIH Clinical Tables (ICD-10-CM) adapter
+│   ├── public_retriever.py         # Public API retrieval wrapper (config/registry-driven dispatch)
 │   ├── local_retriever.py          # Local SapBERT/FAISS retrieval wrapper
 │   ├── candidate_normalizer.py     # Raw candidate -> NormalizedCandidate
 │   ├── candidate_merger.py         # Deduplication, target filtering, ranking
@@ -390,19 +396,15 @@ llm-ontology-mapper/
 │   ├── llm_reranker.py             # Grounded reranking over retrieved candidates
 │   ├── mapping_result_builder.py   # Grounded decision -> MappingResult
 │   ├── disabled_mapping.py         # Disabled retrieval / LLM-only result path
-│   ├── agentic_mapper.py           # Tool-calling search loop, separate from planned pipeline
-│   ├── retriever.py                # Legacy RAG retriever
 │   ├── validator.py                # Standalone ontology code existence checker
 │   ├── evaluator.py                # Benchmark accuracy measurement
-│   ├── ner_extractor.py            # Optional scispaCy NER extractor for legacy workflows
+│   ├── ner_extractor.py            # Optional scispaCy NER extractor (standalone, not used by the planned pipeline)
 │   └── assets/
-│       ├── ontology_config.yaml
+│       ├── ontology_config.yaml    # Ontology metadata + retrieval.source routing (single source of truth)
 │       └── prompts/
 │           ├── query_planner_prompt.txt
 │           ├── llm_reranker_prompt.txt
-│           ├── disabled_mapping_prompt.txt
-│           ├── mapping_prompt.txt
-│           └── rag_prompt.txt
+│           └── disabled_mapping_prompt.txt
 ├── jupyter_notebook/
 │   └── playground.ipynb
 ├── tests/
@@ -434,11 +436,11 @@ llm-ontology-mapper/
 
 | Value | Meaning |
 |---|---|
-| `llm` | LLM-only mapping. In planned mode this is used by `retrieval_mode="disabled"` and is explicitly ungrounded. The legacy non-RAG prompt flow also produces `llm`. |
-| `rag` | Retrieval-aware mapping. Legacy RAG responses can produce it, and planned public/local mode uses it for both selected retrieved candidates and grounded-policy `UNKNOWN:UNMAPPED` outcomes. |
+| `llm` | LLM-only mapping, produced by `retrieval_mode="disabled"`; explicitly ungrounded. |
+| `rag` | Retrieval-aware mapping. Planned public/local mode uses it for both selected retrieved candidates and grounded-policy `UNKNOWN:UNMAPPED` outcomes. |
 | `direct` | Enum value retained for compatibility; it is not produced by the current planned pipeline. |
 | `hybrid` | Enum value retained for compatibility; the planned pipeline does not expose a public+local hybrid mode. |
-| `agentic` | Successful tool-calling `AgenticMapper` result, separate from the planned pipeline. |
+| `agentic` | Enum value retained for compatibility; no longer produced now that the tool-calling `AgenticMapper` architecture has been removed. |
 
 ### Debugging and observability
 

@@ -16,6 +16,18 @@
 # - EFO: Experimental Factor Ontology
 
 # Ontology metadata
+#
+# retrieval:
+#   The single authoritative home for "which public retrieval source serves
+#   this ontology". `source` must be a key registered in
+#   llm_ontology_mapper.retrieval_sources.registry. `source_ontology_id` is
+#   the identifier to pass to that source's adapter; when omitted it defaults
+#   to this ontology's own config key (most sources use the mapper's
+#   canonical name as-is -- SNOMED-CT is the one existing exception, since
+#   OLS4 knows it as "SNOMED" not "SNOMED-CT"). `aliases` lists additional
+#   raw ontology spellings (beyond canonical_ontology()'s own prefix_aliases)
+#   that should resolve to this same retrieval entry -- used only for
+#   retrieval routing, not for global ontology identity.
 ontologies:
   HPO:
     full_name: "Human Phenotype Ontology"
@@ -25,7 +37,9 @@ ontologies:
       - "Symptoms and clinical signs"
       - "Phenotypic features"
       - "Clinical observations"
-  
+    retrieval:
+      source: ols4
+
   MONDO:
     full_name: "Mondo Disease Ontology"
     description: "Disease and disorder classification"
@@ -34,7 +48,9 @@ ontologies:
       - "Disease diagnoses"
       - "Medical conditions"
       - "Comorbidities"
-  
+    retrieval:
+      source: ols4
+
   NCIT:
     full_name: "NCI Thesaurus"
     description: "Cancer and clinical terminology"
@@ -43,7 +59,9 @@ ontologies:
       - "Cancer types"
       - "Treatments and procedures"
       - "Clinical trials terminology"
-  
+    retrieval:
+      source: ols4
+
   LOINC:
     full_name: "Logical Observation Identifiers Names and Codes"
     description: "Laboratory and clinical observations"
@@ -52,7 +70,9 @@ ontologies:
       - "Laboratory tests"
       - "Vital signs"
       - "Clinical measurements"
-  
+    retrieval:
+      source: loinc
+
   UO:
     full_name: "Units of Measurement Ontology"
     description: "Standardized units of measurement"
@@ -60,7 +80,9 @@ ontologies:
     use_cases:
       - "Measurement units"
       - "Quantities and dimensions"
-  
+    retrieval:
+      source: ols4
+
   ICD10:
     full_name: "International Classification of Diseases, 10th Revision"
     description: "WHO disease classification system"
@@ -68,7 +90,10 @@ ontologies:
     use_cases:
       - "Disease coding for billing"
       - "Diagnosis classification"
-  
+    retrieval:
+      source: nih_clinical_tables
+      aliases: [ICD, "ICD-10", "ICD-10-CM"]
+
   SNOMED-CT:
     full_name: "SNOMED Clinical Terms"
     description: "Comprehensive clinical terminology"
@@ -79,7 +104,12 @@ ontologies:
       - "Medications"
       - "Chemical compounds"
       - "Biochemical entities"
-  
+    retrieval:
+      source: ols4
+      # OLS4's own ontology id for SNOMED CT is "snomed", not "snomed-ct".
+      source_ontology_id: SNOMED
+      aliases: [SNOMED, SNOMEDCT]
+
   RxNorm:
     full_name: "RxNorm"
     description: "Normalized names for clinical drugs"
@@ -87,6 +117,9 @@ ontologies:
     use_cases:
       - "Medication names"
       - "Drug prescriptions"
+    retrieval:
+      source: rxnav
+      aliases: [RXNORM, RXNAV, RXCUI]
 
   EFO:
     full_name: "Experimental Factor Ontology"
@@ -95,6 +128,54 @@ ontologies:
     use_cases:
       - "Experimental factors"
       - "Biomedical study variables"
+    retrieval:
+      source: ols4
+
+  UBERON:
+    full_name: "Uberon Multi-species Anatomy Ontology"
+    description: "Cross-species anatomical structures"
+    curie_prefix: "UBERON"
+    use_cases:
+      - "Anatomical structures"
+    retrieval:
+      source: ols4
+
+  CHEBI:
+    full_name: "Chemical Entities of Biological Interest"
+    description: "Chemical entities and their roles"
+    curie_prefix: "CHEBI"
+    use_cases:
+      - "Chemicals and drugs"
+    retrieval:
+      source: ols4
+
+  GO:
+    full_name: "Gene Ontology"
+    description: "Gene product functions, processes, and cellular components"
+    curie_prefix: "GO"
+    use_cases:
+      - "Molecular functions"
+      - "Biological processes"
+    retrieval:
+      source: ols4
+
+  DOID:
+    full_name: "Human Disease Ontology"
+    description: "Human disease classification"
+    curie_prefix: "DOID"
+    use_cases:
+      - "Disease classification"
+    retrieval:
+      source: ols4
+
+  MESH:
+    full_name: "Medical Subject Headings"
+    description: "NLM controlled vocabulary thesaurus"
+    curie_prefix: "MESH"
+    use_cases:
+      - "Biomedical literature indexing terms"
+    retrieval:
+      source: ols4
 
 # =============================================================================
 # PREFIX ALIASES
@@ -145,20 +226,11 @@ prefix_aliases:
 # EXTERNAL API MAPPINGS
 # =============================================================================
 # Maps our ontology keys to external API identifiers
-
-# EBI OLS API ontology IDs (lowercase)
-ols_api_map:
-  HPO: hp
-  MONDO: mondo
-  NCIT: ncit
-  SNOMED-CT: snomed
-  UO: uo
-  UBERON: uberon
-  CHEBI: chebi
-  GO: go
-  DOID: doid
-  MESH: mesh
-  EFO: efo
+#
+# NOTE: OLS4 ontology ids now live on each ontology's own `retrieval` block
+# above (source_ontology_id) -- this used-to-be `ols_api_map` block was never
+# actually read by production code and has been removed rather than kept as
+# a second, unused copy of the same data.
 
 # BioPortal API ontology acronyms (uppercase)
 bioportal_api_map:

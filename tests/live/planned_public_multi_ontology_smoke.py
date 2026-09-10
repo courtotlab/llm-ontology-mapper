@@ -1,7 +1,7 @@
 """Manual live smoke script for planned public multi-ontology mapping.
 
 This is a direct runnable script, not a pytest test. It intentionally uses
-OntologyMapper(use_planned_pipeline=True), not AgenticMapper.
+OntologyMapper via the planned pipeline.
 
 Run with:
     uv run python tests/live/planned_public_multi_ontology_smoke.py
@@ -289,13 +289,20 @@ def _add_ontology(target: set[str], value: object) -> None:
 
 
 def _planner_retrieval_debug(info: dict[str, Any]) -> dict[str, Any]:
+    """result_is_grounded/result_grounding_source (from the reranker's final
+    decision) and retrieval_is_grounded/retrieval_grounding_source (from the
+    nested RetrievalTrace) are deliberately different concepts and may
+    disagree -- e.g. retrieval succeeds but the reranker abstains. See
+    _planned_smoke_helpers.print_trace_summary for the full explanation."""
     retrieval_trace = info.get("retrieval_trace", {}) or {}
     query_plan = retrieval_trace.get("query_plan", {}) or info.get("query_plan", {}) or {}
     return {
         "query_plan": query_plan,
         "retrieval_mode": info.get("retrieval_mode"),
-        "grounding_source": info.get("grounding_source"),
-        "is_grounded": info.get("is_grounded"),
+        "result_is_grounded": info.get("is_grounded"),
+        "result_grounding_source": info.get("grounding_source"),
+        "retrieval_is_grounded": retrieval_trace.get("is_grounded"),
+        "retrieval_grounding_source": retrieval_trace.get("grounding_source"),
         "candidate_count": info.get("candidate_count"),
         "raw_candidate_count": retrieval_trace.get("raw_candidate_count"),
         "merged_candidate_count": retrieval_trace.get("merged_candidate_count"),
