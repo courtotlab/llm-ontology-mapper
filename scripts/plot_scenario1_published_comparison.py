@@ -36,12 +36,18 @@ Usage
     uv run python scripts/fetch_text2term_evaluation_outputs.py   # one-time, network step
 
     uv run python scripts/plot_scenario1_published_comparison.py \\
-        --ols-dir outputs/evaluation/scenario1_ols_efo/2026-08-26T15-04-18Z \\
-        --ukbb-dir outputs/evaluation/scenario1_ukbb_efo/2026-08-31T13-54-53Z \\
-        --biomappings-dir outputs/evaluation/scenario1_biomappings_efo/2026-08-31T16-10-24Z \\
+        --ols-dir outputs/evaluation/scenario1_ols_efo_patched/2026-09-04T18-00-45Z \\
+        --ukbb-dir outputs/evaluation/scenario1_ukbb_efo_patched/2026-09-04T17-41-38Z \\
+        --biomappings-dir outputs/evaluation/scenario1_biomappings_efo_patched/2026-09-04T17-45-52Z \\
         --baselines outputs/evaluation_figures/scenario1/published_comparison/data/published_baselines_used.csv \\
         --text2term-graph-baseline outputs/evaluation_figures/scenario1/published_comparison/data/text2term_graph_relationship_baseline.csv \\
         --text2term-data data/text2term_evaluation/original_outputs
+
+    NOTE: the directories above are the UNMAPPED-rows-patched EFO runs (see
+    llm_ontology_mapper.benchmarking.scenario1_patch) -- the UKBB-EFO patched
+    directory also already incorporates the prior gold-parsing-bug correction
+    (scenario1_ukbb_efo_gold_corrected), so it alone should be used for UKBB,
+    never the plain original run or the gold-corrected run directly.
 
 Optional:
     --output-dir outputs/evaluation_figures/scenario1/published_comparison   (default)

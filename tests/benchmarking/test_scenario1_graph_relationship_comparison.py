@@ -354,6 +354,38 @@ def test_ukbb_and_biomappings_are_single_gold_only(tmp_path: Path) -> None:
     assert gc.load_gold_count_distribution(biomappings_dir) == {1: 795}
 
 
+def test_multi_gold_audit_prose_reflects_ukbb_multi_gold_after_correction(tmp_path: Path) -> None:
+    """Regression guard: the multi-gold-audit sentence in the base
+    graph-relationship section must never again hardcode "UKBB-EFO and
+    Biomappings-EFO are 100% single-gold" -- once UKBB's dataset_validation.json
+    correctly reports multi-gold queries (post gold-parsing-bug fix), the
+    generated prose must say so dynamically instead."""
+    run_dirs = _make_all_graph_run_dirs(
+        tmp_path,
+        **{
+            "OLS-EFO (full)": {"gold_count_distribution": {1: 7257, 2: 113, 3: 7}},
+            "UKBB-EFO": {"gold_count_distribution": {1: 883, 2: 5}},
+        },
+    )
+    baseline_csv = tmp_path / "text2term_graph_baseline.csv"
+    _write_text2term_graph_baseline_csv(baseline_csv)
+    output_dir = tmp_path / "figures_out"
+    figures_md = output_dir / "FIGURES.md"
+    figures_md.parent.mkdir(parents=True, exist_ok=True)
+    figures_md.write_text("# base\n", encoding="utf-8")
+
+    gc.build_all(
+        ols_dir=run_dirs["OLS-EFO (full)"], ukbb_dir=run_dirs["UKBB-EFO"], biomappings_dir=run_dirs["Biomappings-EFO"],
+        text2term_baseline_path=baseline_csv, output_dir=output_dir, figures_md_path=figures_md,
+    )
+    text = figures_md.read_text(encoding="utf-8")
+
+    assert "UKBB-EFO and Biomappings-EFO are 100% single-gold" not in text
+    assert "UKBB-EFO includes multi-gold queries" in text
+    assert "5 with 2 acceptable golds" in text
+    assert "Biomappings-EFO is 100% single-gold" in text
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 17-20. no raw-file parsing, no fuzzy matching, no forced alignment, no Figure 15
 # ─────────────────────────────────────────────────────────────────────────────

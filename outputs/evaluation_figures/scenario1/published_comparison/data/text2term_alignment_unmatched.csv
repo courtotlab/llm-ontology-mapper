@@ -5,6 +5,11 @@ UKBB-EFO,t2t,Getting up in morning,EFO:0009817,no exact identity match in our si
 UKBB-EFO,t2t,Number of stillbirths,EFO:0009722,no exact identity match in our single-gold subset
 UKBB-EFO,t2t,Bring up phlegm/sputum/mucus on most days,EFO:0009824,no exact identity match in our single-gold subset
 UKBB-EFO,t2t,Volume_depletion,HP0011106,no exact identity match in our single-gold subset
+UKBB-EFO,t2t,Malaise and fatigue,HP:0012378 | EFO:0009641,no exact identity match in our single-gold subset
+UKBB-EFO,t2t,Other acquired deformities of musculoskeletal system and connective tissue,EFO:0009676 | EFO:1001986,no exact identity match in our single-gold subset
+UKBB-EFO,t2t,Other diseases of anus and rectum,EFO:0009660 | EFO:0009685,no exact identity match in our single-gold subset
+UKBB-EFO,t2t,Otalgia and effusion of ear,HP:0030766 | EFO:0007415,no exact identity match in our single-gold subset
+UKBB-EFO,t2t,Paraplegia and tetraplegia,EFO:0009679 | EFO:0009684,no exact identity match in our single-gold subset
 Biomappings-EFO,ours,RD,EFO:0002315,no exact identity match
 OLS-EFO (full),ours,?瘡,EFO:0003894,no exact identity match
 OLS-EFO (full),ours,A血型,EFO:0600060,no exact identity match

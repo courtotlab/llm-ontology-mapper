@@ -44,12 +44,12 @@ OPENAI_MODEL = "gpt-5.6-luna"
 OLLAMA_MODEL = "gpt-oss:120b"
 OLLAMA_BASE_URL = "http://localhost:11528"
 
-SOURCE_TERM = "vaping"
-SOURCE_LABEL = "Vaping"
-SOURCE_DESCRIPTION = ""
+SOURCE_TERM = "heart_rate"
+SOURCE_LABEL = "Heart rate"
+SOURCE_DESCRIPTION = "unit is counts per minute"
 SOURCE_TYPE = ""
 CLINICAL_AREA = ""
-TARGET_ONTOLOGY = "SNOMED"
+TARGET_ONTOLOGY = "LOINC"
 RETRIEVAL_MODE = "public"
 
 # When True, mappings must belong natively to one of the requested target

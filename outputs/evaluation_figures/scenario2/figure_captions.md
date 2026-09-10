@@ -12,6 +12,10 @@ Public=blue, Local=orange, Disabled=bluish-green (Okabe-Ito palette).
 - **Top-1**: exact match between the top-ranked predicted code and any
   acceptable gold code for that row (`semantic_correctness`, locked identical
   to `top1_hit`). An ontology-valid but semantically wrong code is NOT correct.
+- **Top-3 / Top-5**: an acceptable gold code appears among the FINAL
+  `rank_1`..`rank_3` / `rank_1`..`rank_5` predicted codes (`top3_hit` /
+  `top5_hit`) -- the same final mapper ranking Top-1 uses, never raw
+  retrieval-stage rank or candidate ordering.
 - **Abstention**: the pipeline declined to map (`status="unmapped"`) or
   returned the `UNKNOWN:UNMAPPED` sentinel. Execution errors are a distinct
   outcome and are never counted as an abstention.
@@ -68,6 +72,16 @@ and ICD10 (n=16) are far smaller strata than HPO (n=64), MONDO (n=49), and
 LOINC (n=47); percentages in the small strata should not be over-interpreted
 as precisely as the larger ones.
 
+**figure_07_ontology_top3_top5_heatmap.** Top-3 (panel A) and Top-5 (panel B)
+accuracy by `target_ontology` and mode, recomputed directly from each mode's
+`predictions.csv` using the same `_build_ontology_topk()` grouping Figure 5's
+Top-1 heatmap uses -- identical mode/ontology ordering, per-ontology N,
+"{:.0%}" annotation style, fixed 0-1 `Blues` color range, and blank treatment for
+undefined cells. Figure 5 itself is unchanged and remains the Top-1 heatmap;
+this is an additional figure, not a replacement. The two panels share one
+colorbar since both use the identical 0-1 accuracy scale. Data also written to
+`data/ontology_top3_top5_by_mode.csv`.
+
 **figure_06_paired_correctness_transitions.** Three 2x2 matrices (Public vs
 Local, Public vs Disabled, Local vs Disabled), built from
 `scenario2_compare.build_paired_predictions()` over the same 218 paired rows.
@@ -97,8 +111,8 @@ A per-stage (planner/retrieval/reranker/LLM) stacked breakdown across all
 three modes, matching `figure_05_latency_breakdown` in the model-comparison
 figures, was deliberately NOT built: `retrieval_seconds`/`reranker_seconds`
 are inapplicable by design for Disabled (no retrieval stage), and
-`planner_seconds`/`llm_seconds` are populated for only 13/218
-and 13/218 rows respectively in the Disabled run -- exactly its
+`planner_seconds`/`llm_seconds` are populated for only 0/218
+and 0/218 rows respectively in the Disabled run -- exactly its
 13 execution-error rows, not a representative sample of its 218 mapped/
 unmapped/error outcomes. Public and Local do have complete stage timing;
 their breakdown is written to

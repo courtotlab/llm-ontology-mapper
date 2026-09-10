@@ -29,9 +29,9 @@ OM and text2term values come from a single structured CSV, `published_baselines_
 
 Our Top-1/Top-3/Top-5/MRR values come from these exact completed Scenario 1 runs' `scenario1_metrics.csv`, reconciled against each run's own `predictions.csv` using the unmodified `scenario1_metrics.score_prediction`/`aggregate` utilities:
 
-- **UKBB-EFO**: `outputs/evaluation/scenario1_ukbb_efo/2026-08-31T13-54-53Z`
-- **Biomappings-EFO**: `outputs/evaluation/scenario1_biomappings_efo/2026-08-31T16-10-24Z`
-- **OLS-EFO (full)**: `outputs/evaluation/scenario1_ols_efo/2026-08-26T15-04-18Z`
+- **UKBB-EFO**: `outputs/evaluation/scenario1_ukbb_efo_patched/2026-09-04T17-41-38Z`
+- **Biomappings-EFO**: `outputs/evaluation/scenario1_biomappings_efo_patched/2026-09-04T17-45-52Z`
+- **OLS-EFO (full)**: `outputs/evaluation/scenario1_ols_efo_patched/2026-09-04T18-00-45Z`
 
 Derived from those runs' `experiment_config.json` (not hardcoded): model=`gpt-5.6-luna`, retrieval_mode=`local`, target_ontology=`EFO`, strict_target_ontology=`False`. All three runs share this configuration; see `data/our_scenario1_metrics_used.csv` for the per-benchmark values.
 
@@ -229,9 +229,9 @@ Each method's four bins are checked to sum to 1.0 within a 0.01 tolerance (publi
 
 **Caveats.** ΔMRR is not plotted here (it is a raw unit-fraction difference, not percentage points) -- see the per-benchmark ΔMRR list below and data/delta_vs_metaharmonizer.csv.
 
-- UKBB-EFO: ΔTop-1=+1.2 pp, ΔTop-3=+1.7 pp, ΔTop-5=+0.4 pp, ΔMRR=+0.014
-- Biomappings-EFO: ΔTop-1=-0.2 pp, ΔTop-3=-1.6 pp, ΔTop-5=-2.1 pp, ΔMRR=-0.009
-- OLS-EFO (full): ΔTop-1=-5.7 pp, ΔTop-3=-5.7 pp, ΔTop-5=-6.1 pp, ΔMRR=-0.057
+- UKBB-EFO: ΔTop-1=+1.3 pp, ΔTop-3=+2.4 pp, ΔTop-5=+1.1 pp, ΔMRR=+0.018
+- Biomappings-EFO: ΔTop-1=+0.6 pp, ΔTop-3=-0.3 pp, ΔTop-5=-0.8 pp, ΔMRR=+0.001
+- OLS-EFO (full): ΔTop-1=-5.6 pp, ΔTop-3=-5.5 pp, ΔTop-5=-5.9 pp, ΔMRR=-0.056
 
 **Source data**
 - data/delta_vs_metaharmonizer.csv
@@ -258,9 +258,9 @@ Each method's four bins are checked to sum to 1.0 within a 0.01 tolerance (publi
 
 **Caveats.** ΔMRR is not plotted (unit-fraction difference, not percentage points) -- see below and data/delta_vs_text2term.csv.
 
-- UKBB-EFO: ΔTop-1=+7.5 pp, ΔTop-3=+7.7 pp, ΔTop-5=+6.5 pp, ΔMRR=+0.075
-- Biomappings-EFO: ΔTop-1=+16.2 pp, ΔTop-3=+6.9 pp, ΔTop-5=+3.4 pp, ΔMRR=+0.112
-- OLS-EFO (full): ΔTop-1=+4.2 pp, ΔTop-3=+2.3 pp, ΔTop-5=+1.8 pp, ΔMRR=+0.033
+- UKBB-EFO: ΔTop-1=+7.6 pp, ΔTop-3=+8.4 pp, ΔTop-5=+7.2 pp, ΔMRR=+0.079
+- Biomappings-EFO: ΔTop-1=+17.0 pp, ΔTop-3=+8.2 pp, ΔTop-5=+4.7 pp, ΔMRR=+0.122
+- OLS-EFO (full): ΔTop-1=+4.3 pp, ΔTop-3=+2.5 pp, ΔTop-5=+2.0 pp, ΔMRR=+0.034
 
 **Source data**
 - data/delta_vs_text2term.csv
@@ -429,8 +429,8 @@ Our own graph-distance summary's denominator audit (Part 5) confirmed that `sum(
 | Benchmark | Total n | Mapped | Unmapped | Execution error | No Top-1 prediction |
 | --- | --- | --- | --- | --- | --- |
 | UKBB-EFO | 888 | 884 | 4 | 0 | 4 |
-| Biomappings-EFO | 795 | 781 | 14 | 0 | 14 |
-| OLS-EFO (full) | 7,377 | 7,262 | 115 | 0 | 115 |
+| Biomappings-EFO | 795 | 787 | 8 | 0 | 8 |
+| OLS-EFO (full) | 7,377 | 7,277 | 100 | 0 | 100 |
 
 ## Comparability limitations
 
@@ -444,10 +444,10 @@ Our own graph-distance summary's denominator audit (Part 5) confirmed that `sum(
 - **OLS-EFO denominator mismatch -- THREE different OLS numbers appear across this whole figure suite, and they must not be confused:** our controlled-comparison/graph-distance N is n=7,377 unique queries (Figures 1-14); the MetaHarmonizer-controlled text2term rerun used for the Top-k comparison (Figures 1, 5, 8, 12) reports n=7,504 mapping pairs; and the *original* text2term publication's own OLS-EFO graph-relationship evaluation used n=8,143 rows -- a materially different, larger set than either of the other two. All three are legitimate numbers from different sources/protocols, never interchangeable.
 - **Biomappings-EFO appears most directly comparable**: our n and the original text2term n are both 795, though this equality of N alone is not proof of identical row identity (see common-query alignment below).
 - **Original text2term protocol was single-gold only.** The original text2term paper's comparison was limited to queries with exactly one benchmark mapping. Our own gold-count audit (`data/our_multi_gold_audit.csv`):
-  - UKBB-EFO: 888 queries with 1 gold
+  - UKBB-EFO: 883 queries with 1 gold, 5 queries with 2 gold
   - Biomappings-EFO: 795 queries with 1 gold
   - OLS-EFO (full): 7,257 queries with 1 gold, 113 queries with 2 gold, 7 queries with 3 gold
-  OLS-EFO (full) includes multi-gold queries (113 with 2 acceptable golds, 7 with 3), so our full-run OLS-EFO graph distribution is not perfectly protocol-identical to the original text2term Table 1 distribution even where n happened to align; UKBB-EFO and Biomappings-EFO are 100% single-gold, matching the original text2term protocol on this dimension.
+  UKBB-EFO includes multi-gold queries (5 with 2 acceptable golds); OLS-EFO (full) includes multi-gold queries (113 with 2 acceptable golds, 7 with 3 acceptable golds), so those full-run graph distributions are not perfectly protocol-identical to the original text2term Table 1 distribution even where n happened to align; Biomappings-EFO is 100% single-gold, matching the original text2term protocol on this dimension.
 - **The original text2term run used here is NOT the MetaHarmonizer-controlled t2t rerun** used everywhere else in this suite -- see the table at the top of this section.
 
 ## Common-query alignment audit
@@ -524,13 +524,13 @@ Exact-duplicate upstream rows (identical source term, gold, t2t prediction, AND 
 
 ## OLS-EFO single-gold restriction
 
-The original text2term protocol evaluated each benchmark record against exactly one benchmark mapping. Our OLS-EFO Scenario 1 run supports multiple acceptable golds per query (7,257 single-gold, 113 with 2 golds, 7 with 3), which would silently advantage our method if multi-gold queries were included in a comparison against text2term's single-gold protocol. The PRIMARY strict OLS-EFO alignment is therefore restricted to our 7,257 single-gold queries only; multi-gold queries are excluded from this alignment entirely (not scored, not credited, not penalized). UKBB-EFO and Biomappings-EFO required no such restriction -- both are verified 100% single-gold by their own `original_mapping_pair_count` field in `unique_queries.csv` (the same field/definition `dataset_validation.json`'s `gold_count_distribution` uses; naively counting `|` characters in the `gold_codes` string is NOT equivalent -- a handful of UKBB-EFO rows carry a single canonical gold whose own composite source-benchmark label happens to already contain literal `|` text).
+The original text2term protocol evaluated each benchmark record against exactly one benchmark mapping. Our OLS-EFO Scenario 1 run supports multiple acceptable golds per query (7,257 single-gold, 113 with 2 golds, 7 with 3), which would silently advantage our method if multi-gold queries were included in a comparison against text2term's single-gold protocol. The PRIMARY strict OLS-EFO alignment is therefore restricted to our 7,257 single-gold queries only; multi-gold queries are excluded from this alignment entirely (not scored, not credited, not penalized). UKBB-EFO has 5 multi-gold queries out of 888 and is restricted to its 883 single-gold queries for this alignment, exactly like OLS-EFO; Biomappings-EFO is verified 100% single-gold -- every benchmark's single-gold status is read from its own `original_mapping_pair_count` field in `unique_queries.csv` (the same field/definition `dataset_validation.json`'s `gold_count_distribution` uses; naively counting `|` characters in the `gold_codes` string is NOT equivalent -- a handful of UKBB-EFO rows carry a single canonical gold whose own composite source-benchmark label happens to already contain literal `|` text).
 
 ## Alignment quality
 
 | Benchmark | Our N | t2t N | Our single-gold N | Candidate matches | Strict matched N | Ambiguous | Gold mismatch | Match rate (ours) | Quality |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| UKBB-EFO | 888 | 899 | 888 | 888 | 888 | 0 | 0 | 100.0% | **STRONG** |
+| UKBB-EFO | 893 | 899 | 883 | 883 | 883 | 0 | 0 | 100.0% | **STRONG** |
 | Biomappings-EFO | 795 | 795 | 795 | 794 | 794 | 0 | 0 | 99.9% | **STRONG** |
 | OLS-EFO (full) | 7,504 | 8,143 | 7,257 | 7,255 | 7,255 | 0 | 0 | 100.0% | **STRONG** |
 
@@ -552,7 +552,7 @@ For every STRICT matched row, text2term's own stored `Classification` was compar
 
 | Benchmark | Matched N | Agreement N | Disagreement N | Agreement rate |
 | --- | --- | --- | --- | --- |
-| UKBB-EFO | 888 | 888 | 0 | 100.00% |
+| UKBB-EFO | 883 | 883 | 0 | 100.00% |
 | Biomappings-EFO | 794 | 794 | 0 | 100.00% |
 | OLS-EFO (full) | 7,255 | 7,255 | 0 | 100.00% |
 
@@ -562,11 +562,11 @@ High agreement here is strong evidence that this repository's from-scratch reimp
 
 | Benchmark | Method | Same | More Specific | More General | Sibling | Unrelated | No Top-1 prediction |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| UKBB-EFO | LLM Ontology Mapper | 79.2% | 1.7% | 2.7% | 1.4% | 14.6% | 0.5% |
-| UKBB-EFO | text2term | 73.2% | 4.1% | 2.3% | 1.5% | 19.0% | 0.0% |
-| Biomappings-EFO | LLM Ontology Mapper | 95.5% | 0.0% | 0.1% | 0.5% | 2.1% | 1.8% |
+| UKBB-EFO | LLM Ontology Mapper | 79.6% | 1.7% | 2.7% | 1.4% | 14.3% | 0.3% |
+| UKBB-EFO | text2term | 73.6% | 4.1% | 2.3% | 1.5% | 18.6% | 0.0% |
+| Biomappings-EFO | LLM Ontology Mapper | 96.2% | 0.0% | 0.1% | 0.5% | 2.1% | 1.0% |
 | Biomappings-EFO | text2term | 78.7% | 0.0% | 0.3% | 5.9% | 15.1% | 0.0% |
-| OLS-EFO (full) | LLM Ontology Mapper | 83.6% | 0.7% | 0.9% | 0.5% | 12.7% | 1.5% |
+| OLS-EFO (full) | LLM Ontology Mapper | 83.7% | 0.7% | 0.9% | 0.5% | 12.9% | 1.3% |
 | OLS-EFO (full) | text2term | 81.0% | 0.6% | 1.2% | 1.1% | 16.0% | 0.0% |
 
 ## Paired exact-match transitions and McNemar's test
@@ -575,17 +575,17 @@ Because aligned rows are paired (both methods scored on the identical record), r
 
 | Benchmark | Both exact | Ours only | text2term only | Neither | Aligned N |
 | --- | --- | --- | --- | --- | --- |
-| UKBB-EFO | 616 | 87 | 34 | 151 | 888 |
-| Biomappings-EFO | 601 | 157 | 24 | 12 | 794 |
-| OLS-EFO (full) | 5,742 | 326 | 136 | 1,051 | 7,255 |
+| UKBB-EFO | 616 | 87 | 34 | 146 | 883 |
+| Biomappings-EFO | 605 | 159 | 20 | 10 | 794 |
+| OLS-EFO (full) | 5,744 | 328 | 134 | 1,049 | 7,255 |
 
 **McNemar's exact test** (binomial, on the discordant pairs -- appropriate specifically because Top-1-exact correctness is paired on identical records here):
 
 | Benchmark | Ours-only correct | text2term-only correct | Discordant N | p-value |
 | --- | --- | --- | --- | --- |
 | UKBB-EFO | 87 | 34 | 121 | 1.57e-06 |
-| Biomappings-EFO | 157 | 24 | 181 | 3.84e-25 |
-| OLS-EFO (full) | 326 | 136 | 462 | 4.57e-19 |
+| Biomappings-EFO | 159 | 20 | 179 | 4.64e-28 |
+| OLS-EFO (full) | 328 | 134 | 462 | 7.72e-20 |
 
 A small p-value indicates the discordant pairs are asymmetric beyond chance -- it does NOT by itself establish which method is better in any absolute sense, only that the two methods' Top-1-exact outcomes disagree asymmetrically on this aligned set.
 

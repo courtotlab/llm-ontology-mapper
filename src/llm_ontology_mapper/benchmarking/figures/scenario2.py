@@ -352,11 +352,15 @@ def fig_s2d_reliability_diagram(runs: dict[str, LoadedRun], output_dir: Path) ->
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def build_ontology_top1(runs: dict[str, LoadedRun]) -> tuple[list[dict[str, Any]], list[str]]:
+def _build_ontology_topk(runs: dict[str, LoadedRun], hit_field: str) -> tuple[list[dict[str, Any]], list[str]]:
     """Returns (rows, ontology_order). rows: one dict per (mode, ontology)
-    with n and top1_accuracy, both derived directly from predictions.csv
-    (never hardcoded). ontology_order follows EXPECTED_ONTOLOGY_ORDER
-    filtered/extended to whatever is actually present in the data."""
+    with n and accuracy (mean of `hit_field` over that group), both derived
+    directly from predictions.csv (never hardcoded). `hit_field` selects which
+    RowMetrics attribute to average -- "top1_hit", "top3_hit", or "top5_hit"
+    -- all of which score_prediction() derives from the FINAL rank_1..rank_5
+    columns (never raw retrieval rank). ontology_order follows
+    EXPECTED_ONTOLOGY_ORDER filtered/extended to whatever is actually present
+    in the data."""
     rows: list[dict[str, Any]] = []
     seen_ontologies: set[str] = set()
     for mode in MODES:
@@ -369,12 +373,50 @@ def build_ontology_top1(runs: dict[str, LoadedRun]) -> tuple[list[dict[str, Any]
             records = [csv_row_to_prediction_record(r) for r in ont_rows]
             row_metrics = [score_prediction(r) for r in records]
             n = len(records)
-            top1 = sum(1 for m in row_metrics if m.top1_hit) / n if n else 0.0
-            rows.append({"mode": mode, "ontology": ontology, "n": n, "top1_accuracy": top1})
+            accuracy = sum(1 for m in row_metrics if getattr(m, hit_field)) / n if n else 0.0
+            rows.append({"mode": mode, "ontology": ontology, "n": n, "accuracy": accuracy})
 
     ordered = [o for o in EXPECTED_ONTOLOGY_ORDER if o in seen_ontologies]
     ordered += sorted(seen_ontologies - set(ordered))
     return rows, ordered
+
+
+def build_ontology_top1(runs: dict[str, LoadedRun]) -> tuple[list[dict[str, Any]], list[str]]:
+    """Thin backwards-compatible wrapper around _build_ontology_topk() for
+    Top-1: preserves the historical `top1_accuracy` key name/row shape for
+    existing callers and tests."""
+    rows, ontology_order = _build_ontology_topk(runs, "top1_hit")
+    renamed = [
+        {"mode": r["mode"], "ontology": r["ontology"], "n": r["n"], "top1_accuracy": r["accuracy"]} for r in rows
+    ]
+    return renamed, ontology_order
+
+
+def _draw_ontology_heatmap(
+    ax, matrix: list[list[float]], ontology_order: list[str], n_by_ontology: dict[str, int], mode_labels: list[str]
+):
+    """Shared imshow/annotation/tick/spine rendering for a mode x ontology
+    accuracy heatmap -- factored out of fig_s2e_ontology_heatmap() so the new
+    Top-3/Top-5 panels (fig_s2e2) render identically to the original Top-1
+    heatmap rather than duplicating this loop. Fixed 0-1 color range, "{:.0%}"
+    annotations, white text above 60%, NaN cells left blank -- unchanged from
+    the original Figure 5 behavior."""
+    im = ax.imshow(matrix, cmap="Blues", vmin=0, vmax=1, aspect="auto")
+    ax.set_xticks(range(len(ontology_order)))
+    ax.set_xticklabels([f"{ont}\n(n={n_by_ontology[ont]})" for ont in ontology_order])
+    ax.set_yticks(range(len(mode_labels)))
+    ax.set_yticklabels(mode_labels)
+    for i in range(len(mode_labels)):
+        for j in range(len(ontology_order)):
+            v = matrix[i][j]
+            if isinstance(v, float) and math.isnan(v):
+                continue
+            text_color = "white" if v > 0.6 else "black"
+            ax.text(j, i, f"{v:.0%}", ha="center", va="center", fontsize=9.2, color=text_color)
+    ax.tick_params(axis="both", length=0)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    return im
 
 
 def fig_s2e_ontology_heatmap(runs: dict[str, LoadedRun], output_dir: Path) -> None:
@@ -388,27 +430,72 @@ def fig_s2e_ontology_heatmap(runs: dict[str, LoadedRun], output_dir: Path) -> No
     matrix = [[by_key.get((mode, ont), {}).get("top1_accuracy", math.nan) for ont in ontology_order] for mode in MODES]
 
     fig, ax = _new_ax(figsize=(9.5, 3.6))
-    im = ax.imshow(matrix, cmap="Blues", vmin=0, vmax=1, aspect="auto")
-    ax.set_xticks(range(len(ontology_order)))
-    ax.set_xticklabels([f"{ont}\n(n={n_by_ontology[ont]})" for ont in ontology_order])
-    ax.set_yticks(range(len(MODES)))
-    ax.set_yticklabels([MODE_DISPLAY[m] for m in MODES])
-    for i in range(len(MODES)):
-        for j in range(len(ontology_order)):
-            v = matrix[i][j]
-            if isinstance(v, float) and math.isnan(v):
-                continue
-            text_color = "white" if v > 0.6 else "black"
-            ax.text(j, i, f"{v:.0%}", ha="center", va="center", fontsize=9.2, color=text_color)
+    im = _draw_ontology_heatmap(ax, matrix, ontology_order, n_by_ontology, [MODE_DISPLAY[m] for m in MODES])
     cbar = fig.colorbar(im, ax=ax, shrink=0.85)
     cbar.set_label("Top-1 accuracy")
     ax.set_title("Top-1 accuracy by target ontology and retrieval mode")
-    ax.tick_params(axis="both", length=0)
-    for spine in ax.spines.values():
-        spine.set_visible(False)
     save_figure(fig, "figure_05_ontology_top1_heatmap", "main", output_dir)
 
     write_csv(rows, ["mode", "ontology", "n", "top1_accuracy"], output_dir / "data" / "ontology_top1_by_mode.csv")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# S2E2 -- Top-3 / Top-5 accuracy by target ontology x mode (new figure,
+# mirrors S2E's Top-1 heatmap; Figure 5 above is left unchanged)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def build_ontology_top3_top5(runs: dict[str, LoadedRun]) -> tuple[list[dict[str, Any]], list[str]]:
+    """Returns (rows, ontology_order): one dict per (mode, ontology) with n,
+    top3_accuracy, top5_accuracy -- mean(top3_hit)/mean(top5_hit) via the same
+    _build_ontology_topk() grouping/scoring Figure 5's Top-1 uses, so ordering
+    and per-group N are guaranteed identical across all three heatmaps."""
+    top3_rows, ontology_order = _build_ontology_topk(runs, "top3_hit")
+    top5_rows, _ = _build_ontology_topk(runs, "top5_hit")
+    top5_by_key = {(r["mode"], r["ontology"]): r["accuracy"] for r in top5_rows}
+    rows = [
+        {
+            "mode": r["mode"],
+            "ontology": r["ontology"],
+            "n": r["n"],
+            "top3_accuracy": r["accuracy"],
+            "top5_accuracy": top5_by_key[(r["mode"], r["ontology"])],
+        }
+        for r in top3_rows
+    ]
+    return rows, ontology_order
+
+
+def fig_s2e2_ontology_top3_top5_heatmap(runs: dict[str, LoadedRun], output_dir: Path) -> None:
+    """Two-panel figure (A: Top-3, B: Top-5), same mode/ontology ordering,
+    annotation format, fixed 0-1 Blues color range, and tick/spine treatment
+    as Figure 5 -- sharing one colorbar across both panels since both use the
+    identical 0-1 accuracy scale."""
+    rows, ontology_order = build_ontology_top3_top5(runs)
+    by_key = {(r["mode"], r["ontology"]): r for r in rows}
+    n_by_ontology = {
+        ont: next(iter({by_key[(m, ont)]["n"] for m in MODES if (m, ont) in by_key}), 0)
+        for ont in ontology_order
+    }
+    mode_labels = [MODE_DISPLAY[m] for m in MODES]
+    matrix_top3 = [[by_key.get((mode, ont), {}).get("top3_accuracy", math.nan) for ont in ontology_order] for mode in MODES]
+    matrix_top5 = [[by_key.get((mode, ont), {}).get("top5_accuracy", math.nan) for ont in ontology_order] for mode in MODES]
+
+    fig, axes = _new_fig_axes(1, 2, figsize=(15.0, 3.8))
+    _draw_ontology_heatmap(axes[0], matrix_top3, ontology_order, n_by_ontology, mode_labels)
+    axes[0].set_title("A. Top-3 accuracy by target ontology and retrieval mode")
+    im_b = _draw_ontology_heatmap(axes[1], matrix_top5, ontology_order, n_by_ontology, mode_labels)
+    axes[1].set_title("B. Top-5 accuracy by target ontology and retrieval mode")
+
+    cbar = fig.colorbar(im_b, ax=list(axes), shrink=0.85)
+    cbar.set_label("Accuracy")
+    save_figure(fig, "figure_07_ontology_top3_top5_heatmap", "main", output_dir)
+
+    write_csv(
+        rows,
+        ["mode", "ontology", "n", "top3_accuracy", "top5_accuracy"],
+        output_dir / "data" / "ontology_top3_top5_by_mode.csv",
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -800,6 +887,10 @@ Public=blue, Local=orange, Disabled=bluish-green (Okabe-Ito palette).
 - **Top-1**: exact match between the top-ranked predicted code and any
   acceptable gold code for that row (`semantic_correctness`, locked identical
   to `top1_hit`). An ontology-valid but semantically wrong code is NOT correct.
+- **Top-3 / Top-5**: an acceptable gold code appears among the FINAL
+  `rank_1`..`rank_3` / `rank_1`..`rank_5` predicted codes (`top3_hit` /
+  `top5_hit`) -- the same final mapper ranking Top-1 uses, never raw
+  retrieval-stage rank or candidate ordering.
 - **Abstention**: the pipeline declined to map (`status="unmapped"`) or
   returned the `UNKNOWN:UNMAPPED` sentinel. Execution errors are a distinct
   outcome and are never counted as an abstention.
@@ -855,6 +946,16 @@ pre-aggregated summary). Per-ontology N is shown in the column labels and in
 and ICD10 (n=16) are far smaller strata than HPO (n=64), MONDO (n=49), and
 LOINC (n=47); percentages in the small strata should not be over-interpreted
 as precisely as the larger ones.
+
+**figure_07_ontology_top3_top5_heatmap.** Top-3 (panel A) and Top-5 (panel B)
+accuracy by `target_ontology` and mode, recomputed directly from each mode's
+`predictions.csv` using the same `_build_ontology_topk()` grouping Figure 5's
+Top-1 heatmap uses -- identical mode/ontology ordering, per-ontology N,
+"{{:.0%}}" annotation style, fixed 0-1 `Blues` color range, and blank treatment for
+undefined cells. Figure 5 itself is unchanged and remains the Top-1 heatmap;
+this is an additional figure, not a replacement. The two panels share one
+colorbar since both use the identical 0-1 accuracy scale. Data also written to
+`data/ontology_top3_top5_by_mode.csv`.
 
 **figure_06_paired_correctness_transitions.** Three 2x2 matrices (Public vs
 Local, Public vs Disabled, Local vs Disabled), built from
@@ -954,6 +1055,7 @@ def build_all(*, public_dir: Path, local_dir: Path, disabled_dir: Path, output_d
     fig_s2c_calibration_metrics(mode_summaries, output_dir)
     fig_s2d_reliability_diagram(runs, output_dir)
     fig_s2e_ontology_heatmap(runs, output_dir)
+    fig_s2e2_ontology_top3_top5_heatmap(runs, output_dir)
     fig_s2f_paired_transitions(runs, output_dir)
     write_comparison_artifacts(runs, mode_summaries, output_dir)
 
@@ -977,6 +1079,7 @@ __all__ = [
     "build_all",
     "build_full_transition_matrices",
     "build_ontology_top1",
+    "build_ontology_top3_top5",
     "build_outcome_distribution",
     "classify_row_outcome",
     "load_completed_runs",

@@ -10,6 +10,7 @@ mapper, no LLM calls.
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 
 import pytest
@@ -267,6 +268,57 @@ def test_recommend_figure_15_primary_when_quality_strong(tmp_path: Path) -> None
     )
     promoted, _rationale = gc.recommend_figure_15_primary(result.alignment_results)
     assert promoted is True  # synthetic fixture is 100% aligned with perfect reclassification agreement
+
+
+def test_ukbb_multi_gold_prose_in_aligned_section_reflects_actual_count(tmp_path: Path) -> None:
+    """Regression guard for the 'OLS-EFO single-gold restriction' section:
+    must never again hardcode "UKBB-EFO and Biomappings-EFO required no such
+    restriction -- both are verified 100% single-gold". If UKBB's own
+    dataset_validation.json/unique_queries.csv report multi-gold queries
+    (exactly the pair the real gold-parsing-bug fix corrected together), the
+    generated prose must say so dynamically -- in QUERY units, matching the
+    OLS-EFO sentence's own units, not the alignment table's mapping-pair-row
+    units."""
+    run_dirs, baseline_csv, t2t_data_dir = _full_aligned_setup(tmp_path)
+
+    # Make 2 of UKBB's 888 queries multi-gold in BOTH provenance files the
+    # real fix touches together: unique_queries.csv (drives the actual
+    # single-gold alignment restriction) and dataset_validation.json (drives
+    # this section's prose).
+    ukbb_uq_path = run_dirs["UKBB-EFO"] / "unique_queries.csv"
+    with ukbb_uq_path.open(newline="", encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh))
+        fieldnames = list(rows[0].keys())
+    for row in rows[:2]:
+        row["original_mapping_pair_count"] = "2"
+    with ukbb_uq_path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    ukbb_dv_path = run_dirs["UKBB-EFO"] / "dataset_validation.json"
+    ukbb_dv_path.write_text(
+        json.dumps({"gold_count_distribution": {"1": len(rows) - 2, "2": 2}}), encoding="utf-8"
+    )
+
+    output_dir = tmp_path / "figures_out"
+    figures_md = output_dir / "FIGURES.md"
+    figures_md.parent.mkdir(parents=True, exist_ok=True)
+    figures_md.write_text("# base\n", encoding="utf-8")
+
+    gc.build_all(
+        ols_dir=run_dirs["OLS-EFO (full)"], ukbb_dir=run_dirs["UKBB-EFO"], biomappings_dir=run_dirs["Biomappings-EFO"],
+        text2term_baseline_path=baseline_csv, output_dir=output_dir, figures_md_path=figures_md,
+        text2term_data_dir=t2t_data_dir,
+    )
+    text = figures_md.read_text(encoding="utf-8")
+
+    assert (
+        "UKBB-EFO and Biomappings-EFO required no such restriction -- both are verified 100% single-gold"
+        not in text
+    )
+    assert f"UKBB-EFO has 2 multi-gold queries out of {len(rows):,}" in text
+    assert "Biomappings-EFO is verified 100% single-gold" in text
 
 
 def test_recommend_not_primary_when_match_rate_low() -> None:

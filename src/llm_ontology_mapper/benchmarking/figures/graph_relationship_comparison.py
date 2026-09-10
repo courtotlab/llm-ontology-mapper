@@ -853,15 +853,48 @@ def _build_graph_relationship_markdown_section(
         "comparison was limited to queries with exactly one benchmark mapping. Our own gold-count "
         "audit (`data/our_multi_gold_audit.csv`):"
     )
+    distributions: dict[str, dict[int, int]] = {}
     for benchmark in pc.BENCHMARK_ORDER:
         distribution = load_gold_count_distribution(run_dirs[benchmark])
+        distributions[benchmark] = distribution
         parts = ", ".join(f"{count:,} queries with {gold_count} gold" for gold_count, count in sorted(distribution.items()))
         lines.append(f"  - {benchmark}: {parts}")
+    # Dynamic, never hardcoded per-benchmark: which benchmarks are 100%
+    # single-gold vs. which include multi-gold queries is read straight from
+    # `distributions` above (Part 12) so this sentence can never again go
+    # stale the way a hardcoded "UKBB-EFO and Biomappings-EFO are 100%
+    # single-gold" claim did once the UKBB multi-gold-parsing fix changed
+    # UKBB's true distribution.
+    multi_gold_benchmarks = [b for b in pc.BENCHMARK_ORDER if set(distributions[b]) != {1}]
+    single_gold_benchmarks = [b for b in pc.BENCHMARK_ORDER if set(distributions[b]) == {1}]
+    multi_gold_clauses = [
+        f"{b} includes multi-gold queries ("
+        + ", ".join(
+            f"{count:,} with {gold_count} acceptable golds"
+            for gold_count, count in sorted(distributions[b].items())
+            if gold_count != 1
+        )
+        + ")"
+        for b in multi_gold_benchmarks
+    ]
+    if single_gold_benchmarks:
+        single_gold_clause = (
+            f"{' and '.join(single_gold_benchmarks)} "
+            f"{'is' if len(single_gold_benchmarks) == 1 else 'are'} 100% single-gold, matching the "
+            "original text2term protocol on this dimension"
+        )
+    else:
+        single_gold_clause = "no benchmark here is 100% single-gold"
     lines.append(
-        "  OLS-EFO (full) includes multi-gold queries (113 with 2 acceptable golds, 7 with 3), so our "
-        "full-run OLS-EFO graph distribution is not perfectly protocol-identical to the original "
-        "text2term Table 1 distribution even where n happened to align; UKBB-EFO and Biomappings-EFO "
-        "are 100% single-gold, matching the original text2term protocol on this dimension."
+        "  "
+        + "; ".join(multi_gold_clauses)
+        + (
+            ", so those full-run graph distributions are not perfectly protocol-identical to the "
+            "original text2term Table 1 distribution even where n happened to align"
+            if multi_gold_clauses
+            else ""
+        )
+        + f"; {single_gold_clause}."
     )
     lines.append(
         "- **The original text2term run used here is NOT the MetaHarmonizer-controlled t2t rerun** "
@@ -1023,6 +1056,7 @@ def _build_aligned_markdown_section(
     mcnemar: dict[str, align.McNemarResult],
     *,
     generate_15c: bool,
+    run_dirs: dict[str, Path],
 ) -> str:
     lines: list[str] = []
     lines.append(ALIGNED_SECTION_HEADING)
@@ -1100,14 +1134,42 @@ def _build_aligned_markdown_section(
 
     lines.append("## OLS-EFO single-gold restriction")
     lines.append("")
+    # Dynamic, never hardcoded: whether UKBB-EFO/Biomappings-EFO are 100%
+    # single-gold (and the exact multi-gold QUERY count if not) is read from
+    # each benchmark's own dataset_validation.json (via
+    # load_gold_count_distribution, run_dirs) below, never asserted as a
+    # fixed fact -- this is exactly what went stale when the UKBB
+    # multi-gold-parsing fix changed UKBB's true gold structure. Query-level
+    # counts (not results[b].ours_total_n/ours_single_gold_n, which count
+    # mapping-PAIR rows -- 2 rows per multi-gold query -- not queries) are
+    # used so this sentence's units match "queries", the same units the
+    # OLS-EFO sentence above already uses. The underlying restriction itself
+    # (single_gold_rows in text2term_alignment.align_benchmark) already
+    # applies uniformly and correctly to every benchmark via each row's own
+    # `is_single_gold` flag -- only this sentence's wording was ever
+    # hardcoded.
+    other_gold_clauses = []
+    for b in (b for b in pc.BENCHMARK_ORDER if b != "OLS-EFO (full)"):
+        distribution = load_gold_count_distribution(run_dirs[b])
+        total_queries = sum(distribution.values())
+        single_gold_queries = distribution.get(1, 0)
+        multi_gold_queries = total_queries - single_gold_queries
+        if multi_gold_queries == 0:
+            other_gold_clauses.append(f"{b} is verified 100% single-gold")
+        else:
+            other_gold_clauses.append(
+                f"{b} has {multi_gold_queries:,} multi-gold quer{'y' if multi_gold_queries == 1 else 'ies'} "
+                f"out of {total_queries:,} and is restricted to its {single_gold_queries:,} single-gold "
+                "queries for this alignment, exactly like OLS-EFO"
+            )
     lines.append(
         "The original text2term protocol evaluated each benchmark record against exactly one benchmark "
         "mapping. Our OLS-EFO Scenario 1 run supports multiple acceptable golds per query (7,257 "
         "single-gold, 113 with 2 golds, 7 with 3), which would silently advantage our method if multi-gold "
         "queries were included in a comparison against text2term's single-gold protocol. The PRIMARY strict "
         "OLS-EFO alignment is therefore restricted to our 7,257 single-gold queries only; multi-gold queries "
-        "are excluded from this alignment entirely (not scored, not credited, not penalized). UKBB-EFO and "
-        "Biomappings-EFO required no such restriction -- both are verified 100% single-gold by their own "
+        f"are excluded from this alignment entirely (not scored, not credited, not penalized). {'; '.join(other_gold_clauses)} -- "
+        "every benchmark's single-gold status is read from its own "
         "`original_mapping_pair_count` field in `unique_queries.csv` (the same field/definition "
         "`dataset_validation.json`'s `gold_count_distribution` uses; naively counting `|` characters in the "
         "`gold_codes` string is NOT equivalent -- a handful of UKBB-EFO rows carry a single canonical gold "
@@ -1399,7 +1461,9 @@ def build_all(
         if generate_15c:
             fig_15c_exact_match_transitions_vs_text2term(transitions, output_dir)
 
-        aligned_markdown = _build_aligned_markdown_section(alignment_results, transitions, mcnemar, generate_15c=generate_15c)
+        aligned_markdown = _build_aligned_markdown_section(
+            alignment_results, transitions, mcnemar, generate_15c=generate_15c, run_dirs=run_dirs
+        )
 
     append_graph_relationship_figures_md_section(
         data, run_dirs, figures_md_path, generate_delta=generate_delta, aligned_markdown=aligned_markdown

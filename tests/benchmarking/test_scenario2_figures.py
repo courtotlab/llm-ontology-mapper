@@ -335,6 +335,125 @@ def test_ontology_top1_aggregation_and_n(tmp_path: Path) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 7b. Top-3/Top-5 ontology aggregation (new figure_07 helper) -- grouping/
+# ordering must match Top-1's exactly; hit values must come from the FINAL
+# rank_1..rank_5 columns only, never a raw-retrieval-stage rank.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_ontology_top3_top5_grouping_and_ordering_matches_top1(tmp_path: Path) -> None:
+    public_dir, local_dir, disabled_dir = _make_all_runs(tmp_path)
+    runs = s2figs.load_completed_runs(public_dir=public_dir, local_dir=local_dir, disabled_dir=disabled_dir)
+
+    top1_rows, top1_order = s2figs.build_ontology_top1(runs)
+    top3top5_rows, top3top5_order = s2figs.build_ontology_top3_top5(runs)
+
+    assert top3top5_order == top1_order == ["HPO", "MONDO"]
+    top1_by_key = {(r["mode"], r["ontology"]): r["n"] for r in top1_rows}
+    top3top5_by_key = {(r["mode"], r["ontology"]): r["n"] for r in top3top5_rows}
+    assert top3top5_by_key == top1_by_key  # identical per-group N as Top-1
+
+    # In this fixture rank_1 is the only populated rank slot, so top3/top5
+    # accuracy must equal top1 accuracy exactly for every (mode, ontology).
+    top1_acc = {(r["mode"], r["ontology"]): r["top1_accuracy"] for r in top1_rows}
+    for r in top3top5_rows:
+        key = (r["mode"], r["ontology"])
+        assert r["top3_accuracy"] == pytest.approx(top1_acc[key])
+        assert r["top5_accuracy"] == pytest.approx(top1_acc[key])
+
+
+def _loaded_run_from_rows(mode: str, rows: list[dict[str, str]]):
+    from llm_ontology_mapper.benchmarking.scenario2_compare import LoadedRun
+
+    return LoadedRun(mode=mode, output_dir=Path("unused"), config={}, rows_by_id={int(r["row_id"]): r for r in rows})
+
+
+def _rank_row(row_id: int, ontology: str, gold_code: str, ranks: list[str | None]) -> dict[str, str]:
+    """Minimal synthetic predictions.csv row with gold at an arbitrary final
+    rank slot (or absent from all 5). top1_hit/top3_hit/top5_hit are
+    deliberately left unset here -- _build_ontology_topk() always recomputes
+    them from rank_1..rank_5 via score_prediction(), never reads a
+    precomputed column, so this fixture proves that end to end."""
+    row = _blank_row()
+    row.update({"row_id": row_id, "status": "mapped", "target_ontology": ontology, "gold_codes": gold_code})
+    for i, code in enumerate(ranks, start=1):
+        row[f"rank_{i}_code"] = code or ""
+    return row
+
+
+def test_top3_top5_use_final_rank_not_raw_retrieval_rank() -> None:
+    # Row 1: gold sits only at final rank 4 -> Top-1=False, Top-3=False, Top-5=True.
+    rank4_row = _rank_row(1, "RANK4ONT", "GOLD:1", ["OTHER:1", "OTHER:2", "OTHER:3", "GOLD:1", "OTHER:5"])
+    # Row 2: gold absent from all 5 final ranks (regardless of whether some
+    # earlier retrieval stage ever surfaced it -- that information isn't even
+    # in predictions.csv) -> Top-1=False, Top-3=False, Top-5=False.
+    absent_row = _rank_row(2, "ABSENTONT", "GOLD:2", ["OTHER:1", "OTHER:2", "OTHER:3", "OTHER:4", "OTHER:5"])
+
+    runs = {mode: _loaded_run_from_rows(mode, [rank4_row, absent_row]) for mode in s2figs.MODES}
+    rows, order = s2figs.build_ontology_top3_top5(runs)
+    assert set(order) == {"RANK4ONT", "ABSENTONT"}
+
+    by_key = {(r["mode"], r["ontology"]): r for r in rows}
+    for mode in s2figs.MODES:
+        rank4 = by_key[(mode, "RANK4ONT")]
+        assert rank4["top3_accuracy"] == pytest.approx(0.0)
+        assert rank4["top5_accuracy"] == pytest.approx(1.0)
+
+        absent = by_key[(mode, "ABSENTONT")]
+        assert absent["top3_accuracy"] == pytest.approx(0.0)
+        assert absent["top5_accuracy"] == pytest.approx(0.0)
+
+
+def test_build_ontology_top1_wrapper_matches_internal_topk_helper(tmp_path: Path) -> None:
+    """Pins the post-refactor build_ontology_top1() wrapper to
+    _build_ontology_topk(runs, "top1_hit") -- guards Figure 5's Top-1 behavior
+    against future edits to the shared internal helper."""
+    public_dir, local_dir, disabled_dir = _make_all_runs(tmp_path)
+    runs = s2figs.load_completed_runs(public_dir=public_dir, local_dir=local_dir, disabled_dir=disabled_dir)
+
+    wrapper_rows, wrapper_order = s2figs.build_ontology_top1(runs)
+    internal_rows, internal_order = s2figs._build_ontology_topk(runs, "top1_hit")
+
+    assert wrapper_order == internal_order
+    wrapper_by_key = {(r["mode"], r["ontology"]): r["top1_accuracy"] for r in wrapper_rows}
+    internal_by_key = {(r["mode"], r["ontology"]): r["accuracy"] for r in internal_rows}
+    assert wrapper_by_key == internal_by_key
+
+
+def test_ontology_top3_top5_heatmap_writes_png_svg_pdf(tmp_path: Path) -> None:
+    public_dir, local_dir, disabled_dir = _make_all_runs(tmp_path)
+    runs = s2figs.load_completed_runs(public_dir=public_dir, local_dir=local_dir, disabled_dir=disabled_dir)
+    output_dir = tmp_path / "out"
+    s2figs.fig_s2e2_ontology_top3_top5_heatmap(runs, output_dir)
+    for ext in ("png", "svg", "pdf"):
+        f = output_dir / "main" / f"figure_07_ontology_top3_top5_heatmap.{ext}"
+        assert f.exists() and f.stat().st_size > 0
+
+
+def test_ontology_top3_top5_csv_matches_computed_values(tmp_path: Path) -> None:
+    public_dir, local_dir, disabled_dir = _make_all_runs(tmp_path)
+    runs = s2figs.load_completed_runs(public_dir=public_dir, local_dir=local_dir, disabled_dir=disabled_dir)
+    output_dir = tmp_path / "out"
+    s2figs.fig_s2e2_ontology_top3_top5_heatmap(runs, output_dir)
+
+    expected_rows, _ = s2figs.build_ontology_top3_top5(runs)
+    expected_by_key = {(r["mode"], r["ontology"]): r for r in expected_rows}
+
+    with (output_dir / "data" / "ontology_top3_top5_by_mode.csv").open(newline="", encoding="utf-8") as fh:
+        csv_rows = list(csv.DictReader(fh))
+    assert len(csv_rows) == len(expected_rows)
+    for row in csv_rows:
+        key = (row["mode"], row["ontology"])
+        expected = expected_by_key[key]
+        assert int(row["n"]) == expected["n"]
+        assert float(row["top3_accuracy"]) == pytest.approx(expected["top3_accuracy"])
+        assert float(row["top5_accuracy"]) == pytest.approx(expected["top5_accuracy"])
+        # Top-3 <= Top-5 must hold for every ontology/mode cell (top_k_hit is
+        # monotonic in k).
+        assert float(row["top3_accuracy"]) <= float(row["top5_accuracy"]) + 1e-9
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 9-10. paired correctness transitions + sum to paired N
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -469,6 +588,7 @@ def test_build_all_writes_every_figure_data_file_and_caption(tmp_path: Path) -> 
         "figure_04_reliability_diagram",
         "figure_05_ontology_top1_heatmap",
         "figure_06_paired_correctness_transitions",
+        "figure_07_ontology_top3_top5_heatmap",
     ]
     supp_figures = [
         "supp_figure_01_rank_outcome_distribution",
@@ -489,6 +609,7 @@ def test_build_all_writes_every_figure_data_file_and_caption(tmp_path: Path) -> 
         "scenario2_retrieval_behavior.csv",
         "scenario2_calibration_metrics.csv",
         "ontology_top1_by_mode.csv",
+        "ontology_top3_top5_by_mode.csv",
         "paired_correctness_transitions.csv",
         "paired_predictions.csv",
         "scenario2_comparison.csv",

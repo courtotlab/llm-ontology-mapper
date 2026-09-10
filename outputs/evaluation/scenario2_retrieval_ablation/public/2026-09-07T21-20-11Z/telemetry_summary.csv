@@ -1,0 +1,2 @@
+mean_end_to_end_seconds,median_end_to_end_seconds,mean_llm_seconds,median_llm_seconds,total_api_cost_usd,mean_api_cost_per_row_usd
+7.180971685995563,7.120623604503635,5.7503180176735516,5.656255583999155,0.2713802,0.0012448633027522936
