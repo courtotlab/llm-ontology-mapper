@@ -13,7 +13,7 @@ flowchart TB
     In["User input<br/>source_term · source_label · entity_type<br/>ontologies=[target] · retrieval_mode"]
     Plan["Layer 1: QueryPlanner<br/>normalizes term · expands queries · infers semantic_type<br/>candidate_ontologies · preferred_ontology · QueryPlan"]
     Route["Layer 2: RetrievalRouter<br/>public | local | disabled"]
-    Public["PublicOntologyRetriever<br/>OLS4 · LOINC Search API · RxNav · NIH ICD-10"]
+    Public["PublicOntologyRetriever<br/>config/registry-driven: ontology_config.yaml → source<br/>OLS4 · LOINC · RxNav · NIH Clinical Tables"]
     Local["LocalSemanticRetriever<br/>SapBERT/FAISS /search<br/>no public fallback"]
     Disabled["DisabledMappingRunner<br/>LLM-only · ungrounded"]
     Norm["CandidateNormalizer<br/>code · term · ontology · score · source · definition"]
@@ -399,12 +399,13 @@ llm-ontology-mapper/
 │   ├── validator.py                # Standalone ontology code existence checker
 │   ├── evaluator.py                # Benchmark accuracy measurement
 │   ├── ner_extractor.py            # Optional scispaCy NER extractor (standalone, not used by the planned pipeline)
-│   └── assets/
-│       ├── ontology_config.yaml    # Ontology metadata + retrieval.source routing (single source of truth)
-│       └── prompts/
-│           ├── query_planner_prompt.txt
-│           ├── llm_reranker_prompt.txt
-│           └── disabled_mapping_prompt.txt
+│   ├── assets/
+│   │   ├── ontology_config.yaml    # Ontology metadata + retrieval.source routing (single source of truth)
+│   │   └── prompts/
+│   │       ├── query_planner_prompt.txt
+│   │       ├── llm_reranker_prompt.txt
+│   │       └── disabled_mapping_prompt.txt
+│   └── benchmarking/               # Standalone benchmark/scoring/calibration/figure tooling; not part of map_term()
 ├── jupyter_notebook/
 │   └── playground.ipynb
 ├── tests/
@@ -431,6 +432,19 @@ llm-ontology-mapper/
 | `metadata` | `MappingMetadata` or `None` | Provider/runtime metadata; planned mode stores pipeline trace details in `metadata.rag_debug` |
 
 `AlternativeMapping` entries include `code`, `term`, `ontology`, `confidence`, `source`, and optional `explanation`. In planned public/local mode, alternatives are built only from retrieved candidates and have `source="rag"`.
+
+### `MappingBatch`
+
+`OntologyMapper.map_data_dictionary()` returns a `MappingBatch`:
+
+| Field | Type | Description |
+|---|---|---|
+| `study_id` | `str` or `None` | Optional study identifier passed to `map_data_dictionary()` |
+| `entity_type` | `str` or `None` | Domain hint applied to the whole batch |
+| `results` | `list[MappingResult]` | One `MappingResult` per input record; a record that raised during mapping is logged and omitted, not included as a failure entry |
+| `produced_at` | `datetime` | UTC timestamp set when the batch was constructed |
+
+`batch.high_confidence` and `batch.needs_review` are convenience properties that partition `results` by `MappingResult.is_high_confidence` (`confidence >= 0.8`). `batch.to_csv_records()` flattens `results` to a list of dicts (via each result's legacy dict form) suitable for `pandas.DataFrame()` or `csv.DictWriter`.
 
 ### `logic_type` values
 
