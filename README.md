@@ -65,6 +65,13 @@ Planned public mode routes each ontology to a retrieval source entirely through 
 - `rxnav` — RxNav, for RxNorm/RxNav
 - `nih_clinical_tables` — NIH Clinical Tables, for ICD-10-CM
 
+**Caveat for `ols4`:** the routing layer being config-only does not mean OLS4 onboarding is. `OLS4Source.search()` forwards the resolved ontology id into `SearchTools.search_ols()`, which looks it up (uppercased) in a second, separate hardcoded table, `SearchTools.OLS_ONTOLOGY_MAP` in `search_tools.py` — the actual OLS4 short id (e.g. `"mondo"`, `"hp"`, `"snomed"`) used in the OLS4 API query comes only from that table, not from `ontology_config.yaml`. Adding an OLS4-backed ontology therefore takes two steps, not one:
+
+1. Add the ontology under `ontologies:` in `ontology_config.yaml` with `retrieval: {source: ols4}` (add `source_ontology_id` too, only if OLS4's short id differs from the ontology's own config key — see the `retrieval:` comment block above).
+2. Add a matching uppercased key → OLS4 short id entry to `SearchTools.OLS_ONTOLOGY_MAP` in `search_tools.py` (the key must equal `source_ontology_id`, or the config key if `source_ontology_id` was omitted, uppercased).
+
+Skipping step 2 is silent: `search_ols()` does not raise, it logs a `WARNING`-level line like `Ontology X not supported by OLS` and returns `[]`, so the pipeline finds zero candidates and mapping typically surfaces downstream as `UNKNOWN:UNMAPPED` with no obvious cause.
+
 Live LOINC search uses the official LOINC Search API and requires configured service credentials:
 
 ```bash

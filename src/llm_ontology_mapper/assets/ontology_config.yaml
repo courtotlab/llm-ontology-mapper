@@ -225,39 +225,12 @@ prefix_aliases:
 # =============================================================================
 # EXTERNAL API MAPPINGS
 # =============================================================================
-# Maps our ontology keys to external API identifiers
-#
-# NOTE: OLS4 ontology ids now live on each ontology's own `retrieval` block
-# above (source_ontology_id) -- this used-to-be `ols_api_map` block was never
-# actually read by production code and has been removed rather than kept as
-# a second, unused copy of the same data.
-
-# BioPortal API ontology acronyms (uppercase)
-bioportal_api_map:
-  HPO: HP
-  MONDO: MONDO
-  NCIT: NCIT
-  LOINC: LOINC
-  SNOMED-CT: SNOMEDCT
-  UO: UO
-  RxNorm: RXNORM
-  ICD10: ICD10CM
-  CHEBI: CHEBI
-
-# SapBERT FAISS index keys (as defined in server/build_index.py)
-sapbert_index_map:
-  HPO: HPO
-  HP: HPO
-  MONDO: MONDO
-  NCIT: NCIT
-  LOINC: LOINC
-  SNOMED-CT: SNOMED
-  SNOMEDCT: SNOMED
-  RxNorm: RXNORM
-  RXNORM: RXNORM
-  RXCUI: RXNORM
-  ICD10: ICD10CM
-  ICD10CM: ICD10CM
+# NOTE: OLS4 ontology ids live on each ontology's own `retrieval` block above
+# (source_ontology_id). `ols_api_map`, `bioportal_api_map`, and
+# `sapbert_index_map` blocks used to live here as second, unused copies of
+# data actually owned elsewhere (SearchTools.OLS_ONTOLOGY_MAP and
+# local_retriever.py's _SAPBERT_INDEX_MAP) -- none were ever read by
+# production code, so they were removed rather than kept as dead config.
 
 # Entity type to ontology mappings
 # Each entity type has a list of recommended ontologies in priority order

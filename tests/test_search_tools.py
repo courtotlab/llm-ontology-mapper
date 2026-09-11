@@ -272,6 +272,33 @@ def test_with_active_status_filter_enforces_active_only(
 
 
 @pytest.mark.unit
+def test_search_ols_unmapped_ontology_returns_empty_and_warns(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """An ontology id that resolves in ontology_config.yaml's `retrieval:` block but
+    has no matching (uppercased) key in SearchTools.OLS_ONTOLOGY_MAP must not reach
+    the HTTP layer at all -- search_ols() should short-circuit, log a WARNING, and
+    return [] rather than raising. This is a documentation of current behavior, not
+    an endorsement: silently returning 0 candidates surfaces downstream (if at all)
+    as an unexplained UNKNOWN:UNMAPPED, which is arguably a bug in its own right and
+    a candidate for raising instead -- but changing that is a design decision out of
+    scope here, not a test/doc fix."""
+    tools = SearchTools(request_delay=0)
+    assert "NEWONTOLOGY" not in SearchTools.OLS_ONTOLOGY_MAP
+
+    with (
+        patch("requests.get") as mock_get,
+        caplog.at_level(logging.WARNING),
+    ):
+        results = tools.search_ols("some term", ontology="NEWONTOLOGY")
+
+    assert results == []
+    mock_get.assert_not_called()
+    assert "NEWONTOLOGY" in caplog.text
+    assert "not supported by OLS" in caplog.text
+
+
+@pytest.mark.unit
 def test_search_ols_query_unaffected_by_loinc_status_filter() -> None:
     """The =status:ACTIVE eligibility filter is LOINC-only; OLS-backed ontology
     searches (HPO, MONDO, NCIT, EFO, SNOMED, ...) must be untouched."""
