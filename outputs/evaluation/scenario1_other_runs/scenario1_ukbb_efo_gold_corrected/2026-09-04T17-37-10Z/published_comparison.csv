@@ -1,0 +1,14 @@
+Metric,text2term (published),MetaHarmonizer (published),llm-ontology-mapper (this study)
+% More General,unavailable,unavailable,0.0293
+% More Specific,unavailable,unavailable,0.0169
+% Same,unavailable,unavailable,0.7917
+% Sibling,unavailable,unavailable,0.0135
+% Unrelated,unavailable,unavailable,0.1441
+F1,unavailable,unavailable,0.9197
+MRR,unavailable,unavailable,0.8421
+Precision,unavailable,unavailable,0.8552
+Recall,unavailable,unavailable,0.9947
+Recall@GT,unavailable,unavailable,0.7928
+Top-1,unavailable,unavailable,0.7917
+Top-3,unavailable,unavailable,0.8908
+Top-5,unavailable,unavailable,0.9020

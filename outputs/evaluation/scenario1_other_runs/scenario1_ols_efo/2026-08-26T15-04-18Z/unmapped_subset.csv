@@ -1,0 +1,116 @@
+query_id,query,gold_codes,gold_labels,gold_count
+129,FBbt_00005524,EFO:0000261,anterior endoderm primordium,1
+341,FBbt_00001720,EFO:0000449,embryonic corpus cardiacum,1
+342,FBbt_00005625,EFO:0000450,embryonic cuprophilic cell,1
+693,AWC-ON,EFO:0000805,obsolete_sensory system,1
+703,dermal system,EFO:0000807,obsolete_integumental system,1
+725,EMAPA_16208,EFO:0000819,obsolete_myocardium,1
+729,EMAPA_17174,EFO:0000820,obsolete_pericardium,1
+751,nostril,EFO:0000828,obsolete_nose structure,1
+760,EMAPA_18870,EFO:0000833,obsolete_tongue,1
+786,anal pad,EFO:0000847,obsolete_anal region,1
+789,cloacal chamber,EFO:0000847,obsolete_anal region,1
+806,EMAPA_18816,EFO:0000855,obsolete_pancreas,1
+824,thyroid follicle,EFO:0000861,obsolete_thyroid,1
+902,Communicating branch of phrenic nerve to internal thoracic plexus,EFO:0000912,obsolete_telencephalon,1
+918,tectum mesencephali,EFO:0000920,obsolete_tectum,1
+919,tectum,EFO:0000920,obsolete_tectum,1
+936,excretory canal,EFO:0000929,obsolete_kidney,1
+940,excretory duct,EFO:0000930|EFO:0000931,obsolete_ureter|obsolete_urethra,2
+984,scale,EFO:0000960,obsolete_scale,1
+987,post-vent region,EFO:0000963,obsolete_tail,1
+1010,ZFA_0009008,EFO:0000972|EFO:0002443,obsolete_unfertilized egg|obsolete_oocyte,2
+1016,uterine horn,EFO:0000975,obsolete_uterus,1
+1019,genital chamber,EFO:0000976,obsolete_vagina,1
+1043,root,EFO:0000989,root structure,1
+1054,tuber,EFO:0001015,obsolete_tuber,1
+1056,cambium,EFO:0001016,obsolete_cambium,1
+1062,bud,EFO:0001023,obsolete_bud,1
+1063,petal,EFO:0001025,obsolete_petal,1
+1064,sepal,EFO:0001026,obsolete_sepal,1
+1065,fruit,EFO:0001028,obsolete_fruit,1
+1067,tassel inflorescence,EFO:0001035,obsolete_female inflorescence,1
+1073,stamen,EFO:0001050,obsolete_stamen,1
+1074,carpel,EFO:0001051,obsolete_carpel,1
+1177,obsolete frog,EFO:0001272,adult,1
+1232,Kupffer's vesicle,EFO:0001322,fertilized egg stage,1
+1254,EMAPA_19148,EFO:0001366,obsolete_dentate gyrus,1
+1298,talus,EFO:0001409,obsolete_ankle,1
+1351,gynoecium,EFO:0001926,obsolete_gynoecium,1
+1375,lateral root,EFO:0001960,obsolete_lateral root,1
+1401,rosette,EFO:0001984,obsolete_rosette leaf,1
+1402,rosette leaf,EFO:0001984,obsolete_rosette leaf,1
+1408,seedling,EFO:0001992,obsolete_seedling,1
+1420,SW-480 cell,EFO:0002083,SW480,1
+1434,RCB2530 cell,EFO:0002101,A172,1
+1435,A-204 cell,EFO:0002102,A204,1
+1439,AsPC-1 cell,EFO:0002112,AsPC1,1
+1441,C-33 A cell,EFO:0002120,C33A,1
+1449,DB cell,EFO:0002158,DB,1
+1478,NAMALWA cell,EFO:0002246,NAMALWA,1
+1489,blood-lymph,EFO:0002300|EFO:0002823,NCI-H69|obsolete_H69,2
+1500,SK-LMS-1 cell,EFO:0002331,SKLMS1,1
+1503,SK-UT-1 cell,EFO:0002341,SKUT1,1
+1651,T3M4 cell,EFO:0002714,Panc89,1
+1652,RCB1021 cell,EFO:0002714,Panc89,1
+1667,vas efferens,EFO:0002824,HCT116,1
+1679,RCB4455 cell,EFO:0002847,PC-9,1
+1681,T24 cell,EFO:0002864,T24,1
+1757,Cellulite,EFO:0003035,cellulitis,1
+1991,aortic arch,EFO:0003695,obsolete_aortic arch,1
+2256,transthyretin amyloidosis,EFO:0004129,familial amyloid neuropathy,1
+2360,mucocutaneous lymph node syndrome,EFO:0004246,mucocutaneous lymph node syndrome,1
+2758,Espondilolisis,EFO:0005649,spondylolysis,1
+2788,retinoblastoma cell,EFO:0005715,WERI-Rb-1,1
+3784,Streptococcus pneumonia,EFO:0007499,streptococcal pneumonia,1
+4048,dicer1 syndrome,EFO:0009068,dicer1 syndrome,1
+4049,obsolete DICER1 syndrome,EFO:0009068,dicer1 syndrome,1
+4050,DICER1 Syndrome,EFO:0009068,dicer1 syndrome,1
+4074,"intellectual disability, autosomal recessive 52",EFO:0009152,"intellectual disability, autosomal dominant 52",1
+4076,lymphatic malformation 6,EFO:0009153,"lymphedema, hereditary, iii",1
+4124,"Lai, Daniel",EFO:0009375,184-hTERT,1
+4423,Qualifier,EFO:0009813,disease characteristic,1
+4464,"Füllgrabe, Anja",EFO:0010649,immunophenotype,1
+4469,"CAUCHETEUR, Déborah",EFO:0010716|EFO:0010717,coinfection|afebrile,2
+4473,"Schwartz, Rachel",EFO:0010935,cytokine secretion assay,1
+4476,"Shadbolt, Marion",EFO:0010936,SDS-PAGE,1
+4477,"Baudis, Michael",EFO:0010937|EFO:0010938|EFO:0010939,comparative genomic hybridization (CGH)|large-insert clone DNA microarray|oligonucleotide DNA microarray,3
+4478,"Nejad, Parisa",EFO:0010945|EFO:0010946,CAST/EiJxC57BL/6J|C57BL/6JxCAST/EiJ,2
+4499,Mammoplasty,EFO:0020978,encounter with health service for breast reconstruction following mastectomy,1
+4584,RCB1154 cell,EFO:0022440,KGN cell,1
+4596,RCB1935 cell,EFO:0022458,HPB-ALL cell,1
+4600,SNG-M cell,EFO:0022497,SNG-M,1
+4601,P493-6 cell,EFO:0022500,P493-6,1
+4603,RCB1953 cell,EFO:0022502,NB-1,1
+4604,CCRF-HSB-2 cell,EFO:0022508,CCRF-HSB-2,1
+4605,KYSE-410 cell,EFO:0022509,KYSE-410,1
+4609,SKLU-1 cell,EFO:0022536,SKLU-1,1
+4610,SK LU 1 cell,EFO:0022536,SKLU-1,1
+4613,hTERT-RPE1 cell,EFO:0022539,hTERT-RPE1,1
+4614,KK-47 cell,EFO:0022544,KK-47,1
+4617,HK-1 cell,EFO:0022551,HK-1,1
+4618,SG231 cell,EFO:0022554,SG231,1
+4619,GM00232 cell,EFO:0022555,GM00232,1
+4620,TIG-3 cell,EFO:0022556,TIG-3,1
+4621,WM-35 cell,EFO:0022558,WM-35,1
+4622,WM35 cell,EFO:0022558,WM-35,1
+4623,WM-278 cell,EFO:0022559,WM278,1
+4624,WM278 cell,EFO:0022559,WM278,1
+4625,1BR3 cell,EFO:0022560,1BR3,1
+4630,KCL-22 cell,EFO:0022565,KCL-22,1
+4631,AG02603 cell,EFO:0022570,AG02603,1
+4632,Rh-4 cell,EFO:0022574,Rh-4,1
+4633,EC-9706 cell,EFO:0022576,EC-9706,1
+4635,UACC-903 cell,EFO:0022581,UACC-903,1
+4636,SUP-T1 cell,EFO:0022582,SUP-T1,1
+4637,HKB-11 cell,EFO:0022587,HKB-11,1
+4639,CAL-33 cell,EFO:0022592,CAL-33,1
+4640,HCN-1A cell,EFO:0022594,HCN-1A,1
+4641,PNT-2 cell,EFO:0022595,PNT2,1
+4642,PNT2 cell,EFO:0022595,PNT2,1
+4643,nucleosome,EFO:0022596,nucleosome,1
+4644,Nucleosome,EFO:0022596,nucleosome,1
+6061,Nucení na močení,EFO:1000781,overactive bladder,1
+6097,Artmış dolaşım kortizol seviyesi,EFO:1000797,adrenal gland hyperfunction,1
+6693,obsolete rat-bite fever,EFO:1001144,rat-bite fever,1
+7042,metagonimiasis,EFO:1001438,Trematode Infections,1

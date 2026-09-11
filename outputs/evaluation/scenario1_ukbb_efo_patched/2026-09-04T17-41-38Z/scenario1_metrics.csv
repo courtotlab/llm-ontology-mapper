@@ -1,0 +1,14 @@
+metric,value,numerator,denominator,evaluation_unit,status
+Top-1,0.7916666666666666,,888,unique_query,OK
+Top-3,0.8941441441441441,,888,unique_query,OK
+Top-5,0.9054054054054054,,888,unique_query,OK
+MRR,0.8435623123123124,,888,unique_query,OK
+Recall@GT,0.7933558558558559,,888,unique_query,OK
+% Same,0.7916666666666666,,888,unique_query,OK
+% More Specific,0.016891891891891893,,888,unique_query,OK
+% More General,0.02927927927927928,,888,unique_query,OK
+% Sibling,0.013513513513513514,,888,unique_query,OK
+% Unrelated,0.14414414414414414,,888,unique_query,OK
+Precision,0.8552036199095022,,888,unique_query,OK
+Recall,0.9947368421052631,,888,unique_query,OK
+F1,0.9197080291970803,,888,unique_query,OK

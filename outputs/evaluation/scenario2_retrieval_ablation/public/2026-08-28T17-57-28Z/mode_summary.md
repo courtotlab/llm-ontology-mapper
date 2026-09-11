@@ -1,0 +1,40 @@
+# Scenario 2 -- retrieval-mode ablation -- mode=public
+
+| Metric | Value |
+| --- | --- |
+| mode | public |
+| n | 218 |
+| top1_accuracy | 0.5872 |
+| top3_accuracy | 0.6239 |
+| top5_accuracy | 0.6239 |
+| mrr | 0.6055 |
+| recall_at_gt | 0.5849 |
+| recall_at_gt_n | 218 |
+| abstention_count | 48 |
+| abstention_total | 218 |
+| abstention_rate | 0.2202 |
+| grounding_rate | 1.0000 |
+| hallucination_rate | 0.0529 |
+| validation_coverage | 1.0000 |
+| unresolved_validation_count | 0 |
+| unresolved_validation_rate | 0.0000 |
+| valid_code_count | 161 |
+| invalid_code_count | 9 |
+| roc_auc | 0.8745 |
+| roc_auc_status | OK |
+| brier_score | 0.2078 |
+| ece | 0.2122 |
+| rank_sum_test_name | scipy.stats.ranksums (Wilcoxon rank-sum test) |
+| rank_sum_statistic | 7.2747 |
+| rank_sum_p_value | 0.0000 |
+| cohens_d | 1.3962 |
+| execution_error_count | 0 |
+| execution_error_rate | 0.0000 |
+| mapped_count | 170 |
+| unmapped_count | 48 |
+| mean_end_to_end_seconds | 6.3694 |
+| median_end_to_end_seconds | 6.2475 |
+| mean_llm_seconds | 4.8481 |
+| median_llm_seconds | 4.7113 |
+| total_api_cost_usd | 0.2078 |
+| mean_api_cost_per_row_usd | 0.0010 |

@@ -1,0 +1,33 @@
+model,model_display,outcome,count,percent
+gpt-4.1-mini,GPT-4.1 mini,Gold rank 1,235,0.5389908256880734
+gpt-4.1-mini,GPT-4.1 mini,Gold rank 2,23,0.052752293577981654
+gpt-4.1-mini,GPT-4.1 mini,Gold rank 3,7,0.016055045871559634
+gpt-4.1-mini,GPT-4.1 mini,Gold rank 4,5,0.011467889908256881
+gpt-4.1-mini,GPT-4.1 mini,Gold rank 5,3,0.006880733944954129
+gpt-4.1-mini,GPT-4.1 mini,"Mapped, gold not in Top 5",81,0.18577981651376146
+gpt-4.1-mini,GPT-4.1 mini,Unmapped,81,0.18577981651376146
+gpt-4.1-mini,GPT-4.1 mini,Execution error,1,0.0022935779816513763
+gpt-5-mini,GPT-5 mini,Gold rank 1,284,0.6513761467889908
+gpt-5-mini,GPT-5 mini,Gold rank 2,21,0.0481651376146789
+gpt-5-mini,GPT-5 mini,Gold rank 3,3,0.006880733944954129
+gpt-5-mini,GPT-5 mini,Gold rank 4,0,0.0
+gpt-5-mini,GPT-5 mini,Gold rank 5,0,0.0
+gpt-5-mini,GPT-5 mini,"Mapped, gold not in Top 5",66,0.15137614678899083
+gpt-5-mini,GPT-5 mini,Unmapped,62,0.14220183486238533
+gpt-5-mini,GPT-5 mini,Execution error,0,0.0
+gpt-5.4-mini,GPT-5.4 mini,Gold rank 1,231,0.5298165137614679
+gpt-5.4-mini,GPT-5.4 mini,Gold rank 2,20,0.045871559633027525
+gpt-5.4-mini,GPT-5.4 mini,Gold rank 3,2,0.0045871559633027525
+gpt-5.4-mini,GPT-5.4 mini,Gold rank 4,0,0.0
+gpt-5.4-mini,GPT-5.4 mini,Gold rank 5,1,0.0022935779816513763
+gpt-5.4-mini,GPT-5.4 mini,"Mapped, gold not in Top 5",82,0.18807339449541285
+gpt-5.4-mini,GPT-5.4 mini,Unmapped,100,0.22935779816513763
+gpt-5.4-mini,GPT-5.4 mini,Execution error,0,0.0
+gpt-5.6-luna,GPT-5.6 Luna,Gold rank 1,258,0.591743119266055
+gpt-5.6-luna,GPT-5.6 Luna,Gold rank 2,9,0.020642201834862386
+gpt-5.6-luna,GPT-5.6 Luna,Gold rank 3,0,0.0
+gpt-5.6-luna,GPT-5.6 Luna,Gold rank 4,0,0.0
+gpt-5.6-luna,GPT-5.6 Luna,Gold rank 5,0,0.0
+gpt-5.6-luna,GPT-5.6 Luna,"Mapped, gold not in Top 5",66,0.15137614678899083
+gpt-5.6-luna,GPT-5.6 Luna,Unmapped,103,0.23623853211009174
+gpt-5.6-luna,GPT-5.6 Luna,Execution error,0,0.0

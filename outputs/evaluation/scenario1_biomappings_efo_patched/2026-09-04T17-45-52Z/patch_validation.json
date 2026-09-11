@@ -1,0 +1,17 @@
+{
+  "original_selection_run": "/Users/akandwal/Developer/llm-ontology-mapper/outputs/evaluation/scenario1_biomappings_efo/2026-08-31T16-10-24Z",
+  "baseline_run": "/Users/akandwal/Developer/llm-ontology-mapper/outputs/evaluation/scenario1_biomappings_efo/2026-08-31T16-10-24Z",
+  "rerun_run": "outputs/evaluation/scenario1_biomappings_efo_rerun_unmapped/2026-09-04T17-42-50Z",
+  "patched_run": "/Users/akandwal/Developer/llm-ontology-mapper/outputs/evaluation/scenario1_biomappings_efo_patched/2026-09-04T17-45-52Z",
+  "original_row_count": 795,
+  "targeted_row_count": 14,
+  "rerun_row_count": 14,
+  "patched_row_count": 795,
+  "replaced_query_ids_count": 14,
+  "missing_query_ids": [],
+  "unexpected_query_ids": [],
+  "duplicate_query_ids": [],
+  "immutable_column_mismatches": [],
+  "non_target_row_mismatches": [],
+  "validation_passed": true
+}

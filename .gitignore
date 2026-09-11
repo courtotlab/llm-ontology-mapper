@@ -71,6 +71,11 @@ docs/_build/
 # data/
 # *.benchmark.csv
 
+# Checksum-verified third-party reference data fetched by
+# scripts/fetch_efo_graph_reference_data.py -- reproducible from that script,
+# not committed (large vendored TSVs from an external repository).
+data/text2term_evaluation/
+
 # Evaluation run outputs
 evaluation_results/
 *.eval.json

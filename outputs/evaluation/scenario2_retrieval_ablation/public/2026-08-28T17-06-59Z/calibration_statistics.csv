@@ -1,0 +1,2 @@
+mode,calibration_n,n_correct,n_incorrect,roc_auc,roc_auc_status,brier_score,ece,rank_sum_test_name,rank_sum_statistic,rank_sum_p_value,mean_confidence_correct,mean_confidence_incorrect,sd_confidence_correct,sd_confidence_incorrect,cohens_d,separation_status,separation_note
+public,7,6,1,0.8333333333333334,OK,0.12907142857142856,0.14999999999999994,scipy.stats.ranksums (Wilcoxon rank-sum test),1.0,0.31731050786291415,0.9716666666666667,0.94,0.05492419017761361,,,OK,Cohen's d requires at least 2 samples in both groups to estimate variance.

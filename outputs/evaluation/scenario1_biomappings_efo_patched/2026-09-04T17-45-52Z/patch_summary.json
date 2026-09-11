@@ -1,0 +1,51 @@
+{
+  "dataset": "biomappings-efo",
+  "metric_comparison": {
+    "Top-1": {
+      "original": "0.9534591194968554",
+      "patched": "0.9610062893081761"
+    },
+    "Top-3": {
+      "original": "0.9660377358490566",
+      "patched": "0.9786163522012579"
+    },
+    "Top-5": {
+      "original": "0.9660377358490566",
+      "patched": "0.9786163522012579"
+    },
+    "MRR": {
+      "original": "0.959538784067086",
+      "patched": "0.969601677148847"
+    },
+    "Recall@GT": {
+      "original": "0.9534591194968554",
+      "patched": "0.9610062893081761"
+    },
+    "Precision": {
+      "original": "0.9769526248399488",
+      "patched": "0.97712833545108"
+    },
+    "Recall": {
+      "original": "0.9819819819819819",
+      "patched": "0.9897039897039897"
+    },
+    "F1": {
+      "original": "0.9794608472400514",
+      "patched": "0.9833759590792839"
+    }
+  },
+  "transitions": {
+    "originally_unmapped_still_unmapped": 8,
+    "originally_unmapped_now_mapped": 6,
+    "originally_unmapped_now_error": 0,
+    "total_rerun": 14
+  },
+  "gold_rank_among_rerun_rows": {
+    "1": 6,
+    "2": 4,
+    "3": 0,
+    "4": 0,
+    "5": 0,
+    "absent": 4
+  }
+}

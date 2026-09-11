@@ -1,0 +1,18 @@
+{
+  "raw_row_count": 796,
+  "missing_query_count": 0,
+  "missing_ref_match_count": 0,
+  "missing_ref_match_id_count": 0,
+  "ref_match_id_prefix_counts": {
+    "EFO": 796
+  },
+  "exact_duplicate_row_count": 1,
+  "unique_mapping_pair_count": 795,
+  "unique_query_count": 795,
+  "gold_count_distribution": {
+    "1": 795
+  },
+  "max_gold_codes_per_query": 1,
+  "canonical_unique_query_count": 795,
+  "max_gold_codes_within_rank_capacity": true
+}

@@ -12,7 +12,6 @@ Run with:  pytest tests/test_ner_extractor.py -v
 from __future__ import annotations
 
 import warnings
-import pytest
 
 
 def test_ner_import():

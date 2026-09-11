@@ -1,0 +1,889 @@
+query_id,source_query,gold_codes,gold_labels,original_row_indices,original_mapping_pair_count
+0,Alzheimer s disease,EFO:0000249,Alzheimer's disease,0,1
+1,Endocarditis valve unspecified,EFO:0000465,endocarditis,1,1
+2,Family history of other conditions,EFO:0000493,family history,2,1
+3,Unspecified maternal hypertension,EFO:0000668,preeclampsia,3,1
+4,Stroke not specified as haemorrhage or infarction,EFO:0000712,stroke,4,1
+5,Subarachnoid haemorrhage,EFO:0000713,subarachnoid hemorrhage,5,1
+6,Unspecified human immunodeficiency virus,EFO:0000764,HIV infection,6,1
+7,Other endocrine disorders,EFO:0001379,endocrine system disease,7,1
+8,Other diseases of liver,EFO:0001421,liver disease,8,1
+9,Primary disorders of muscles,EFO:0002970,muscular disease,9,1
+10,Pervasive developmental disorders,EFO:0003759,pervasive developmental disorder - not otherwise specified,10,1
+11,Other cerebrovascular diseases,EFO:0003763,cerebrovascular disorder,11,1
+12,Other diseases of gallbladder,EFO:0003832,gallbladder disease,12,1
+13,Pain,EFO:0003843,pain,13,1
+14,Fracture of spine level unspecified,EFO:0003902,spinal fracture',14,1
+15,Acute hepatitis B,EFO:0004197,hepatitis B infection,15,1
+16,Abnormalities of heart beat,EFO:0004269,cardiac arrythmia,16,1
+17,Scoliosis,EFO:0004273,scoliosis,17,1
+18,Other congenital malformations of heart,EFO:0005269,congenital heart malformation,18,1
+19,Disorders of tooth development and eruption,EFO:0005410,tooth agenesis,19,1
+20,Intracerebral haemorrhage,EFO:0005669,intracerebral hemorrhage,20,1
+21,Retinal detachments and breaks,EFO:0005773,retinal detachment,21,1
+22,Tuberculosis of nervous system,EFO:0007199,central nervous system tuberculosis,22,1
+23,Acute hepatitis A,EFO:0007305,hepatitis A,23,1
+24,Hookworm diseases,EFO:0007314,hookworm infectious disease,24,1
+25,Female infertility,EFO:0008560,female infertility,25,1
+26,Sleep disorders,EFO:0008568,sleep disorder,26,1
+27,Thiamine deficiency,EFO:0008569,Thiamine deficiency,27,1
+28,Viral conjunctivitis,EFO:0008571,viral conjunctivitis,28,1
+29,Alcoholic liver disease,EFO:0008573,alcoholic liver disease,29,1
+30,Spinal osteochondrosis,EFO:0008576,Spinal Osteochondrosis,30,1
+31,Diseases of salivary glands,EFO:0008581,salivary gland disease,31,1
+32,Gender identity disorders,EFO:0008587,gender identity disorder,32,1
+33,Status asthmaticus,EFO:0008590,status asthmaticus,33,1
+34,Cystic kidney disease,EFO:0008615,cystic kidney disease,34,1
+35,Polyp of female genital tract,EFO:0008622,female genital tract polyp,35,1
+36,Persistent mood,EFO:0008623,dysthymic disorder,36,1
+37,Disorders of vitreous body,EFO:0008624,vitreous body disease,37,1
+38,Ovarian dysfunction,EFO:0009003,ovarian dysfunction,38,1
+39,Other coagulation defects,EFO:0009314,blood coagulation disease,39,1
+40,Granulomatous disorders of skin and subcutaneous tissue,EFO:1000705,granulomatous dermatitis,40,1
+41,Excessive vomiting in pregnancy,EFO:1000971,hyperemesis gravidarum,41,1
+42,Hyperfunction of pituitary gland,EFO:1000973,hyperpituitarism,42,1
+43,Other nutritional deficiencies,EFO:1001067,nutritional deficiency disease,43,1
+44,Other rheumatic heart diseases,EFO:1001161,rheumatic heart disease,44,1
+45,Other helminthiases,EFO:1001342,Helminthiasis,45,1
+46,Unspecified viral infection of CNS,EFO:1001456,central nervous system infection,46,1
+47,Diverticular disease of intestine,EFO:1001460,diverticulitis,47,1
+48,Premature separation of placenta,EFO:1001754,Abruptio Placentae,48,1
+49,Retention of urine,HP:0000016,Urinary retention,49,1
+50,Unspecified urinary incontinence,HP:0000020,Urinary incontinence,50,1
+51,Isolated proteinuria,HP:0000093,proteinuria,51,1
+52,Cleft palate,HP:0000175,cleft palate,52,1
+53,Hydrocephalus,HP:0000238,hydrocephalus,53,1
+54,Visual disturbances,HP:0000505,Visual impairment,54,1
+55,Unspecified dementia,HP:0000726,dementia,55,1
+56,Unspecified haematuria,HP:0000790,hematuria,56,1
+57,Cholecystitis,HP:0001082,Cholecystitis,57,1
+58,Dystonia,HP:0001332,Dystonia,58,1
+59,Ascites,HP:0001541,Ascites,59,1
+60,Iron deficiency anaemia,HP:0001891,Iron deficiency anemia,60,1
+61,Acute renal failure,HP:0001919,acute kidney injury,61,1
+62,Nonspecific lymphadenitis,HP:0002840,lymphadenitis,62,1
+63,Cachexia,HP:0004326,cachexia,63,1
+64,Disseminated intravascular coagulation,HP:0005521,Disseminated intravascular coagulation,64,1
+65,Senile cataract,HP:0011141,age-related cataract,65,1
+66,Agranulocytosis,HP:0012234,Agranulocytosis,66,1
+67,Helicobacter pylori,NCBITaxon:210,Helicobacter pylori,67,1
+68,Reduction defects of lower limb,Orphanet:2130,Hemimelia,68,1
+69,Congenital hydrocephalus,Orphanet:2185,Congenital hydrocephalus,69,1
+70,Immunodeficiency with predominantly antibody defects,Orphanet:331244,Other immunodeficiency syndrome with predominantly antibody defects,70,1
+71,Congenital malformations of oesophagus,Orphanet:88993,Esophageal malformation,71,1
+72,Syndactyly,Orphanet:90025,Syndactyly,72,1
+73,Other congenital malformations of intestine,Orphanet:97945,Intestinal malformation,73,1
+74,Other disorders of peripheral nervous system,EFO:0009387,peripheral nervous system disease,74,1
+75,Spondylosis,EFO:0000706,spondyloarthropathy,75,1
+76,Other retinal disorders,EFO:0003839,retinopathy,76,1
+77,Arterial embolism and thrombosis,EFO:0004286,venous thromboembolism,77,1
+78,Juvenile osteochondrosis of hip and pelvis,Orphanet:2380,Legg-Calvé-Perthes disease,78,1
+79,Encephalitis myelitis and encephalomyelitis,EFO:0007364,meningoencephalitis,79,1
+80,Atrial fibrillation and flutter,EFO:0000275,atrial fibrillation,80,1
+81,Dermatopolymyositis,EFO:0000398,dermatomyositis,81,1
+82,Lack of food,EFO:0008572,malnutrition,82,1
+83,Inflammatory diseases of prostate,EFO:0003830,prostatitis,83,1
+84,Chronic renal failure,EFO:0003884,chronic kidney disease,84,1
+85,Postpolio syndrome,EFO:0007454,postpoliomyelitis syndrome,85,1
+86,Atopic dermatitis,EFO:0000274,atopic aczema,86,1
+87,Cardiomyopathy,EFO:0000318,cardiomyopathy,87,1
+88,other disorders of circulatory system,EFO:0000319,cardiovascular disease,88,1
+89,Crohn s disease,EFO:0000384,Crohn's disease,89,1
+90,Unspecified diabetes mellitus,EFO:0000400,diabetes mellitus,90,1
+91,Other specified diabetes mellitus,EFO:0000400,diabetes mellitus,91,1
+92,Epilepsy,EFO:0000474,epilepsy,92,1
+93,Glaucoma,EFO:0000516,glaucoma,93,1
+94,Irritable bowel syndrome,EFO:0000555,irritable bowel syndrome,94,1
+95,Schizophrenia,EFO:0000692,schizophrenia,95,1
+96,Ulcerative colitis,EFO:0000729,ulcerative colitis,96,1
+97,Viral infection of unspecified site,EFO:0000763,viral disease,97,1
+98,Myositis,EFO:0000783,myositis,98,1
+99,Other cataract,EFO:0001059,cataract,99,1
+100,Cytomegaloviral disease,EFO:0001062,cytomegalovirus infection,100,1
+101,Endometriosis,EFO:0001065,endometriosis,101,1
+102,Obesity,EFO:0001073,obesity,102,1
+103,Insulin dependent diabetes mellitus,EFO:0001359,type I diabetes mellitus,103,1
+104,Non insulin dependent diabetes mellitus,EFO:0001360,type II diabetes mellitus,104,1
+105,Parkinson s disease,EFO:0002508,Parkinson's disease,105,1
+106,Juvenile arthritis,EFO:0002609,chronic childhood arthritis,106,1
+107,Cellulitis,EFO:0003035,cellulitis,107,1
+108,Cushing s syndrome,EFO:0003099,Cushing syndrome,108,1
+109,Osteomyelitis,EFO:0003102,osteomyelitis,109,1
+110,Spina bifida,EFO:0003105,spina bifida,110,1
+111,Heart failure,EFO:0003144,heart failure,111,1
+112,Vitamin D deficiency,EFO:0003762,vitamin D deficiency,112,1
+113,Dental caries,EFO:0003819,dental caries,113,1
+114,Migraine,EFO:0003821,migraine disorder,114,1
+115,Pulmonary embolism,EFO:0003827,pulmonary embolism,115,1
+116,Other peripheral vascular diseases,EFO:0003875,peripheral vascular disease,116,1
+117,Multiple sclerosis,EFO:0003885,multiple sclerosis,117,1
+118,Acne,EFO:0003894,acne,118,1
+119,Ankylosing spondylitis,EFO:0003898,ankylosing spondylitis,119,1
+120,Angina pectoris,EFO:0003913,angina pectoris,120,1
+121,Atherosclerosis,EFO:0003914,atherosclerosis,121,1
+122,Gastro oesophageal reflux disease,EFO:0003948,gastroesophageal reflux disease,122,1
+123,Sunburn,EFO:0003958,sunburn,123,1
+124,Cleft lip,EFO:0003959,cleft lip,124,1
+125,Androgenic alopecia,EFO:0004191,androgenic alopecia,125,1
+126,Alopecia areata,EFO:0004192,alopecia areata,126,1
+127,Vitiligo,EFO:0004208,vitiligo,127,1
+128,Hypospadias,EFO:0004209,hypospadias,128,1
+129,Otosclerosis,EFO:0004213,otosclerosis,129,1
+130,Conduct disorders,EFO:0004216,conduct disorder,130,1
+131,Male infertility,EFO:0004248,male infertility,131,1
+132,Meningococcal infection,EFO:0004249,meningococcal infection,132,1
+133,Calculus of kidney and ureter,EFO:0004253,nephrolithiasis,133,1
+134,Nephrotic syndrome,EFO:0004255,nephrotic syndrome,134,1
+135,Osteonecrosis,EFO:0004259,osteonecrosis,135,1
+136,Paget s disease of bone,EFO:0004261,osteitis deformans,136,1
+137,Other anaemias,EFO:0004272,anemia,137,1
+138,Gout,EFO:0004274,gout,138,1
+139,Diabetes mellitus in pregnancy,EFO:0004593,gestational diabetes,139,1
+140,Duodenal ulcer,EFO:0004607,duodenal ulcer,140,1
+141,Cholelithiasis,EFO:0004799,cholelithiasis,141,1
+142,Leishmaniasis,EFO:0005044,Leishmaniasis,142,1
+143,Eating disorders,EFO:0005203,eating disorder,143,1
+144,Hypotension,EFO:0005251,hypotension,144,1
+145,Unspecified contact dermatitis,EFO:0005319,contact dermatitis,145,1
+146,Schizoaffective disorders,EFO:0005411,schizoaffective disorder,146,1
+147,Urticaria,EFO:0005531,urticaria,147,1
+148,Seborrhoeic keratosis,EFO:0005584,seborrheic keratosis,148,1
+149,Shigellosis,EFO:0005585,shingellosis,149,1
+150,Other vitamin deficiencies,EFO:0005878,vitamin deficiency,150,1
+151,Zoster,EFO:0006510,Herpes Zoster,151,1
+152,Pyoderma gangrenosum,EFO:0006835,pyoderma gangrenosum,152,1
+153,Decubitus ulcer,EFO:0007067,decubitus ulcer,153,1
+154,Actinomycosis,EFO:0007128,actinomycosis,154,1
+155,Amoebiasis,EFO:0007144,amebiasis,155,1
+156,Unspecified appendicitis,EFO:0007149,appendicitis,156,1
+157,Ascariasis,EFO:0007154,ascariasis,157,1
+158,Aspergillosis,EFO:0007157,aspergillosis,158,1
+159,Varicella,EFO:0007204,chickenpox,159,1
+160,Cryptococcosis,EFO:0007229,cryptococcosis,160,1
+161,Echinococcosis,EFO:0007245,echinococcosis,161,1
+162,Enterobiasis,EFO:0007254,enterobiasis,162,1
+163,Granuloma inguinale,EFO:0007291,granuloma inguinale,163,1
+164,Histoplasmosis,EFO:0007310,histoplasmosis,164,1
+165,Infectious mononucleosis,EFO:0007326,infectious mononucleosis,165,1
+166,Leptospirosis,EFO:0007344,leptospirosis,166,1
+167,Listeriosis,EFO:0007347,listeriosis,167,1
+168,Miliary tuberculosis,EFO:0007368,miliary tuberculosis,168,1
+169,Myiasis,EFO:0007389,myiasis,169,1
+170,Optic neuritis,EFO:0007405,optic neuritis,170,1
+171,Placenta praevia,EFO:0007442,placenta praevia,171,1
+172,Plasmodium falciparum malaria,EFO:0007444,Plasmodium falciparum malaria,172,1
+173,Plasmodium vivax malaria,EFO:0007445,Plasmodium vivax malaria,173,1
+174,Acute poliomyelitis,EFO:0007450,poliomyelitis,174,1
+175,Scarlet fever,EFO:0007477,scarlet fever,175,1
+176,Strongyloidiasis,EFO:0007501,strongyloidiasis,176,1
+177,Suppurative and unspecified otitis media,EFO:0007503,suppurative otitis media,177,1
+178,other syphilis,EFO:0007504,syphilis,178,1
+179,Toxoplasmosis,EFO:0007517,toxoplasmosis,179,1
+180,Yaws,EFO:0007548,yaws,180,1
+181,Status epilepticus,EFO:0008526,status epilepticus,181,1
+182,Fracture of femur,EFO:0008553,femur fracture,182,1
+183,Diaphragmatic hernia,EFO:0008561,diaphragmatic hernia,183,1
+184,Niacin deficiency,EFO:0008570,vitamin B3 deficiency,184,1
+185,Gangrene,EFO:0008574,gangrene,185,1
+186,Acute myocardial infarction,EFO:0008583,acute myocardial infarction,186,1
+187,Subsequent myocardial infarction,EFO:0008584,Subsequent ST elevation (STEMI) and non-ST elevation (NSTEMI) myocardian infarction,187,1
+188,Peritonitis,EFO:0008588,peritonitis,188,1
+189,Diseases of spleen,EFO:0009002,splenic disease,189,1
+190,Typhus fever,EFO:0009117,typhus,190,1
+191,Other diseases of intestine,EFO:0009431,intestinal disease,191,1
+192,Fibroblastic disorders,EFO:0009432,fibroblastic disorder,192,1
+193,Unspecified acute lower respiratory infection,EFO:0009433,lower respiratory tract disease,193,1
+194,Other ill defined and unspecified causes of mortality,EFO:0009434,death by undetermined cause,194,1
+195,Cystitis,EFO:1000025,cystitis,195,1
+196,Lactose intolerance,EFO:1000062,lactose intolerance,196,1
+197,Thyroiditis,EFO:1000627,thyroid disease,197,1
+198,Acute pancreatitis,EFO:1000652,acute pancreatitis,198,1
+199,Acanthosis nigricans,EFO:1000660,acanthosis nigricans,199,1
+200,Allergic contact dermatitis,EFO:1000668,allergic contact dermatitis,200,1
+201,Cholesteatoma of middle ear,EFO:1000678,cholesteatoma of middle ear,201,1
+202,Erythema multiforme,EFO:1000694,erythema multiforme,202,1
+203,Hyperhidrosis,EFO:1000712,hypohidrosis,203,1
+204,Impetigo,EFO:1000714,impetigo,204,1
+205,Irritant contact dermatitis,EFO:1000718,irritant dermatitis,205,1
+206,Lichen planus,EFO:1000726,lichen planus,206,1
+207,Parapsoriasis,EFO:1000747,parapsoriasis,207,1
+208,Pemphigus,EFO:1000749,pemphigus,208,1
+209,Pityriasis rosea,EFO:1000756,pityriasis rosea,209,1
+210,Rosacea,EFO:1000760,rosacea,210,1
+211,Seborrhoeic dermatitis,EFO:1000764,seborrheic dermatitis,211,1
+212,Atrophic disorders of skin,EFO:1000766,skin atrophy,212,1
+213,Coxarthrosis,EFO:1000786,"osteoarthritis, hip",213,1
+214,Coalworker s pneumoconiosis,EFO:1000814,anthracosis,214,1
+215,Ascorbic acid deficiency,EFO:1000822,ascorbic acid deficiency,215,1
+216,Bacterial meningitis,EFO:1000831,bacterial meningitis,216,1
+217,Dysplasia of cervix uteri,EFO:1000910,dysplasia of cervix,217,1
+218,Habitual aborter,EFO:1000954,habitual abortion,218,1
+219,Other rickettsioses,EFO:1001162,rickettsiosis,219,1
+220,Secondary parkinsonism,EFO:1001175,secondary Parkinson disease,220,1
+221,Viral meningitis,EFO:1001236,viral meningitis,221,1
+222,Vitamin A deficiency,EFO:1001237,vitamin A deficiency,222,1
+223,Spontaneous abortion,EFO:1001255,spontaneous abortion,223,1
+224,Unspecified renal colic,EFO:1001412,renal colic,224,1
+225,Taeniasis,EFO:1001433,taeniasis,225,1
+226,Synovitis and tenosynovitis,EFO:1001435,tenosynovitis,226,1
+227,Schistosomiasis,EFO:1001475,schistosomiasis,227,1
+228,Unspecified abortion,EFO:1001491,abortion,228,1
+229,Femoral hernia,EFO:1001791,femoral hernia,229,1
+230,Ventral hernia,EFO:1001866,ventral hernia,230,1
+231,Amyloidosis,EFO:1001875,amyloidosis,231,1
+232,Cicatricial alopecia,EFO:1002028,cicatrical alopecia,232,1
+233,Other disorders of nervous system,EFO:0000618,nervous system disease,233,1
+234,Polyuria,HP:0000103,polyuria,234,1
+235,Pruritus,HP:0000989,prutitus,235,1
+236,Nausea and vomiting,HP:0002017,nausea and vomiting,236,1
+237,Peptic ulcer site unspecified,HP:0004398,peptic ulcer,237,1
+238,Erythema nodosum,HP:0012219,erythema nodosum,238,1
+239,Oesophagitis,HP:0100633,esophagitis,239,1
+240,Common variable immunodeficiency,Orphanet:1572,common variable immunodeficiency,240,1
+241,Adrenogenital disorders,Orphanet:181412,adrenogenital syndrome,241,1
+242,Sickle cell disorders,Orphanet:232,sickle cell anemia,242,1
+243,Congenital malformations of great veins,Orphanet:363189,congenital anomaly of the great veins,243,1
+244,Huntington s disease,Orphanet:399,Huntington disease,244,1
+245,Cystic fibrosis,Orphanet:586,cystic fibrosis,245,1
+246,Hypertrichosis,Orphanet:79365,Hypertrichosis,246,1
+247,Sarcoidosis,Orphanet:797,sarcoidosis,247,1
+248,Turner s syndrome,Orphanet:881,Turner syndrome,248,1
+249,Congenital malformations of great arteries,Orphanet:98724,congenital anomaly of the great arteries,249,1
+250,Hereditary factor VIII deficiency,Orphanet:98878,hemophilia A,250,1
+251,Hereditary factor IX deficiency,Orphanet:98879,hemophilia B,251,1
+252,Keratitis,EFO:0009449,keratitis,252,1
+253,Conjunctivitis,EFO:0009450,conjunctivitis,253,1
+254,Hypoparathyroidism,EFO:0009451,hypoparathyroidism,254,1
+255,Hyperaldosteronism,EFO:0009452,hyperaldosteonism,255,1
+256,Hemiplegia,EFO:0009453,hemiplagia,256,1
+257,Gastric ulcer,EFO:0009454,gastric ulcer,257,1
+258,Disorders of lacrimal system,EFO:0009455,lacrimal apparatus disease,258,1
+259,Exfoliative dermatitis,EFO:0009456,exfoliative dermatitis,259,1
+260,Apocrine sweat disorders,EFO:1002046,apocrine sweat gland disease,260,1
+261,Spotted fever,EFO:1002047,spotted fever,261,1
+262,Unspecified nephritic syndrome,EFO:1002050,nephritis,262,1
+263,Facial nerve disorders,EFO:1002051,facial nerve disease,263,1
+264,Essential primary hypertension,EFO:1002032,primary hypertension,264,1
+265,Unspecified jaundice,HP:0000952,jaundice,265,1
+266,Iridocyclitis,HP:0001094,iridocyclitis,266,1
+267,Hepatic failure,HP:0001399,hepatic failure,267,1
+268,Umbilical hernia,HP:0001537,umbilical hernia,268,1
+269,Polyhydramnios,HP:0001561,polyhydramnios,269,1
+270,cardiac arrest,EFO:0009492,cardiac arrest,270,1
+271,Abnormality of red blood cells,HP:0001877,abnormal erythrocyte morphology,271,1
+272,Hypothermia,HP:0002045,hypothermia,272,1
+273,Lymphadenopathy,HP:0002716,lymphadenopathy,273,1
+274,Abnormal findings in cerebrospinal fluid,HP:0002921,abnormality of the cerebrospinal fluid,274,1
+275,Glycosuria,HP:0003076,glycosuria,275,1
+276,Abnormality of glycoprotein metabolism,HP:0004367,abnormality of glycoprotein metabolism,276,1
+277,Abnormality of glycosaminoglycan metabolism,HP:0004371,abnormality of glycosaminoglycan metabolism,277,1
+278,Congenital septal defect,HP:0001671,Abnormal cardiac septum morphology,278,1
+279,Paroxysmal tachycardia,EFO:0009493,paroxysmal tachycardia,279,1
+280,Congenital malformations of anterior segment of eye,HP:0007700,Anterior segment developmental abnormality,280,1
+281,Gynecomastia,HP:0010313,breast hypertrophy,281,1
+282,Polydactyly,Orphanet:2913,polydactyly,282,1
+283,Mixed and other personality disorders,HP:0012075,Personality disorder,283,1
+284,Acquired pure red cell aplasia,HP:0012410,Pure red cell aplasia,284,1
+285,Chorioretinitis,HP:0012424,chorioretinitis,285,1
+286,Congenital malformations of larynx,HP:0025423,Abnormal larynx morphology,286,1
+287,Portal vein thrombosis,HP:0030242,portal vein thrombosis,287,1
+288,Other congenital malformations of ear,HP:0031703,Abnormal ear morphology,288,1
+289,Eclampsia,HP:0100601,eclampsia,289,1
+290,Other mosquito borne viral fevers,EFO:0009575,mosquito-borne hemorragic fever,290,1
+291,Fistulae involving female genital tract,EFO:0009524,female genital tract fistula,291,1
+292,Multiple gestation,EFO:0009576,multiple gestation,292,1
+293,Postpartum haemorrhage,EFO:0009579,postpartum hemorrhage,293,1
+294,Retained placenta and membranes without haemorrhage,EFO:0009578,placental retention,294,1
+295,Faecal incontinence,EFO:0009523,fecal incontinence,295,1
+296,Disturbances of skin sensation,EFO:0009522,disturbance of skin sensation,296,1
+297,Injury of heart,EFO:0009506,heart injury,297,1
+298,Fractures involving multiple body regions,EFO:0009513,multiple bone fractures,298,1
+299,Fracture of upper limb level unspecified,EFO:0009514,upper extremity fracture,299,1
+300,Fracture of lower limb level unspecified,EFO:0009512,lower extremity fracture,300,1
+301,Other injuries of lower limb level unspecified,EFO:0009508,leg injury,301,1
+302,Foreign body in alimentary tract,EFO:0009526,foreign body in gastrointestinal tract,302,1
+303,Burns classified according to extent of body surface involved,EFO:0009516,burn,303,1
+304,Routine general health check up of defined subpopulation,EFO:0009517,checkup,304,1
+305,Contraceptive management,EFO:0009520,contraception,305,1
+306,Prophylactic surgery,EFO:0009580,prophylactic surgery,306,1
+307,Care involving use of rehabilitation procedures,EFO:0009581,rehabilitation,307,1
+308,Disorders of mineral metabolism,EFO:0009556,mineral metabolism disease,308,1
+309,Other disorders of cornea,EFO:0009464,corneal disease,309,1
+310,uremia,EFO:1002048,kidney failure,310,1
+311,Oesophageal varices,EFO:0009545,esophageal varices,311,1
+312,Disorders of autonomic nervous system,EFO:0009532,autonomic nervous system disease,312,1
+313,marasmus,EFO:0009563,protein energy malnutrition,313,1
+314,Inflammatory disease of uterus except cervix,EFO:0009572,uterine inflammatory disease,314,1
+315,Disorders of trigeminal nerve,EFO:0009569,trigeminal nerve disease,315,1
+316,Pulmonary valve disorders,EFO:0009564,pulmonary valve disease,316,1
+317,Other disorders of tympanic membrane,EFO:0009570,tympanic membrane disease,317,1
+318,Other diseases of oesophagus,EFO:0009544,esophageal disease,318,1
+319,Other inflammation of eyelid,EFO:0009536,blepharitis,319,1
+320,Otitis externa,EFO:0009560,otitis externa,320,1
+321,Other diseases of biliary tract,EFO:0009534,biliary tract disease,321,1
+322,Haemorrhoids,EFO:0009552,hemorrhoid,322,1
+323,HIV disease resulting in malignant neoplasms,EFO:0009553,HIV-associated cancer,323,1
+324,Anaemia due to enzyme disorders,EFO:0009529,anemia due to enzyme disorder,324,1
+325,Other disorders of peritoneum,EFO:0009541,disease of peritoneum,325,1
+326,Other headache syndromes,EFO:0009550,headache disorder,326,1
+327,Unspecified intestinal parasitism,EFO:0009561,parasitic intestinal disease,327,1
+328,Nerve root and plexus disorders,EFO:0009559,nerve plexus disease,328,1
+329,Other diseases of appendix,EFO:0009542,disorder of appendix,329,1
+330,Small kidney of unknown cause,EFO:0009471,small kidney,330,1
+331,Perforation of tympanic membrane,EFO:0009472,tympanic membrane perforation,331,1
+332,Other spirochaetal infections,EFO:0009567,Spirochaetales Infections,332,1
+333,Disturbances of smell and taste,EFO:0009543,disturbances of sensation of smell and taste,333,1
+334,Other diseases of jaws,EFO:0009468,jaw disease,334,1
+335,Diseases of Bartholin s gland,EFO:0009469,Bartholin's gland disease,335,1
+336,Waist circumference,EFO:0004342,waist circumference,336,1
+337,Hip circumference,EFO:0005093,hip circumference,337,1
+338,Standing height,EFO:0004339,body height,338,1
+339,Sleep duration,EFO:0005271,sleep duration,339,1
+340,Morning/evening person (chronotype),EFO:0008328,chronotype measurement,340,1
+341,Sleeplessness / insomnia,EFO:0004698,insomnia,341,1
+342,Snoring,EFO:0008341,snoring measurement,342,1
+343,Alcohol intake frequency.,EFO:0007878,alcohol consumption measurement,343,1
+344,Mood swings,HP:0000720,mood swings,344,1
+345,Irritability,HP:0000737,irritability,345,1
+346,"Loneliness, isolation",EFO:0007865,loneliness measurement,346,1
+347,Frequency of tiredness / lethargy in last 2 weeks,EFO:0007946,tiredness measurement,347,1
+348,Hearing difficulty/problems with background noise,EFO:0004238,hearing loss,348,1
+349,Chest pain or discomfort,HP:0100749,chest pain,349,1
+350,Relative age voice broke,EFO:0007888,age at voice drop,350,1
+351,Age when periods started (menarche),EFO:0004703,age at menarche,351,1
+352,Had menopause,EFO:0003922,menopause,352,1
+353,Forced vital capacity (FVC),EFO:0004312,vital capacity,353,1
+354,Length of menstrual cycle,EFO:0007786,menstrual cycle measurement,354,1
+355,Stomach/abdominal pain for 3+ months,EFO:0003766,pain in abdomen,355,1
+356,Gestational diabetes only,EFO:0004593,gestational diabetes,356,1
+357,"Diastolic blood pressure, automated reading",EFO:0006336,diastolic blood pressure,357,1
+358,"Systolic blood pressure, automated reading",EFO:0006335,systolic blood pressure,358,1
+359,Pulse rate,EFO:0004326,heart rate,359,1
+360,Maximum heart rate during fitness test,EFO:0009184,heart rate response to exercise,360,1
+361,Fluid intelligence score,EFO:0004337,intelligence,361,1
+362,Birth weight,EFO:0004344,birth weight,362,1
+363,Bipolar disorder status,EFO:0000289,bipolar disorder,363,1
+364,Neuroticism score,EFO:0007660,neuroticism measurement,364,1
+365,"Forced vital capacity (FVC), Best measure",EFO:0004312,vital capacity,365,1
+366,Body mass index (BMI),EFO:0004340,body mass index,366,1
+367,Weight,EFO:0004338,body weight,367,1
+368,Pulse wave Arterial Stiffness index,EFO:0004517,arterial stiffness measurement,368,1
+369,hayfever or allergic rhinitis,EFO:0003956,seasonal allergic rhinitis,369,1
+370,asthma,EFO:0000270,asthma,370,1
+371,emphysema,EFO:0000464,emphysema,371,1
+372,chronic bronchitis,EFO:0006505,chronic bronchitis,372,1
+373,COPD (chronic obstructive pulmonary disease),EFO:0000341,chronic obstructive pulmonary disease,373,1
+374,sarcoidosis,Orphanet:797,sarcoidosis,374,1
+375,bronchiectasis,HP:0002110,bronchiectasis,375,1
+376,idiopathic pulmonary fibrosis,EFO:0000768,idiopathic pulmonary fibrosis,376,1
+377,tuberculosis,Orphanet:3389,tuberculosis,377,1
+378,Body fat percentage,EFO:0007800,body fat percentage,378,1
+379,Whole body fat mass,EFO:0005409,fat body mass,379,1
+380,Whole body fat-free mass,EFO:0004995,lean body mass,380,1
+381,Basal metabolic rate,EFO:0007777,base metabolic rate measurement,381,1
+382,Potassium in urine,HP:0012598,abnormal urine potassium concentration,382,1
+383,Sodium in urine,HP:0012603,abnormal urine sodium concentration,383,1
+384,Age at death,EFO:0005056,age at death,384,1
+385,cancer of lip/mouth/pharynx/oral cavity,EFO:0005570,oral cavity cancer,385,1
+386,rectal cancer,EFO:1000657,rectal cancer,386,1
+387,lymphoma,EFO:0000574,lymphoma,387,1
+388,leukaemia,EFO:0000565,leukemia,388,1
+389,multiple myeloma,EFO:0001378,multiple myeloma,389,1
+390,hodgkins lymphoma / hodgkins disease,EFO:0000183,Hodgkins lymphoma,390,1
+391,non-hodgkins lymphoma,EFO:0005952,non-Hodgkins lymphoma,391,1
+392,chronic lymphocytic,EFO:0000095,chronic lymphocytic leukemia,392,1
+393,chronic myeloid,EFO:0000339,chronic myelogenous leukemia,393,1
+394,malignant melanoma,EFO:0000756,melanoma,394,1
+395,basal cell carcinoma,EFO:0004193,basal cell carcinoma,395,1
+396,squamous cell carcinoma,EFO:0000707,squamous cell carcinoma,396,1
+397,hypertension,EFO:0000537,hypertension,397,1
+398,heart/cardiac problem,EFO:0003777,heart disease,398,1
+399,peripheral vascular disease,EFO:0003875,peripheral vascular disease,399,1
+400,venous thromboembolic disease,HP:0004936,venous thrombosis,400,1
+401,essential hypertension,EFO:1002032,primary hypertension,401,1
+402,gestational hypertension/pre-eclampsia,EFO:0000668,preeclampsia,402,1
+403,angina,EFO:0003913,angina pectoris,403,1
+404,heart attack/myocardial infarction,EFO:0000612,myocardial infarction,404,1
+405,heart failure/pulmonary odema,EFO:0003144,heart failure,405,1
+406,heart arrhythmia,EFO:0004269,cardiac arrhythmia,406,1
+407,cardiomyopathy,EFO:0000318,cardiomyopathy,407,1
+408,stroke,EFO:0000712,stroke,408,1
+409,transient ischaemic attack (tia),EFO:0003764,transient ischemic attack,409,1
+410,subdural haemorrhage/haematoma,HP:0100309,subdural hemorrhage,410,1
+411,subarachnoid haemorrhage,EFO:0000713,subarachnoid hemorrhage,411,1
+412,leg claudication/ intermittent claudication,EFO:0003876,intermittent vascular claudication,412,1
+413,pulmonary embolism +/- dvt,EFO:0003827,pulmonary embolism,413,1
+414,deep venous thrombosis (dvt),EFO:0003907,deep vein thrombosis,414,1
+415,chronic obstructive airways disease/copd,EFO:0000341,chronic obstructive pulmonary disease,415,1
+416,emphysema/chronic bronchitis,EFO:0000464,emphysema,416,1
+417,interstitial lung disease,EFO:0004244,interstitial lung disease,417,1
+418,asbestosis,EFO:0007153,asbestosis,418,1
+419,pulmonary fibrosis,EFO:0009448,pulmonary fibrosis,419,1
+420,fibrosing alveolitis/unspecified alveolitis,EFO:0009624,pulmonary alveolitis,420,1
+421,sleep apnoea,EFO:0003877,sleep apnea,421,1
+422,pleurisy,EFO:1001825,pleurisy,422,1
+423,spontaneous pneumothorax/recurrent pneumothorax,HP:0002108,spontaneous pneumothorax,423,1
+424,gastro-oesophageal reflux (gord) / gastric reflux,EFO:0003948,gastroesophageal reflux disease,424,1
+425,gastric/stomach ulcers,HP:0004398,peptic ulcer,425,1
+426,gastritis/gastric erosions,EFO:0000217,gastritis,426,1
+427,irritable bowel syndrome,EFO:0000555,irritable bowel syndrome,427,1
+428,hepatitis,HP:0012115,hepatitis,428,1
+429,infective/viral hepatitis,EFO:0004196,viral human hepatitis infection,429,1
+430,liver failure/cirrhosis,EFO:0001422,cirrhosis of liver,430,1
+431,gall bladder disease,EFO:0003832,gallbladder disease,431,1
+432,cholecystitis,HP:0001082,cholecystitis,432,1
+433,pancreatitis,EFO:0000278,pancreatitis,433,1
+434,peritonitis,EFO:0008588,peritonitis,434,1
+435,gastrointestinal bleeding,HP:0002239,gastrointestinal hemorrhage,435,1
+436,renal/kidney failure,EFO:1002048,kidney failure,436,1
+437,urinary tract infection/kidney infection,EFO:0003103,urinary tract infection,437,1
+438,ureteric obstruction/hydronephrosis,EFO:0005562,hydronephrosis,438,1
+439,urinary frequency / incontinence,EFO:0006865,urgency urinary incontinence,439,1
+440,diabetes,EFO:0000400,diabetes,440,1
+441,gestational diabetes,EFO:0004593,gestational diabetes,441,1
+442,type 1 diabetes,EFO:0001359,type i diabetes mellitus,442,1
+443,type 2 diabetes,EFO:0001360,type ii diabetes mellitus,443,1
+444,parathyroid hyperplasia/adenoma,EFO:1000457,parathyroid hyperplasia,444,1
+445,pituitary adenoma/tumour,EFO:1000478,pituitary gland adenoma,445,1
+446,encephalitis,EFO:0001423,encephalomyelitis,446,1
+447,bell's palsy/facial nerve palsy,EFO:0007167,Bell's palsy,447,1
+448,peripheral neuropathy,EFO:0003100,peripheral neuropathy,448,1
+449,acute infective polyneuritis/guillain-barre syndrome,EFO:0007292,Guillain-Barre syndrome,449,1
+450,multiple sclerosis,EFO:0003885,multiple sclerosis,450,1
+451,parkinsons disease,EFO:0002508,Parkinson's disease,451,1
+452,epilepsy,EFO:0000474,epilepsy,452,1
+453,migraine,EFO:0003821,migraine disorder,453,1
+454,spinal injury,EFO:1001919,spinal cord injury,454,1
+455,eye infection,EFO:1001888,eye infection,455,1
+456,retinal problem,EFO:0003839,retinopathy,456,1
+457,glaucoma,EFO:0000516,glaucoma,457,1
+458,cataract,EFO:0001059,cataract,458,1
+459,retinal detachment,EFO:0005773,retinal detachment,459,1
+460,schizophrenia,EFO:0000692,schizophrenia,460,1
+461,deliberate self-harm/suicide attempt,EFO:0004321,attempted suicide,461,1
+462,mania/bipolar disorder/manic depression,EFO:0000289,bipolar disorder,462,1
+463,bone disorder,EFO:0004260,bone disease,463,1
+464,joint disorder,EFO:1000999,joint disease,464,1
+465,osteomyelitis,EFO:0003102,osteomyelitis,465,1
+466,osteoporosis,EFO:0003882,osteoporosis,466,1
+467,ankylosing spondylitis,EFO:0003898,ankylosing spondylitis,467,1
+468,low platelets/platelet disorder,HP:0001873,thrombocytopenia,468,1
+469,iron deficiency anaemia,HP:0001891,iron deficiency anemia,469,1
+470,pernicious anaemia,EFO:0005576,pernicious anemia,470,1
+471,thalassaemia,EFO:1001996,thalassemia,471,1
+472,ovarian cyst or cysts,HP:0000138,ovarian cyst,472,1
+473,polycystic ovaries/polycystic ovarian syndrome,EFO:0000660,polycystic ovary syndrome,473,1
+474,uterine fibroids,EFO:0000731,uterine fibroid,474,1
+475,vaginal prolapse/uterine prolapse,EFO:1001864,uterine prolapse,475,1
+476,fibrocystic disease,EFO:0003014,breast fibrocystic disease,476,1
+477,breast cysts,EFO:1000848,breast cyst,477,1
+478,vasculitis,EFO:0006803,vasculitis,478,1
+479,connective tissue disorder,EFO:1001986,connective tissue disease,479,1
+480,giant cell/temporal arteritis,EFO:1001209,temporal arteritis,480,1
+481,polymyalgia rheumatica,EFO:0008518,polymyalgia rheumatica,481,1
+482,wegners granulmatosis,EFO:0005297,granulomatosis with polyangiitis,482,1
+483,systemic lupus erythematosis/sle,EFO:0002690,systemic lupus erythematosus,483,1
+484,sjogren's syndrome/sicca syndrome,EFO:0000699,Sjogren syndrome,484,1
+485,allergy or anaphylactic reaction to food,EFO:1001890,food allergy,485,1
+486,pneumonia,EFO:0003106,pneumonia,486,1
+487,peptic ulcer,HP:0004398,peptic ulcer,487,1
+488,endometriosis,EFO:0001065,endometriosis,488,1
+489,female infertility,EFO:0008560,female infertility,489,1
+490,alcohol dependency,EFO:0003829,alcohol dependence,490,1
+491,nasal polyps,EFO:1000391,nasal cavity polyp,491,1
+492,otosclerosis,EFO:0004213,otosclerosis,492,1
+493,meniere's disease,EFO:0006862,Meniere disease,493,1
+494,cerebral aneurysm,EFO:0003870,brain aneurysm,494,1
+495,myocarditis,EFO:0009609,myocarditis,495,1
+496,polycystic kidney,EFO:0008620,polycystic kidney disease,496,1
+497,thyroiditis,EFO:1000627,thyroid disease,497,1
+498,hypopituitarism,EFO:0001380,hypopituitarism,498,1
+499,cerebral palsy,EFO:1000632,cerebral palsy,499,1
+500,optic neuritis,EFO:0007405,optic neuritis,500,1
+501,headaches (not migraine),HP:0002315,headache,501,1
+502,myasthenia gravis,EFO:0004991,myasthenia gravis,502,1
+503,polycythaemia vera,EFO:0002429,polycythemia vera,503,1
+504,tuberculosis (tb),Orphanet:3389,tuberculosis,504,1
+505,malaria,EFO:0001068,malaria,505,1
+506,helicobacter pylori,NCBITaxon:210,Helicobacter pylori,506,1
+507,anaemia,EFO:0004272,anemia,507,1
+508,eczema/dermatitis,HP:0000964,eczema,508,1
+509,psoriasis,EFO:0000676,psoriasis,509,1
+510,chronic skin ulcers,EFO:0007066,chronic ulcer of skin,510,1
+511,malabsorption/coeliac disease,EFO:0001060,celiac disease,511,1
+512,duodenal ulcer,EFO:0004607,duodenal ulcer,512,1
+513,diverticular disease/diverticulitis,EFO:1001460,diverticulitis,513,1
+514,colitis/not crohns or ulcerative colitis,EFO:0003872,colitis,514,1
+515,rectal or colon adenoma/polyps,EFO:1000633,adenomatous colon polyp,515,1
+516,inflammatory bowel disease,EFO:0003767,inflammatory bowel disease,516,1
+517,crohns disease,EFO:0000384,Crohn's disease,517,1
+518,ulcerative colitis,EFO:0000729,ulcerative colitis,518,1
+519,rheumatoid arthritis,EFO:0000685,rheumatoid arthritis,519,1
+520,osteoarthritis,EFO:0002506,osteoarthritis,520,1
+521,gout,EFO:0004274,gout,521,1
+522,post-traumatic stress disorder,EFO:0001358,post-traumatic stress disorder,522,1
+523,atrial fibrillation,EFO:0000275,atrial fibrillation,523,1
+524,high cholesterol,HP:0003124,hypercholesterolemia,524,1
+525,hiatus hernia,HP:0002036,hiatus hernia,525,1
+526,sciatica,HP:0011868,sciatica,526,1
+527,psoriatic arthropathy,EFO:0003778,psoriatic arthritis,527,1
+528,rheumatic fever,EFO:1001160,rheumatic fever,528,1
+529,chronic fatigue syndrome,EFO:0004540,chronic fatigue syndrome,529,1
+530,irregular heart beat,EFO:0004269,cardiac arrhythmia,530,1
+531,brain haemorrhage,EFO:0000551,intracranial hemorrhage,531,1
+532,varicose veins,HP:0002619,varicose veins,532,1
+533,lymphoedema,Orphanet:79383,lymphedema,533,1
+534,pneumothorax,HP:0002107,pneumothorax,534,1
+535,labyrinthitis,EFO:0009604,labyrinthitis,535,1
+536,vertigo,HP:0002321,vertigo,536,1
+537,pyloric stenosis,EFO:0009626,pyloric stenosis,537,1
+538,appendicitis,EFO:0007149,appendicitis,538,1
+539,anal fissure,HP:0012390,anal fissure,539,1
+540,haemorrhoids / piles,EFO:0009552,hemorrhoid,540,1
+541,jaundice (unknown cause),HP:0000952,jaundice,541,1
+542,dyspepsia / indigestion,EFO:0008533,dyspepsia,542,1
+543,abdominal hernia,HP:0004299,hernia of the abdominal wall,543,1
+544,umbilical hernia,HP:0001537,umbilical hernia,544,1
+545,inguinal hernia,HP:0000023,inguinal hernia,545,1
+546,cystitis,EFO:1000025,cystitis,546,1
+547,bph / benign prostatic hypertrophy,EFO:0000284,benign prostatis hypertrophy,547,1
+548,prostatitis,EFO:0003830,prostatitis,548,1
+549,erectile dysfunction / impotence,EFO:0004234,erectile dysfunction,549,1
+550,grave's disease,EFO:0004237,Graves disease,550,1
+551,trigemminal neuralgia,EFO:1001219,trigeminal neuralgia,551,1
+552,benign / essential tremor,EFO:0003108,essential tremor,552,1
+553,polio / poliomyelitis,EFO:0007450,poliomyelitis,553,1
+554,dry eyes,EFO:1000906,dry eye syndrome,554,1
+555,iritis,EFO:1000997,iritis,555,1
+556,post-natal depression,EFO:0007453,postpartum depression,556,1
+557,disc degeneration,EFO:0004994,lumbar disc degeneration,557,1
+558,back pain,HP:0003418,back pain,558,1
+559,scoliosis,EFO:0004273,scoliosis,559,1
+560,spinal stenosis,EFO:0007490,spinal stenosis,560,1
+561,joint pain,HP:0002829,arthralgia,561,1
+562,arthritis (nos),EFO:0005856,arthritis,562,1
+563,plantar fascitis,EFO:1001909,plantar fasciitis,563,1
+564,carpal tunnel syndrome,EFO:0004143,carpal tunnel syndrome,564,1
+565,fibromyalgia,EFO:0005687,fibromyalgia,565,1
+566,dupuytren's contracture,EFO:0004229,Dupuytren contracture,566,1
+567,acne/acne vulgaris,EFO:0003894,acne,567,1
+568,lichen planus,EFO:1000726,lichen planus,568,1
+569,cervical intra-epithelial neoplasia (cin) / precancerous cells cervix,EFO:1000910,dysplasia of cervix,569,1
+570,menorrhagia (unknown cause),HP:0000132,menorrhagia,570,1
+571,ectopic pregnancy,HP:0031456,ectopic pregnancy,571,1
+572,breast fibroadenoma,EFO:1000254,Fibroadenoma,572,1
+573,raynaud's phenomenon/disease,EFO:1001145,Raynaud disease,573,1
+574,food intolerance,EFO:1001890,food allergy,574,1
+575,urticaria,EFO:0005531,urticaria,575,1
+576,measles / morbillivirus,EFO:1002025,measles,576,1
+577,mumps / epidemic parotitis,EFO:0007383,mumps infectious disease,577,1
+578,rubella / german measles,EFO:1002026,rubella,578,1
+579,chickenpox,EFO:0007204,chickenpox,579,1
+580,whooping cough / pertussis,EFO:0000650,whooping cough,580,1
+581,shingles,EFO:0006510,Herpes Zoster,581,1
+582,herpes simplex,EFO:1002022,herpes simplex infection,582,1
+583,hepatitis a,EFO:0007305,hepatitis a,583,1
+584,hepatitis b,EFO:0004197,hepatitis b infection,584,1
+585,hepatitis c,EFO:0003047,hepatitis c infection,585,1
+586,aortic regurgitation / incompetence,EFO:0007148,aortic valve insufficiency,586,1
+587,hypertrophic cardiomyopathy (hcm / hocm),EFO:0000538,hypertrophic cardiomyopathy,587,1
+588,pericarditis,EFO:0007427,pericarditis,588,1
+589,tinnitus / tiniitis,HP:0000360,tinnitus,589,1
+590,tonsiltis,HP:0011110,tonsillitis,590,1
+591,constipation,HP:0002019,constipation,591,1
+592,rectal prolapse,HP:0002035,rectal prolapse,592,1
+593,femoral hernia,EFO:1001791,femoral hernia,593,1
+594,incisional hernia,HP:0004872,incisional hernia,594,1
+595,nephritis,EFO:1002050,nephritis,595,1
+596,thyroid goitre,EFO:0004283,goiter,596,1
+597,blepharitis / eyelid infection,EFO:0009536,blepharitis,597,1
+598,obsessive compulsive disorder (ocd),EFO:0004242,obsessive-compulsive disorder,598,1
+599,insomnia,EFO:0004698,insomnia,599,1
+600,osteopenia,HP:0000938,osteopenia,600,1
+601,bursitis,EFO:1000941,frozen shoulder,601,1
+602,tennis elbow / lateral epicondylitis,EFO:1001896,lateral epicondylitis,602,1
+603,cellulitis,EFO:0003035,cellulitis,603,1
+604,fracture skull / head,EFO:1001425,skull fractures,604,1
+605,fracture radius,EFO:0003957,radius fracture,605,1
+606,fracture ulna,EFO:0003950,ulna fracture,606,1
+607,fracture tibia,EFO:0003944,tibia fracture,607,1
+608,septicaemia / sepsis,HP:0100806,sepsis,608,1
+609,meningioma / benign meningeal tumour,Orphanet:2495,meningioma,609,1
+610,rosacea,EFO:1000760,rosacea,610,1
+611,vitiligo,EFO:0004208,vitiligo,611,1
+612,cervical erosion,EFO:1000862,cervix erosion,612,1
+613,dysmenorrhoea / dysmenorrhea,HP:0100607,dysmenorrhea,613,1
+614,menopausal symptoms / menopause,EFO:0003922,menopause,614,1
+615,alopecia / hair loss,Orphanet:79364,alopecia,615,1
+616,scarlet fever / scarlatina,EFO:0007477,scarlet fever,616,1
+617,undescended testicle,EFO:0004562,cryptorchidism,617,1
+618,Hearing difficulty/problems: Yes,EFO:0004238,hearing loss,618,1
+619,Overall health rating,EFO:0004778,self rated health,619,1
+620,General pain for 3+ months,HP:0012532,Chronic pain,620,1
+621,Number of spontaneous miscarriages,EFO:1001255,spontaneous abortion,621,1
+622,Pulse wave reflection index,EFO:0009804,reflection wave amplitude,622,1
+623,Cough on most days,HP:0012735,cough,623,1
+624,Years of cough on most days,HP:0012735,cough,624,1
+625,head injury,EFO:0009505,head injury,625,1
+626,gynaecological disorder (not cancer),EFO:0009549,female reproductive system disease,626,1
+627,peripheral nerve injury,EFO:0009510,peripheral nerve injury,627,1
+628,fracture jaw,EFO:0009612,jaw fracture,628,1
+629,fracture nose,EFO:0009623,nose injury,629,1
+630,fracture clavicle / collar bone,EFO:0009614,clavicle facture,630,1
+631,fracture shoulder / scapula,EFO:0009621,shoulder fracture,631,1
+632,fracture forearm / wrist,EFO:0009515,wrist fracture,632,1
+633,fracture wrist / colles fracture,EFO:0009515,wrist fracture,633,1
+634,fracture hand,NCIT:C27161,hand fracture,634,1
+635,fracture finger,EFO:0009616,finger fracture,635,1
+636,fracture rib,EFO:0009620,rib fracture,636,1
+637,fracture pelvis,EFO:0009622,facture of pelvis,637,1
+638,fracture patella / knee,EFO:0009617,knee fracture,638,1
+639,fracture fibula,EFO:0009613,fibula fracture,639,1
+640,fracture foot,EFO:0009618,foot fracture,640,1
+641,Hand grip strength (left),EFO:0006941,grip strength measurement,641,1
+642,Hand grip strength (right),EFO:0006941,grip strength measurement,642,1
+643,"Heel bone mineral density (BMD) T-score, automated",EFO:0009270,heel bone mineral density,643,1
+644,Age completed full time education,EFO:0004784,self reported educational attainment,644,1
+645,Worrier / anxious feelings,EFO:0005230,anxiety,645,1
+646,Diabetes diagnosed by doctor,EFO:0000400,diabetes mellitus,646,1
+647,Cancer diagnosed by doctor,EFO:0000311,cancer,647,1
+648,Fractured/broken bones in last 5 years,EFO:0003931,bone fracture,648,1
+649,Ever used hormone-replacement therapy (HRT),EFO:0003961,hormone replacement therapy,649,1
+650,Longest period of depression,EFO:0007704,depressive episode measurement,650,1
+651,Number of depression episodes,EFO:0007704,depressive episode measurement,651,1
+652,Creatinine (enzymatic) in urine,EFO:0007934,creatine clearance measurement,652,1
+653,cin/pre-cancer cells cervix,EFO:1000910,dysplasia of cervix,653,1
+654,heart valve problem/heart murmur,EFO:0009551,heart valve disease,654,1
+655,pericardial problem,EFO:0007427,pericarditis,655,1
+656,other respiratory problems,EFO:0000684,respiratory system disease,656,1
+657,oesophageal disorder,EFO:0009544,esophageal disease,657,1
+658,stomach disorder,EFO:0009608,stomach disease,658,1
+659,parathyroid gland problem (not cancer),EFO:0005754,parathyroid disease,659,1
+660,chronic/degenerative neurological problem,EFO:0005772,neurodegenerative disease,660,1
+661,muscle/soft tissue problem,EFO:0009470,soft tissue disease,661,1
+662,other renal/kidney problem,EFO:0003086,kidney disease,662,1
+663,other joint disorder,EFO:1000999,joint disease,663,1
+664,diabetic neuropathy/ulcers,EFO:1000783,diabetic neuropathy,664,1
+665,cervical spondylosis,EFO:0009610,"spondylosis, cervical",665,1
+666,svt / supraventricular tachycardia,HP:0004755,supraventricular tachycardia,666,1
+667,anal problem,HP:0004378,abnormality of the anus,667,1
+668,macular degeneration,EFO:0009606,macular degeneration,668,1
+669,bowel / intestinal obstruction,HP:0004796,gastrointestinal obstruction,669,1
+670,benign neuroma,EFO:0009619,neuroma,670,1
+671,Hearing difficulty/problems: I am completely deaf,EFO:0001063,deafness,671,1
+672,Which eye(s) are affected by cataract: Right eye,EFO:0001059,cataract,672,1
+673,Which eye(s) are affected by cataract: Left eye,EFO:0001059,cataract,673,1
+674,Number of self-reported cancers,EFO:0009800,cancer,674,1
+675,Number of self-reported non-cancer illnesses,EFO:0009801,disease,675,1
+676,"Number of operations, self-reported",EFO:0009802,medical prodecure,676,1
+677,Number of treatments/medications taken,EFO:0009803,treatment,677,1
+678,Nap during day,EFO:0009818,Need to sleep during day,678,1
+679,Comparative body size at age 10,EFO:0009819,body height,679,1
+680,Father's age at death,EFO:0009712,age at death,680,1
+681,Suffer from 'nerves',NCIT:C74532,nervousness,681,1
+682,"Seen doctor (GP) for nerves, anxiety, tension or depression",EFO:0009820,mental or behavioural disorder,682,1
+683,"Seen a psychiatrist for nerves, anxiety, tension or depression",EFO:0009821,mental or behavioural disorder,683,1
+684,Relative age of first facial hair,EFO:0009716,puberty onset measurement,684,1
+685,Number of children fathered,EFO:0009814,number of children ever born measurement,685,1
+686,Age at first live birth,EFO:0009101,age at first birth measurement,686,1
+687,Bilateral oophorectomy (both ovaries removed),EFO:0009717,bilateral oophorectomy,687,1
+688,Peak expiratory flow (PEF),EFO:0009718,peak expiratory flow,688,1
+689,Pace-maker,EFO:0009719,cardiac pacemaker,689,1
+690,Mother's age at death,EFO:0009721,age at death,690,1
+691,Age of primiparous women at birth of child,EFO:0009101,age at first birth measurement,691,1
+692,Work/job satisfaction,EFO:0009723,job satisfaction,692,1
+693,Health satisfaction,EFO:0009724,satisfaction,693,1
+694,Friendships satisfaction,EFO:0009725,satisfaction,694,1
+695,Financial situation satisfaction,EFO:0009726,satisfied with current financial situation,695,1
+696,Ever manic/hyper for 2 days,EFO:0007705,manic episode measurement,696,1
+697,Ever highly irritable/argumentative for 2 days,EFO:0009594,irritability measurement,697,1
+698,Cochlear implant,EFO:0009728,cochlear implants,698,1
+699,Able to walk or cycle unaided for 10 minutes,EFO:0009822,physical activity,699,1
+700,Target heart rate achieved,EFO:0009823,heart rate,700,1
+701,Sitting height,EFO:0007118,sitting height ratio,701,1
+702,Cascot confidence score,EFO:0009815,quantitative confidence value,702,1
+703,Whole body water mass,EFO:0009805,body weight,703,1
+704,Reported occurrences of cancer,EFO:0000311,cancer,704,1
+705,oesophageal stricture,HP:0002043,esophageal stricture,705,1
+706,bladder problem (not cancer),EFO:1000018,bladder disease,706,1
+707,prostate problem (not cancer),EFO:0009602,prostate disease,707,1
+708,testicular problems (not cancer),EFO:0009601,testicular disease,708,1
+709,thyroid problem (not cancer),EFO:1000627,thyroid disease,709,1
+710,thyroid radioablation therapy,EFO:0009600,thyroid radioablation therapy,710,1
+711,adrenocortical insufficiency/addison's disease,EFO:0009491,adrenocortical insufficiency,711,1
+712,neurological injury/trauma,EFO:0009490,nervous system injury,712,1
+713,cranial nerve problem/palsy,EFO:0009489,cranial nerve palsy,713,1
+714,spinal cord disorder,EFO:0009488,spinal cord disease,714,1
+715,peripheral nerve disorder,EFO:0009387,peripheral nervous system disease,715,1
+716,trapped nerve/compressed nerve,EFO:0009487,nerve compression syndrome,716,1
+717,diabetic eye disease,EFO:0009486,diabetic eye disease,717,1
+718,eye trauma,EFO:0009485,eye injury,718,1
+719,back problem,HP:0003418,back pain,719,1
+720,uterine polyps,EFO:0009484,uterine polyp,720,1
+721,allergy or anaphylactic reaction to drug,EFO:0009482,drug allergy,721,1
+722,enlarged prostate,EFO:0000284,benign prostatic hyperplasia,722,1
+723,burns,EFO:0009516,burn,723,1
+724,nasal/sinus disorder,EFO:0009481,paranasal sinus disease,724,1
+725,throat or larynx disorder,EFO:0009479,throat disease,725,1
+726,vocal cord polyp,EFO:0009478,vocal cord polyp,726,1
+727,other neurological problem,EFO:0000618,nervous system disease,727,1
+728,clotting disorder/excessive bleeding,EFO:0009314,blood coagulation disease,728,1
+729,disc problem,EFO:0009477,vertebral joint disease,729,1
+730,cervical polyps,EFO:0009475,cervical polyp,730,1
+731,abnormal smear (cervix),EFO:0009511,abnormal PAP smear,731,1
+732,benign breast lump,EFO:0003014,breast fibrocystic disease,732,1
+733,Perineal_laceration_during_delivery,EFO:0009816,first degree perineal laceration,733,1
+734,Intrauterine_hypoxia,EFO:1001793,hypoxia,734,1
+735,Abnormal_serum_enzyme_levels,EFO:0009826,liver enzyme measurement,735,1
+736,Injury_of_other_intrathoracic_organs,EFO:0009887,injury,736,1
+737,Other_fluke_infections,EFO:1001342,infectious disease,737,1
+738,Hereditary_ataxia,EFO:0009671,hereditary ataxia,738,1
+739,Mycetoma,EFO:0007265,eumycotic mycetoma,739,1
+740,Viral_warts,EFO:0009662,warts,740,1
+741,Convalescence,EFO:0009630,caonvalescence,741,1
+742,Other_disorders_of_nervous_system,EFO:0000618,nervous system disease,742,1
+743,Hypertensive_renal_disease,EFO:1002039,renal hypertension,743,1
+744,Headache,HP:0002315,Headache,744,1
+745,Fever of unknown origin,EFO:0003952,fever of unknown origin,745,1
+746,Dysphagia,HP:0002015,Dysphagia,746,1
+747,Cough,HP:0012735,Cough,747,1
+748,Other arthritis,EFO:0005856,arthritis,748,1
+749,Systemic lupus erythematosus,EFO:0002690,systemic lupus erythematosus,749,1
+750,Systemic sclerosis,EFO:0000717,systemic scleroderma,750,1
+751,Psoriasis,EFO:0000676,psoriasis,751,1
+752,Other disorders of pigmentation,EFO:1000755,pigmentation disease,752,1
+753,"Ulcer of lower limb, not elsewhere classified",EFO:0007068,ulcer of lower limb,753,1
+754,Dyspepsia,EFO:0008533,dyspepsia,754,1
+755,Inguinal hernia,HP:0000023,inguinal hernia,755,1
+756,"Bacterial pneumonia, not elsewhere classified",EFO:1001272,bacterial pneumonia,756,1
+757,"Pneumonia, organism unspecified",EFO:0003106,pneumonia,757,1
+758,Nasal polyp,EFO:1000391,nasal cavity polyp,758,1
+759,Peritonsillar abscess,EFO:0007429,peritonsillar abscess,759,1
+760,Emphysema,EFO:0000464,emphysema,760,1
+761,Other chronic obstructive pulmonary disease,EFO:0000341,chronic obstructive pulmonary disease,761,1
+762,Asthma,EFO:0000270,asthma,762,1
+763,Bronchiectasis,HP:0002110,Bronchiectasis,763,1
+764,Other interstitial pulmonary diseases,EFO:0004244,interstitial lung disease,764,1
+765,Other respiratory disorders,EFO:0000684,respiratory system disease,765,1
+766,Bipolar affective disorder,EFO:0000289,bipolar disorder,766,1
+767,"Sexual dysfunction, not caused by organic disorder or disease",EFO:0004714,sexual dysfunction,767,1
+768,Other hypothyroidism,EFO:0004705,hypothyroidism,768,1
+769,Melanoma in situ,EFO:0004957,Clark level I melanoma,769,1
+770,Benign neoplasm of ovary,EFO:1000116,benign ovarian neoplasm,770,1
+771,Benign neoplasm of thyroid gland,EFO:1000122,benign thyroid gland neoplasm,771,1
+772,Polycythaemia vera,EFO:0002429,Polycythaemia vera,772,1
+773,Myelodysplastic syndromes,EFO:0000198,myelodysplastic syndrome,773,1
+774,Malignant neoplasm of colon,EFO:1001950,colon carcinoma,774,1
+775,Malignant neoplasm of larynx,EFO:1000354,Malignant Laryngeal Neoplasm,775,1
+776,Mesothelioma,EFO:0000588,mesothelioma,776,1
+777,Hodgkin's disease,EFO:0000183,Hodgkins lymphoma,777,1
+778,Lymphoid leukaemia,EFO:0004289,lymphoid leukemia,778,1
+779,Myeloid leukaemia,EFO:0000222,acute myeloid leukemia,779,1
+780,Other disorders of bladder,EFO:1000018,bladder disease,780,1
+781,Other inflammation of vagina and vulva,EFO:0005757,vaginal inflammation,781,1
+782,Other rheumatoid arthritis,EFO:0000685,rheumatoid arthritis,782,1
+783,"Other joint disorders, not elsewhere classified",EFO:1000999,joint disease,783,1
+784,"Other disorders of skin and subcutaneous tissue, not elsewhere classified",EFO:0000701,skin disease,784,1
+785,Other aneurysm,EFO:0009659,aneurysm,785,1
+786,Other hearing loss,EFO:0004238,hearing loss,786,1
+787,Acute and transient psychotic disorders,EFO:0005940,General psycotic symptoms term,787,1
+788,Other anxiety disorders,EFO:0006788,General anxiety disorder,788,1
+789,Other disorders of thyroid,EFO:1000627,General throid disorder term,789,1
+790,Neoplasm of uncertain or unknown behaviour of female genital organs,EFO:1001331,"Genital neoplasm, female",790,1
+791,Neoplasm of uncertain or unknown behaviour of endocrine glands,EFO:0003769,endocrine neoplasm,791,1
+792,Malignant neoplasm of tonsil,EFO:1001214,tonsil cancer,792,1
+793,Malignant neoplasm of rectum,EFO:1000657,rectum cancer,793,1
+794,Malignant melanoma of skin,EFO:0000389,cutaneous melanoma,794,1
+795,Other septicaemia,HP:0100806,sepsis,795,1
+796,Family history of malignant neoplasm,EFO:0009640,"There is only family history of breast or lung cancer, could use a parent term like family history of cancer?",796,1
+797,Abnormal findings on diagnostic imaging of other body structures,EFO:0009827,abnormal finding,797,1
+798,Symptoms and signs concerning food and fluid intake,EFO:0009825,sign or symptom,798,1
+799,Pregnancy examination and test,EFO:0009643,pregnancy test,799,1
+800,"Adverse effects, not elsewhere classified",EFO:0009658,No general adverse effects term,800,1
+801,Injury of unspecified body region,EFO:0000546,injury,801,1
+802,"Dislocation, sprain and strain of joints and ligaments at neck level",EFO:0009476,neck injury,802,1
+803,Other general symptoms and signs,EFO:0003765,sign or symptom,803,1
+804,"Oedema, not elsewhere classified",EFO:0009373,edema,804,1
+805,Syncope and collapse,HP:0001279,syncope,805,1
+806,Malaise and fatigue,HP:0012378 | EFO:0009641,fatigue||malaise,806,1
+807,Voice disturbances,EFO:0009692,voice disturbance,807,1
+808,Other symptoms and signs involving the urinary system,HP:0000079,abnormality of the urinary system,808,1
+809,Other skin changes,HP:0000951,abnormality of the skin,809,1
+810,Flatulence and related conditions,EFO:0009669,flatulence,810,1
+811,Ectopic pregnancy,HP:0031456,ectopic pregnancy,811,1
+812,Other disorders of amniotic fluid and membranes,HP:0001560,abnormality of the amniotic fluid,812,1
+813,"Antepartum haemorrhage, not elsewhere classified",HP:0025328,antepartum hemorrhage,813,1
+814,False labour,EFO:0009639,Braxton-Hicks contraction,814,1
+815,Prolonged pregnancy,EFO:0009681,post term pregnancy,815,1
+816,Single spontaneous delivery,EFO:0009638,spontaneous labor and birth,816,1
+817,"Complications of the puerperium, not elsewhere classified",EFO:0009683,puerperal disorder,817,1
+818,"Other maternal diseases classifiable elsewhere but complicating pregnancy, childbirth and the puerperium",EFO:0009682,pregnancy disorder,818,1
+819,Calculus of lower urinary tract,EFO:1001228,ureterolithiasis,819,1
+820,"Neuromuscular dysfunction of bladder, not elsewhere classified",HP:0000011,neurogenic bladder,820,1
+821,Other disorders of urethra,EFO:0009689,urethral disease,821,1
+822,Other disorders of urinary system,EFO:0009690,urinary system disease,822,1
+823,Hyperplasia of prostate,EFO:0000284,benign prostatic hyperplasia,823,1
+824,Other disorders of prostate,EFO:0009602,prostate disease,824,1
+825,Other disorders of breast,EFO:0009483,breast disease,825,1
+826,Erosion and ectropion of cervix uteri,EFO:1000862,cervix erosion,826,1
+827,Other abnormal uterine and vaginal bleeding,HP:0100608,metrorrhagia,827,1
+828,Other arthrosis,EFO:0002506,osteoarthritis,828,1
+829,Other acquired deformities of limbs,Orphanet:294944,congenital deformities of limbs,829,1
+830,Disorders of patella,EFO:0009665,abnormality of the patella,830,1
+831,Other disorders of muscle,EFO:0002970,muscular disease,831,1
+832,Other disorders of synovium and tendon,EFO:1001435,tenosynovitis,832,1
+833,Other enthesopathies,EFO:0009666,enthesopathy,833,1
+834,"Other soft tissue disorders, not elsewhere classified",EFO:0009470,soft tissue disease,834,1
+835,Other disorders of bone,EFO:0004260,bone disease,835,1
+836,Other disorders of cartilage,EFO:0005802,cartilage disease,836,1
+837,Other acquired deformities of musculoskeletal system and connective tissue,EFO:0009676 | EFO:1001986,musculoskeletal system disease | connective tissue disease,837,1
+838,Other epidermal thickening,HP:0011368,epidermal thickening,838,1
+839,Embedded and impacted teeth,HP:0011079,impacted tooth,839,1
+840,Other disorders of teeth and supporting structures,EFO:1001216,tooth disease,840,1
+841,Stomatitis and related lesions,EFO:0009688,stomatitis,841,1
+842,Other diseases of anus and rectum,EFO:0009660 | EFO:0009685,anus disease||rectal disease,842,1
+843,Other diseases of pancreas,EFO:0009605,pancreas disease,843,1
+844,Other diseases of digestive system,EFO:0000405,digestive system disease,844,1
+845,Acute pharyngitis,EFO:0009657,pharyngitis,845,1
+846,"Diseases of vocal cords and larynx, not elsewhere classified",EFO:0009673,laryngeal disease,846,1
+847,"Bronchitis, not specified as acute or chronic",EFO:0009661,bronchitis,847,1
+848,Pyothorax,EFO:0009680,pleural empyema,848,1
+849,"Pleural effusion, not elsewhere classified",EFO:0009637,pleural effusion,849,1
+850,"Respiratory failure, not elsewhere classified",EFO:0009686,respiratory failure,850,1
+851,Other diseases of pericardium,EFO:0007427,pericarditis,851,1
+852,Other conduction disorders,EFO:0005137,conduction system disease,852,1
+853,Other cardiac arrhythmias,EFO:0004269,cardiac arrythmia,853,1
+854,"Occlusion and stenosis of precerebral arteries, not resulting in cerebral infarction",EFO:0009677,occlusion precerebral artery,854,1
+855,Other venous embolism and thrombosis,EFO:0004286,venous thromboembolism,855,1
+856,Other non-infective disorders of lymphatic vessels and lymph nodes,EFO:0007352,lymphatic system disease,856,1
+857,Other disorders of eyelid,EFO:0009547,eyelid disease,857,1
+858,Disorders of orbit,EFO:0009664,disease of orbital region,858,1
+859,Other disorders of conjunctiva,EFO:1000203,conjunctival disorder,859,1
+860,Other disorders of lens,EFO:0009674,lens disease,860,1
+861,Paralytic strabismus,EFO:0009678,paralytic strabismus,861,1
+862,Other strabismus,HP:0000486,strabismus,862,1
+863,Other disorders of eye and adnexa,EFO:0009546,eye adnexa disease,863,1
+864,Other disorders of external ear,EFO:0009668,external ear disease,864,1
+865,Other disorders of Eustachian tube,EFO:0009667,eustachian tube disease,865,1
+866,Disorders of vestibular function,EFO:0009691,vestibular disease,866,1
+867,Other diseases of inner ear,EFO:0009672,inner ear disease,867,1
+868,Otalgia and effusion of ear,HP:0030766 | EFO:0007415,ear pain||otitis media with effusion,868,1
+869,"Other disorders of ear, not elsewhere classified",EFO:1001455,auditory system disease,869,1
+870,Other mononeuropathies,EFO:0009558,mononeuropathy,870,1
+871,Other polyneuropathies,EFO:0009562,polyneuropathy,871,1
+872,Paraplegia and tetraplegia,EFO:0009679 | EFO:0009684,paraplegia,872,1
+873,Other disorders of brain,EFO:0005774,brain disease,873,1
+874,Other diseases of spinal cord,EFO:0009488,spinal cord disease,874,1
+875,Somatoform disorders,EFO:0009687,somatoform disorder,875,1
+876,Thyrotoxicosis [hyperthyroidism],EFO:0009189,hyperthyroidism,876,1
+877,"Other disorders of fluid, electrolyte and acid-base balance",HP:0001939,abnormality of metabolism/homeostasis,877,1
+878,Benign lipomatous neoplasm,EFO:0000759,lipoma,878,1
+879,Melanocytic naevi,EFO:0009675,Melanocytic nevus,879,1
+880,Benign neoplasm of other and unspecified endocrine glands,EFO:0003769,endocrine neoplasm,880,1
+881,Benign neoplasm of other and unspecified sites,EFO:0002422,benign neoplasm,881,1
+882,Neoplasm of uncertain or unknown behaviour of oral cavity and digestive organs,EFO:0008549,digestive system neoplasm,882,1
+883,Other aplastic anaemias,HP:0001915,aplastic anemia,883,1
+884,Other diseases of blood and blood-forming organs,EFO:0005803,hematologic disease,884,1
+885,"Other disorders involving the immune mechanism, not elsewhere classified",EFO:0000540,immune system disease,885,1
+886,Other and unspecified types of non-Hodgkin's lymphoma,EFO:0005952,non-Hodgkins lymphoma,886,1
+887,Other disorders of adrenal gland,EFO:0005539,adrenal gland disease,887,1

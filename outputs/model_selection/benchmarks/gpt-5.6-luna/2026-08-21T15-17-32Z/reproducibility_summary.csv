@@ -1,0 +1,2 @@
+model,rows_compared,rows_skipped_execution_error,top1_exact_agreement,top5_set_agreement,run_1_weighted_f1,run_2_weighted_f1,weighted_f1_absolute_difference,run_1_top1_accuracy,run_2_top1_accuracy,top1_absolute_difference,run_1_top5_hit_rate,run_2_top5_hit_rate,top5_absolute_difference
+gpt-5.6-luna,218,0,0.8853211009174312,0.6284403669724771,0.7525035765379113,0.7507163323782234,0.0017872441596878952,0.5963302752293578,0.5871559633027523,0.00917431192660545,0.6100917431192661,0.6146788990825688,0.004587155963302725

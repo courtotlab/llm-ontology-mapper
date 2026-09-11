@@ -1,29 +1,31 @@
 """
 OntologyMapper — core LLM mapping service.
 
-Prompt templates live in assets/prompts/ (mapping_prompt.txt, rag_prompt.txt).
-Provider backends are injected via BaseLLMProvider / LLMProviderFactory.
+The only supported mapping architecture is the seven-stage planned pipeline
+(QueryPlanner -> RetrievalRouter -> retriever -> CandidateNormalizer ->
+CandidateMerger -> LLMReranker -> MappingResultBuilder); see
+planned_pipeline.PlannedPipeline. Provider backends are injected via
+BaseLLMProvider / LLMProviderFactory.
 Public API: map_term(), map_data_dictionary().
 """
 
 from __future__ import annotations
 
 import logging
+import math
 import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 from llm_ontology_mapper.models import (
-    LogicType,
     MappingBatch,
-    MappingMetadata,
     MappingResult,
-    RAGDebugInfo,
+    RetrievalMode,
 )
+from llm_ontology_mapper.planned_pipeline import PlannedPipeline
 from llm_ontology_mapper.providers import (
     BaseLLMProvider,
-    ChatMessage,
     LLMProviderFactory,
 )
 
@@ -31,7 +33,6 @@ logger = logging.getLogger(__name__)
 
 # ── Asset paths ───────────────────────────────────────────────────────────────
 _ASSETS = Path(__file__).parent / "assets"
-_PROMPT_DIR = _ASSETS / "prompts"
 _DEFAULT_CONFIG = _ASSETS / "ontology_config.yaml"
 
 
@@ -39,6 +40,7 @@ _DEFAULT_CONFIG = _ASSETS / "ontology_config.yaml"
 def _load_config_cached(path: Path) -> dict[str, Any]:
     """Load ontology_config.yaml, cached at module level to avoid lru_cache memory leak on methods."""
     import yaml  # noqa: PLC0415  # type: ignore[import-untyped]
+
     if not path.exists():
         logger.warning("Ontology config not found at %s — using empty config", path)
         return {}
@@ -89,13 +91,14 @@ class OntologyMapper:
         ontology_config_path: str | None = None,
         # ── Caching ───────────────────────────────────────────────────────────
         cache_dir: str | None = ".ontology_cache",
-        # ── RAG parameters ────────────────────────────────────────────────────
-        use_rag: bool = False,
-        ontology_retriever: Any | None = None,  # OntologyRetriever
-        rag_top_k: int = 5,
-        rag_auto_accept_threshold: float = 0.0,
-        # ── Legacy compat flags ───────────────────────────────────────────────
-        use_ontogpt: bool = False,   # deprecated no-op
+        # ── Retrieval knobs (consumed by the planned pipeline) ────────────────
+        rag_top_k: int = 15,
+        # ── Planned pipeline (the only supported mapping architecture) ────────
+        use_planned_pipeline: bool = True,
+        retrieval_mode: RetrievalMode | str = RetrievalMode.PUBLIC,
+        planned_pipeline: Any | None = None,
+        max_candidates: int | None = 20,
+        max_alternatives: int = 5,
         **provider_kwargs: Any,
     ) -> None:
         # ── LLM backend ───────────────────────────────────────────────────────
@@ -110,24 +113,34 @@ class OntologyMapper:
             )
 
         # ── Config ────────────────────────────────────────────────────────────
-        self._explicit_ontologies: list[str] | None = ontologies  # None = auto-detect
-        self.ontologies = ontologies or ["HPO", "MONDO", "NCIT", "LOINC", "UO"]
         config_path = Path(ontology_config_path) if ontology_config_path else _DEFAULT_CONFIG
         self._ontology_config = self._load_config(config_path)
+        self._explicit_ontologies = self._normalize_ontology_list(ontologies)
+        self.ontologies = self._explicit_ontologies or ["HPO", "MONDO", "NCIT", "LOINC", "UO"]
 
-        # ── RAG ───────────────────────────────────────────────────────────────
-        self.use_rag                  = use_rag
-        self._retriever               = ontology_retriever
-        self.rag_top_k                = rag_top_k
-        self.rag_auto_accept_threshold = rag_auto_accept_threshold
+        self.rag_top_k = rag_top_k
+        self.max_candidates = max_candidates
+        self.max_alternatives = max_alternatives
+
+        # ── Planned pipeline: the only supported mapping architecture ──────────
+        # use_planned_pipeline is accepted (and defaults to True) so an active
+        # caller that still passes it explicitly -- e.g. Bridge always sends
+        # use_planned_pipeline=True -- keeps working unchanged. Passing False
+        # is rejected rather than silently downgraded to a removed legacy path.
+        if not use_planned_pipeline:
+            raise ValueError(
+                "use_planned_pipeline=False is no longer supported: the legacy "
+                "non-planned mapping path has been removed. OntologyMapper now "
+                "always maps through the seven-stage planned pipeline."
+            )
+        self.use_planned_pipeline = True
+        self._planned_retrieval_mode = self._coerce_planned_retrieval_mode(retrieval_mode)
+        self._planned_pipeline = planned_pipeline
 
         # ── Cache dir ─────────────────────────────────────────────────────────
         self._cache_dir = Path(cache_dir) if cache_dir else None
         if self._cache_dir:
             self._cache_dir.mkdir(parents=True, exist_ok=True)
-
-        if use_ontogpt:
-            logger.warning("use_ontogpt is deprecated and will be removed in v1.0.  Ignoring.")
 
     # ─────────────────────────────────────────────────────────────────────────
     # Public API
@@ -139,6 +152,11 @@ class OntologyMapper:
         source_label: str | None = None,
         source_type: str | None = None,
         entity_type: str | None = None,
+        use_planned_pipeline: bool | None = None,
+        retrieval_mode: RetrievalMode | str | None = None,
+        *,
+        source_description: str | None = None,
+        strict_target_ontology: bool = False,
     ) -> MappingResult:
         """
         Map a single term to an ontology code.
@@ -148,48 +166,46 @@ class OntologyMapper:
             source_label: Human-readable question / label text.
             source_type:  Schema type hint (radio, integer, text, …).
             entity_type:  Domain hint (phenotype, diagnosis, measurement, …).
+            use_planned_pipeline: Accepted for call-site compatibility with
+                existing planned-pipeline callers (e.g. Bridge always passes
+                True). There is no other mapping architecture, so passing
+                False raises ValueError instead of silently doing something
+                different from what the caller asked for.
+            retrieval_mode: Optional per-call retrieval mode override
+                (public/local/disabled).
+            source_description: Optional description of the source field for
+                planned-pipeline query planning.
+            strict_target_ontology: When True, a returned mapping's candidate
+                must belong natively to one of the requested target
+                ontologies — e.g. for target_ontology="EFO", a candidate
+                merely retrieved through the EFO route (native ontology HPO,
+                MONDO, …) is rejected rather than accepted. Defaults to False,
+                which preserves the existing ontology-specific eligibility
+                rules (including EFO imported-term support) exactly.
 
         Returns:
             MappingResult with confidence score and logic_type.
         """
-        t0 = time.monotonic()
-
-        # 1. RAG retrieval (if enabled)
-        rag_debug: RAGDebugInfo | None = None
-        rag_candidates: list[dict[str, Any]] = []
-
-        if self.use_rag and self._retriever is not None:
-            rag_candidates, rag_debug = self._retrieve_candidates(
-                source_term, source_label, entity_type
+        planned_t0 = time.monotonic()
+        if use_planned_pipeline is False:
+            raise ValueError(
+                "use_planned_pipeline=False is no longer supported: the legacy "
+                "non-planned mapping path has been removed."
             )
 
-        # 2. Build prompt
-        messages = self._build_prompt(
+        mode = self._coerce_planned_retrieval_mode(
+            retrieval_mode if retrieval_mode is not None else self._planned_retrieval_mode
+        )
+        result = self._map_term_with_planned_pipeline(
             source_term=source_term,
             source_label=source_label,
+            source_description=source_description,
             source_type=source_type,
             entity_type=entity_type,
-            rag_candidates=rag_candidates,
+            retrieval_mode=mode,
+            strict_target_ontology=strict_target_ontology,
         )
-
-        # 3. Call LLM
-        completion = self._llm.complete(messages, temperature=0.1, max_tokens=512)
-
-        # 4. Parse response → MappingResult
-        result = self._parse_response(
-            completion=completion,
-            source_term=source_term,
-            source_label=source_label,
-            source_type=source_type,
-            rag_debug=rag_debug,
-            latency_ms=(time.monotonic() - t0) * 1000,
-        )
-
-        logger.info(
-            "Mapped %r → %s (%s, conf=%.2f, logic=%s)",
-            source_term, result.target_code, result.target_term,
-            result.confidence, result.logic_type.value,
-        )
+        _attach_latency_ms(result, (time.monotonic() - planned_t0) * 1000)
         return result
 
     def map_data_dictionary(
@@ -200,6 +216,11 @@ class OntologyMapper:
         source_type_field: str = "field_type",
         entity_type: str | None = None,
         study_id: str | None = None,
+        *,
+        source_description_field: str | None = None,
+        use_planned_pipeline: bool | None = None,
+        retrieval_mode: RetrievalMode | str | None = None,
+        strict_target_ontology: bool = False,
     ) -> MappingBatch:
         """
         Map every row in a data dictionary to an ontology code.
@@ -211,18 +232,39 @@ class OntologyMapper:
             source_type_field:  Key holding the data type.
             entity_type:        Domain hint applied to all records.
             study_id:           Optional study identifier for the batch.
+            source_description_field: Optional key holding a source-field description.
+            use_planned_pipeline: Optional per-row override forwarded to map_term();
+                see map_term for why False is rejected rather than silently accepted.
+            retrieval_mode: Optional per-row planned retrieval mode forwarded to map_term().
+            strict_target_ontology: Forwarded unchanged to every map_term() call in
+                the batch (see OntologyMapper.map_term).
 
         Returns:
             MappingBatch containing one MappingResult per input record.
         """
+        if use_planned_pipeline is False:
+            raise ValueError(
+                "use_planned_pipeline=False is no longer supported: the legacy "
+                "non-planned mapping path has been removed."
+            )
+
         results: list[MappingResult] = []
+        description_key = _normalize_optional_batch_text(source_description_field)
         for rec in records:
             try:
                 result = self.map_term(
                     source_term=rec.get(source_term_field, ""),
                     source_label=rec.get(source_label_field),
-                    source_type=rec.get(source_type_field),
+                    source_type=_normalize_optional_batch_text(rec.get(source_type_field)),
                     entity_type=entity_type,
+                    use_planned_pipeline=use_planned_pipeline,
+                    retrieval_mode=retrieval_mode,
+                    source_description=(
+                        _normalize_optional_batch_text(rec.get(description_key))
+                        if description_key is not None
+                        else None
+                    ),
+                    strict_target_ontology=strict_target_ontology,
                 )
                 results.append(result)
             except Exception:
@@ -234,285 +276,138 @@ class OntologyMapper:
     # Private helpers
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _effective_ontologies(self, entity_type: str | None) -> list[str]:
-        if self._explicit_ontologies is not None:
-            return self._explicit_ontologies
-        return self.get_recommended_ontologies(entity_type)
+    @staticmethod
+    def _coerce_planned_retrieval_mode(
+        retrieval_mode: RetrievalMode | str,
+    ) -> RetrievalMode:
+        if isinstance(retrieval_mode, RetrievalMode):
+            return retrieval_mode
+        return RetrievalMode(str(retrieval_mode).lower())
+
+    def _get_planned_pipeline(self) -> Any:
+        if self._planned_pipeline is None:
+            self._planned_pipeline = PlannedPipeline(provider=self._llm)
+        return self._planned_pipeline
+
+    def _planned_allowed_target_ontologies(self) -> list[str] | None:
+        """
+        Resolve constructor ontologies into a planned-mode allow-list.
+
+        None means unrestricted planner behavior.  A one-item list is still
+        treated as a singular target by PlannedPipeline for backward
+        compatibility; multi-item lists are strict allow-lists.
+        """
+        return list(self._explicit_ontologies) if self._explicit_ontologies else None
+
+    def _map_term_with_planned_pipeline(
+        self,
+        *,
+        source_term: str,
+        source_label: str | None,
+        source_description: str | None,
+        source_type: str | None,
+        entity_type: str | None,
+        retrieval_mode: RetrievalMode,
+        strict_target_ontology: bool = False,
+    ) -> MappingResult:
+        allowed_target_ontologies = self._planned_allowed_target_ontologies()
+        pipeline = self._get_planned_pipeline()
+        return pipeline.map_term(
+            source_term=source_term,
+            source_label=source_label,
+            source_description=source_description,
+            source_type=source_type,
+            clinical_area=entity_type,
+            target_ontology=(
+                allowed_target_ontologies[0]
+                if allowed_target_ontologies and len(allowed_target_ontologies) == 1
+                else None
+            ),
+            allowed_target_ontologies=allowed_target_ontologies,
+            retrieval_mode=retrieval_mode,
+            max_results_per_query=self.rag_top_k,
+            max_candidates=self.max_candidates,
+            max_alternatives=self.max_alternatives,
+            strict_target_ontology=strict_target_ontology,
+        )
 
     def _load_config(self, path: Path) -> dict[str, Any]:
         """Load ontology_config.yaml.  Cached per path."""
         return _load_config_cached(path)
 
-    def _load_prompt_template(self, name: str) -> str:
-        """Load a prompt template from assets/prompts/<name>.txt."""
-        p = _PROMPT_DIR / f"{name}.txt"
-        if not p.exists():
-            raise FileNotFoundError(f"Prompt template not found: {p}")
-        return p.read_text(encoding="utf-8")
+    def _normalize_ontology_list(self, ontologies: Any | None) -> list[str] | None:
+        if ontologies is None:
+            return None
+        raw_values = [ontologies] if isinstance(ontologies, str) else list(ontologies)
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in raw_values:
+            ontology = self._normalize_ontology_name(raw)
+            if ontology and ontology not in seen:
+                normalized.append(ontology)
+                seen.add(ontology)
+        return normalized or None
 
-    def _get_ontology_description(self, ontology: str) -> str:
-        return self._ontology_config.get('ontologies', {}).get(ontology, {}).get('description', ontology)
+    def _normalize_ontology_name(self, ontology: Any) -> str | None:
+        text = str(ontology or "").strip()
+        if not text:
+            return None
 
-    def _get_ontology_prefix(self, ontology: str) -> str:
-        return self._ontology_config.get('ontologies', {}).get(ontology, {}).get('curie_prefix', ontology)
+        upper = text.upper()
+        aliases = self._ontology_config.get("prefix_aliases", {})
+        alias_map = {str(k).upper(): str(v).strip() for k, v in aliases.items()}
+        alias_value = alias_map.get(upper)
+        if alias_value:
+            return alias_value.upper()
 
-    def get_recommended_ontologies(self, entity_type: str | None = None) -> list[str]:
-        if not entity_type:
-            entity_type = 'default'
-        mapping = self._ontology_config.get('entity_ontology_mapping', {})
-        et_lower = entity_type.lower()
-        if et_lower in mapping:
-            return mapping[et_lower].get('ontologies', ['HPO'])
-        for key in mapping:
-            if key in et_lower or et_lower in key:
-                return mapping[key].get('ontologies', ['HPO'])
-        return mapping.get('default', {}).get('ontologies', ['HPO', 'MONDO', 'NCIT'])
+        ontology_keys = self._ontology_config.get("ontologies", {})
+        for key in ontology_keys:
+            if str(key).upper() == upper:
+                return str(key).upper()
 
-    def _infer_ontology_from_entity(self, entity_type: str | None) -> str:
-        if not entity_type:
-            entity_type = 'default'
-        mapping = self._ontology_config.get('entity_ontology_mapping', {})
-        et_lower = entity_type.lower()
-        if et_lower in mapping:
-            primary = mapping[et_lower].get('primary')
-            if primary:
-                return primary
-        for key in mapping:
-            if key in et_lower:
-                primary = mapping[key].get('primary')
-                if primary:
-                    return primary
-        return mapping.get('default', {}).get('primary', 'HPO')
+        return upper
 
-    def _infer_ontology_source_from_code(self, code: str, fallback: str) -> str:
-        if not code or ':' not in code:
-            return fallback
-        prefix = code.split(':', 1)[0].upper()
-        for onto_key, onto_cfg in self._ontology_config.get('ontologies', {}).items():
-            if onto_cfg.get('curie_prefix', onto_key).upper() == prefix:
-                return onto_key
-        prefix_aliases = self._ontology_config.get('prefix_aliases', {})
-        if prefix in prefix_aliases:
-            return prefix_aliases[prefix]
-        if not prefix_aliases:
-            _FB = {
-                'HP': 'HPO', 'HPO': 'HPO', 'MONDO': 'MONDO', 'NCIT': 'NCIT',
-                'LOINC': 'LOINC', 'ICD10': 'ICD10', 'ICD10CM': 'ICD10',
-                'RXNORM': 'RxNorm', 'RXCUI': 'RxNorm',
-                'SCTID': 'SNOMED-CT', 'SNOMEDCT': 'SNOMED-CT',
-            }
-            return _FB.get(prefix, fallback)
-        return fallback
 
-    def _normalize_ontology_code(self, code: str, target_ontology: str) -> str:
-        if not code or ':' not in code:
-            return code
-        current_prefix, code_id = code.split(':', 1)
-        current_prefix = current_prefix.strip()
-        ontologies_meta = self._ontology_config.get('ontologies', {})
-        correct_prefix = ontologies_meta.get(target_ontology, {}).get('curie_prefix')
-        prefix_aliases = self._ontology_config.get('prefix_aliases', {})
-        if not prefix_aliases:
-            prefix_aliases = {
-                'HPO': 'HPO', 'HP': 'HPO', 'SCTID': 'SNOMED-CT',
-                'SNOMED': 'SNOMED-CT', 'SNOMEDCT': 'SNOMED-CT',
-                'LOINC': 'LOINC', 'MONDO': 'MONDO', 'NCIT': 'NCIT',
-                'RXNORM': 'RxNorm', 'RXCUI': 'RxNorm',
-            }
-        alias_ontology = prefix_aliases.get(current_prefix.upper())
-        if alias_ontology and alias_ontology in ontologies_meta:
-            correct_prefix = ontologies_meta[alias_ontology].get('curie_prefix', alias_ontology)
-        if correct_prefix and correct_prefix != current_prefix:
-            return f"{correct_prefix}:{code_id}"
-        return code
+def _normalize_optional_batch_text(value: Any) -> str | None:
+    """Normalize optional spreadsheet-like batch metadata to prompt-safe text."""
+    if _is_missing_batch_value(value):
+        return None
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    if text.lower() in {"nan", "none", "null", "n/a"}:
+        return None
+    return text
 
-    def _extract_json_from_response(self, response: str) -> str:
-        import re
-        fence_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', response, re.DOTALL)
-        if fence_match:
-            return fence_match.group(1)
-        obj_match = re.search(r'\{.*\}', response, re.DOTALL)
-        if obj_match:
-            return obj_match.group(0)
-        return response.strip()
 
-    def _build_prompt(
-        self,
-        source_term: str,
-        source_label: str | None,
-        source_type: str | None,
-        entity_type: str | None,
-        rag_candidates: list[dict[str, Any]],
-    ) -> list[ChatMessage]:
-        """Build prompt messages from assets/prompts/*.txt templates."""
-        target_ontologies = self._effective_ontologies(entity_type)
-        ontologies_block = "\n".join(
-            f"  {i+1}. {o} — {self._get_ontology_description(o)}"
-            for i, o in enumerate(target_ontologies)
-        )
+def _is_missing_batch_value(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, float) and math.isnan(value):
+        return True
 
-        if rag_candidates:
-            candidates_block = "\n".join(
-                f"  {i+1}. {c.get('code', '?')} — {c.get('term', '?')}  (score: {c.get('score', 0):.3f})"
-                for i, c in enumerate(rag_candidates)
-            )
-            template = self._load_prompt_template("rag_prompt")
-            content = template.format(
-                source_term=source_term,
-                source_label=source_label or "N/A",
-                source_type=source_type or "N/A",
-                entity_type=entity_type or "N/A",
-                candidates=candidates_block,
-                ontologies=ontologies_block,
-            )
-        else:
-            template = self._load_prompt_template("mapping_prompt")
-            content = template.format(
-                source_term=source_term,
-                source_label=source_label or "N/A",
-                source_type=source_type or "N/A",
-                entity_type=entity_type or "N/A",
-                ontologies=ontologies_block,
-            )
+    try:
+        not_equal_to_self = value != value
+    except Exception:
+        not_equal_to_self = False
+    try:
+        if bool(not_equal_to_self):
+            return True
+    except Exception:
+        pass
 
-        return [
-            ChatMessage(role="system", content="You are a biomedical ontology expert."),
-            ChatMessage(role="user", content=content),
-        ]
+    value_type = type(value)
+    module = value_type.__module__
+    name = value_type.__name__
+    return module.startswith("pandas.") and (
+        name in {"NAType", "NaTType"} or str(value) in {"<NA>", "NaT"}
+    )
 
-    def _retrieve_candidates(
-        self,
-        source_term: str,
-        source_label: str | None,
-        entity_type: str | None,
-    ) -> tuple[list[dict[str, Any]], RAGDebugInfo]:
-        """Call retriever and build RAGDebugInfo."""
-        assert self._retriever is not None, "_retrieve_candidates called without a retriever"
-        ontologies = self._effective_ontologies(entity_type)
-        candidates, top_score = self._retriever.retrieve(
-            query=source_term,
-            entity_type=entity_type,
-            ontologies=ontologies,
-        )
-        debug = RAGDebugInfo(
-            query_sent=source_term,
-            candidates_retrieved=candidates[: self.rag_top_k],
-            top_k=getattr(self._retriever, "top_k", self.rag_top_k),
-            auto_accepted=top_score >= self.rag_auto_accept_threshold,
-            auto_accept_threshold=self.rag_auto_accept_threshold,
-        )
-        return candidates, debug
 
-    def _parse_response(
-        self,
-        completion: Any,
-        source_term: str,
-        source_label: str | None,
-        source_type: str | None,
-        rag_debug: RAGDebugInfo | None,
-        latency_ms: float,
-    ) -> MappingResult:
-        """Parse LLM completion into a MappingResult."""
-        import json as _json
-
-        if isinstance(completion, str):
-            text = completion
-        elif hasattr(completion, 'content'):
-            text = completion.content
-        else:
-            text = str(completion)
-        logger.debug("LLM raw response | model=%s text=%s", self._llm.model, text[:500])
-        json_str = self._extract_json_from_response(text)
-
-        try:
-            data = _json.loads(json_str)
-        except Exception:
-            logger.warning("Failed to parse LLM response | model=%s text=%r", self._llm.model, text[:500])
-            return MappingResult(
-                source_term=source_term,
-                source_label=source_label,
-                source_type=source_type,
-                target_code="UNMAPPED",
-                target_term="MANUAL_REVIEW_REQUIRED",
-                ontology=self.ontologies[0],
-                confidence=0.0,
-                logic_type=LogicType.LLM,
-                notes=f"Failed to parse LLM response: {text[:200]}",
-                metadata=MappingMetadata(
-                    model=self._llm.model,
-                    provider=self._llm.provider_name,
-                    latency_ms=latency_ms,
-                    prompt_tokens=None,
-                    completion_tokens=None,
-                    rag_debug=rag_debug,
-                ),
-            )
-
-        # Handle RAG selection response (selected_rank) vs direct code response
-        if "selected_rank" in data:
-            rank = int(data.get("selected_rank") or 0)
-            confidence = float(data.get("confidence") or 0.5)
-            reasoning = data.get("notes") or data.get("reasoning") or ""
-            candidates: list[dict[str, Any]] = (
-                rag_debug.candidates_retrieved if rag_debug else []
-            )
-            if 1 <= rank <= len(candidates):
-                chosen = candidates[rank - 1]
-                curie = chosen.get("code") or "UNMAPPED"
-                term = chosen.get("term") or ""
-                ontology = self._infer_ontology_source_from_code(curie, self.ontologies[0])
-                logic = LogicType.RAG
-            else:
-                curie = "UNMAPPED"
-                term = "NO_MATCH_FOUND"
-                ontology = self.ontologies[0]
-                logic = LogicType.RAG
-            return MappingResult(
-                source_term=source_term,
-                source_label=source_label,
-                source_type=source_type,
-                target_code=curie,
-                target_term=term,
-                ontology=ontology,
-                confidence=confidence,
-                logic_type=logic,
-                notes=f"RAG: {reasoning}",
-                metadata=MappingMetadata(
-                    model=self._llm.model,
-                    provider=self._llm.provider_name,
-                    latency_ms=latency_ms,
-                    prompt_tokens=None,
-                    completion_tokens=None,
-                    rag_debug=rag_debug,
-                ),
-            )
-
-        # Direct code response (also used when rag_prompt.txt returns a full code)
-        raw_code = data.get("code") or "UNMAPPED"
-        curie = self._normalize_ontology_code(raw_code, self.ontologies[0])
-        term = data.get("term") or "MANUAL_REVIEW_REQUIRED"
-        confidence = float(data.get("confidence") or 0.5)
-        reasoning = data.get("notes") or data.get("reasoning") or ""
-        ontology = self._infer_ontology_source_from_code(curie, self.ontologies[0])
-        # Honour logic_type field from rag_prompt.txt ("rag" when LLM picked a candidate)
-        _lt_str = data.get("logic_type") or ""
-        logic_type = LogicType.RAG if _lt_str == "rag" else LogicType.LLM
-        return MappingResult(
-            source_term=source_term,
-            source_label=source_label,
-            source_type=source_type,
-            target_code=curie,
-            target_term=term,
-            ontology=ontology,
-            confidence=confidence,
-            logic_type=logic_type,
-            notes=f"Mapped. {reasoning}" if reasoning else "Mapped",
-            metadata=MappingMetadata(
-                model=self._llm.model,
-                provider=self._llm.provider_name,
-                latency_ms=latency_ms,
-                prompt_tokens=None,
-                completion_tokens=None,
-                rag_debug=rag_debug,
-            ),
-        )
+def _attach_latency_ms(result: MappingResult, latency_ms: float) -> None:
+    metadata = result.metadata
+    if metadata is None:
+        return
+    result.metadata = metadata.model_copy(update={"latency_ms": latency_ms})

@@ -1,0 +1,67 @@
+{
+  "source_original_run": "/Users/akandwal/Developer/llm-ontology-mapper/outputs/evaluation/scenario1_ukbb_efo/2026-08-31T13-54-53Z",
+  "source_dataset": "/Users/akandwal/Developer/llm-ontology-mapper/UKBB-EFO.csv",
+  "original_row_count": 888,
+  "corrected_row_count": 888,
+  "affected_query_ids": [
+    806,
+    837,
+    842,
+    868,
+    872
+  ],
+  "affected_row_count": 5,
+  "gold_metadata_changes": [
+    {
+      "query_id": 806,
+      "old_gold_codes": "HP:0012378 | EFO:0009641",
+      "new_gold_codes": "HP:0012378|EFO:0009641",
+      "old_gold_labels": "fatigue||malaise",
+      "new_gold_labels": "fatigue|malaise",
+      "old_gold_count": "1",
+      "new_gold_count": "2"
+    },
+    {
+      "query_id": 837,
+      "old_gold_codes": "EFO:0009676 | EFO:1001986",
+      "new_gold_codes": "EFO:0009676|EFO:1001986",
+      "old_gold_labels": "musculoskeletal system disease | connective tissue disease",
+      "new_gold_labels": "musculoskeletal system disease|connective tissue disease",
+      "old_gold_count": "1",
+      "new_gold_count": "2"
+    },
+    {
+      "query_id": 842,
+      "old_gold_codes": "EFO:0009660 | EFO:0009685",
+      "new_gold_codes": "EFO:0009660|EFO:0009685",
+      "old_gold_labels": "anus disease||rectal disease",
+      "new_gold_labels": "anus disease|rectal disease",
+      "old_gold_count": "1",
+      "new_gold_count": "2"
+    },
+    {
+      "query_id": 868,
+      "old_gold_codes": "HP:0030766 | EFO:0007415",
+      "new_gold_codes": "HP:0030766|EFO:0007415",
+      "old_gold_labels": "ear pain||otitis media with effusion",
+      "new_gold_labels": "ear pain|otitis media with effusion",
+      "old_gold_count": "1",
+      "new_gold_count": "2"
+    },
+    {
+      "query_id": 872,
+      "old_gold_codes": "EFO:0009679 | EFO:0009684",
+      "new_gold_codes": "EFO:0009679|EFO:0009684",
+      "old_gold_labels": "paraplegia",
+      "new_gold_labels": "|",
+      "old_gold_count": "1",
+      "new_gold_count": "2"
+    }
+  ],
+  "mapper_output_mismatch_count": 0,
+  "missing_query_ids": [],
+  "unexpected_query_ids": [],
+  "duplicate_query_ids": [],
+  "original_predictions_sha256": "34106d2a075280f983a73f334aec823807d252d296f2084a331a9e67fbb9ba71",
+  "validation_passed": true
+}

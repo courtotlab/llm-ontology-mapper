@@ -1,0 +1,50 @@
+{
+  "experiment_name": "scenario2_retrieval_ablation",
+  "source_dataset_path": "dict_mapped_all.xlsx",
+  "source_dataset_sha256": "91980c4df28781e5ef8d33d614c4f768966fa88b3db24996f3da38fc01bbddfd",
+  "dataset_row_count": 218,
+  "llm_ontology_mapper_git_commit": "653763307b016842010c5547673e1c41a60ed57c",
+  "working_tree_dirty": true,
+  "provider": "openai",
+  "model": "gpt-5.6-luna",
+  "reasoning_effort": "low",
+  "temperature": null,
+  "temperature_mode": "provider_default",
+  "seed": 42,
+  "retrieval_mode": "local",
+  "strict_target_ontology": false,
+  "max_alternatives": 4,
+  "sapbert_url": "http://localhost:8765",
+  "sapbert_health_response": {
+    "status": "ok",
+    "model": "cambridgeltl/SapBERT-from-PubMedBERT-fulltext",
+    "loaded_indexes": [
+      "EFO",
+      "HPO",
+      "ICD10CM",
+      "LOINC",
+      "MONDO",
+      "NCIT",
+      "RXNORM",
+      "SNOMED"
+    ],
+    "available_indexes": [
+      "EFO",
+      "HPO",
+      "ICD10CM",
+      "LOINC",
+      "MONDO",
+      "NCIT",
+      "RXNORM",
+      "SNOMED"
+    ],
+    "lazy_load": true
+  },
+  "sapbert_model": "cambridgeltl/SapBERT-from-PubMedBERT-fulltext",
+  "start_timestamp": "2026-08-28T18:25:27.602425+00:00",
+  "end_timestamp": "2026-08-28T18:44:01.972047+00:00",
+  "completed": true,
+  "rows_completed": 218,
+  "limit": null,
+  "total_run_seconds": 1114.2953296250198
+}

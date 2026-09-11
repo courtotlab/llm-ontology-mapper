@@ -1,0 +1,5 @@
+model,model_display,mean_weighted_f1_e2e,mean_api_cost_per_term_usd,mean_end_to_end_seconds_per_term,pareto_efficient_cost_vs_f1,pareto_efficient_latency_vs_f1
+gpt-4.1-mini,GPT-4.1 mini,0.7271196129683954,0.0016950933333333,10.693884951539008,False,False
+gpt-5-mini,GPT-5 mini,0.807510077675949,0.0024695193807339,13.652261710649276,True,True
+gpt-5.4-mini,GPT-5.4 mini,0.7129655081336925,0.0044018652522935,6.473089741208675,False,False
+gpt-5.6-luna,GPT-5.6 Luna,0.7516099544580674,0.0008561280275229,6.123315191905965,True,True

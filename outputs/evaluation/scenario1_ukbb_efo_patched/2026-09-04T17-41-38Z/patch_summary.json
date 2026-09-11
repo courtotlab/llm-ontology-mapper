@@ -1,0 +1,51 @@
+{
+  "dataset": "ukbb-efo",
+  "metric_comparison": {
+    "Top-1": {
+      "original": "0.7905405405405406",
+      "patched": "0.7916666666666666"
+    },
+    "Top-3": {
+      "original": "0.8873873873873874",
+      "patched": "0.8941441441441441"
+    },
+    "Top-5": {
+      "original": "0.8975225225225225",
+      "patched": "0.9054054054054054"
+    },
+    "MRR": {
+      "original": "0.8395833333333332",
+      "patched": "0.8435623123123124"
+    },
+    "Recall@GT": {
+      "original": "0.7905405405405406",
+      "patched": "0.7933558558558559"
+    },
+    "Precision": {
+      "original": "0.8518099547511312",
+      "patched": "0.8552036199095022"
+    },
+    "Recall": {
+      "original": "0.9947159841479525",
+      "patched": "0.9947368421052631"
+    },
+    "F1": {
+      "original": "0.9177330895795248",
+      "patched": "0.9197080291970803"
+    }
+  },
+  "transitions": {
+    "originally_unmapped_still_unmapped": 4,
+    "originally_unmapped_now_mapped": 0,
+    "originally_unmapped_now_error": 0,
+    "total_rerun": 4
+  },
+  "gold_rank_among_rerun_rows": {
+    "1": 0,
+    "2": 2,
+    "3": 1,
+    "4": 0,
+    "5": 0,
+    "absent": 1
+  }
+}
